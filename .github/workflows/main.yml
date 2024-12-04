@@ -11,21 +11,38 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    
     steps:
+    # 1. 체크아웃
     - name: Checkout code
       uses: actions/checkout@v3
-
+    # 2. Node.js버전 설정
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '22'
-
+    # 3. 의존성 설치  
     - name: Install dependencies
       run: npm install
-
+    # 4. 코드 빌드
     - name: TypeScript Build Check
       run: npm run build
-
+    # 5. 코드 Lint
     - name: Run lint
       run: npm run lint
+    # 6. Docker 이미지 빌드
+    - name: Build Docker image
+      # 6-1. Docker 이미지 이름 지정(PskDockerImage) . 은 Dockerfile이 위치한 현재 디렉토리를 의미
+      run: |
+        docker build -t PskDockerImage .   
+    # 7. Docker 컨테이너 실행
+    - name: Run Docker container
+      run: |
+        docker run -d --name my-container my-app
+      
+    - name: Copy dist folder to server
+      run: |
+        scp -r ./dist qkrtjsrb312@elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}  # SSH 키를 GitHub Secrets에 저장
+  
