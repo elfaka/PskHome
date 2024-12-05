@@ -59,4 +59,4 @@ jobs:
     # 9. dist 폴더 서버에 복사
     - name: Copy dist folder to server
       run: |
-        scp -p 2222 -i ~/.ssh/elfaka.kr.pem -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+        scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
