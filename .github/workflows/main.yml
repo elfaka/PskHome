@@ -29,11 +29,11 @@ jobs:
         docker run --rm -v $(pwd):/app psk_docker_image npm run build
 
     # 4. Docker 이미지 푸시 (Docker Hub 사용 시)
-    - name: Push Docker image to Docker Hub
-      run: |
-        docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-        docker tag psk_docker_image ${{ secrets.DOCKER_USERNAME }}/psk_docker_image:latest
-        docker push ${{ secrets.DOCKER_USERNAME }}/psk_docker_image:latest
+    #- name: Push Docker image to Docker Hub
+    #  run: |
+    #    docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+    #    docker tag psk_docker_image ${{ secrets.DOCKER_USERNAME }}/psk_docker_image:latest
+    #    docker push ${{ secrets.DOCKER_USERNAME }}/psk_docker_image:latest
       
     # 5. SSH 서버 접근 테스트
     - name: SSH server access test
