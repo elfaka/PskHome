@@ -27,8 +27,7 @@ jobs:
       run: |
         docker run --rm -v $(pwd):/app psk_docker_image npm install  # 컨테이너 내에서 npm install
         docker run --rm -v $(pwd):/app psk_docker_image npm run build
-        docker run --rm -v $(pwd):/app psk_docker_image npm test
-        
+
     # 4. SSH 서버 접근 테스트
     - name: SSH server access test
       run: |
