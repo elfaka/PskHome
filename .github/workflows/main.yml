@@ -50,7 +50,7 @@ jobs:
       run: |
         mkdir -p ~/.ssh
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/elfaka.kr.pem
-        chmod 600 ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/elfaka.kr.pem
         ssh-keyscan -p 2222 ssh.elfaka.kr >> ~/.ssh/known_hosts
         ssh qkrtjsrb312@ssh.elfaka.kr -i .ssh/elfaka.kr.pem -p 2222 "echo 'SSH connection successful'"
       env:
