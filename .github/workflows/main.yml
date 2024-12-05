@@ -39,16 +39,15 @@ jobs:
     - name: Run Docker container
       run: |
         docker run -d --name psk_docker_container psk_docker_image
-    # 8. SSH 키를 .pem 파일로 추가 및 설정
-    - name: Set up SSH
+   # 8. 서버의 호스트 키 추가
+    - name: Add server to known_hosts
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa.pem
-        chmod 600 ~/.ssh/id_rsa.pem
         ssh-keyscan -p 2222 ssh.elfaka.kr >> ~/.ssh/known_hosts
-      env:
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-    # 9. dist 폴더 서버에 복사
+
+   # 9. dist 폴더 서버에 복사
     - name: Copy dist folder to server
       run: |
-        scp -P 2222 -i ~/.ssh/id_rsa.pem -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+        scp -P 2222 -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+      env:
+        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
