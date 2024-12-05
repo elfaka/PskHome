@@ -11,7 +11,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     # 1. 체크아웃
     - name: Checkout code
@@ -27,23 +27,28 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    # 4. 코드 빌드
-    - name: TypeScript Build Check
-      run: npm run build
-
-    # 5. 코드 Lint
+    # 4. 코드 Lint
     - name: Run lint
       run: npm run lint
 
-    # 6. Docker 이미지 빌드
+    # 5. Docker 이미지 빌드
     - name: Build Docker image
       run: |
-        docker build -t psk_docker_image .   
+        docker build -t psk_docker_image .    # Docker 이미지를 빌드
 
-    # 7. Docker 컨테이너 실행
-    - name: Run Docker container
+    # 6. Docker 컨테이너에서 빌드 및 테스트 실행
+    - name: Run build and tests in Docker container
       run: |
-        docker run -d --name psk_docker_container psk_docker_image
+        # 컨테이너에서 빌드 및 테스트 실행
+        docker run --rm -v $(pwd):/app psk_docker_image npm run build
+        docker run --rm -v $(pwd):/app psk_docker_image npm test  # 필요하면 테스트 추가
+
+    # 7. Docker 이미지 푸시 (Docker Hub 사용 시)
+    - name: Push Docker image to Docker Hub
+      run: |
+        docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+        docker tag psk_docker_image ${{ secrets.DOCKER_USERNAME }}/psk_docker_image:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/psk_docker_image:latest
 
     # 8. SSH 서버 접근 테스트
     - name: SSH server access test
