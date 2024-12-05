@@ -56,7 +56,8 @@ jobs:
       env:
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    # 9. dist 폴더 서버에 복사
-    - name: Copy dist folder to server
+    # 9. 기존 dist 폴더 삭제 및 새로운 dist 폴더 업로드
+    - name: Replace dist folder on server
       run: |
+        ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "rm -rf /home/qkrtjsrb312/PskHome/dist"
         scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
