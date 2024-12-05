@@ -28,7 +28,14 @@ jobs:
         docker run --rm -v $(pwd):/app psk_docker_image npm install  # 컨테이너 내에서 npm install
         docker run --rm -v $(pwd):/app psk_docker_image npm run build
 
-    # 4. SSH 서버 접근 테스트
+    # 4. Docker 이미지 푸시 (Docker Hub 사용 시)
+    - name: Push Docker image to Docker Hub
+      run: |
+        docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+        docker tag psk_docker_image ${{ secrets.DOCKER_USERNAME }}/psk_docker_image:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/psk_docker_image:latest
+      
+    # 5. SSH 서버 접근 테스트
     - name: SSH server access test
       run: |
         mkdir -p ~/.ssh
@@ -39,7 +46,7 @@ jobs:
       env:
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    # 5. 기존 dist 폴더 삭제 및 새로운 dist 폴더 업로드
+    # 6. 기존 dist 폴더 삭제 및 새로운 dist 폴더 업로드
     - name: Replace dist folder on server
       run: |
         ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "rm -rf /home/qkrtjsrb312/PskHome/dist"
