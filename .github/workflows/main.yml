@@ -52,11 +52,11 @@ jobs:
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/elfaka.kr.pem
         chmod 600 ~/.ssh/elfaka.kr.pem
         ssh-keyscan -p 2222 ssh.elfaka.kr >> ~/.ssh/known_hosts
-        ssh qkrtjsrb312@ssh.elfaka.kr -i .ssh/elfaka.kr.pem -p 2222 "echo 'SSH connection successful'"
+        ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "echo 'SSH connection successful'"
       env:
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
     # 9. dist 폴더 서버에 복사
     - name: Copy dist folder to server
       run: |
-        scp -p 2222 -i ~/.ssh/id_rsa -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+        scp -p 2222 -i ~/.ssh/elfaka.kr.pem -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
