@@ -25,9 +25,10 @@ jobs:
     # 3. Docker 컨테이너에서 빌드 및 테스트 실행
     - name: Run build and tests in Docker container
       run: |
+        docker run --rm -v $(pwd):/app psk_docker_image npm install  # 컨테이너 내에서 npm install
         docker run --rm -v $(pwd):/app psk_docker_image npm run build
-        docker run --rm -v $(pwd):/app psk_docker_image npm test  # 필요하면 테스트 추가
-
+        docker run --rm -v $(pwd):/app psk_docker_image npm test
+        
     # 4. SSH 서버 접근 테스트
     - name: SSH server access test
       run: |
