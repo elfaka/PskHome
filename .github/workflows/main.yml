@@ -34,11 +34,11 @@ jobs:
     - name: Build Docker image
       # 6-1. Docker 이미지 이름 지정(PskDockerImage) . 은 Dockerfile이 위치한 현재 디렉토리를 의미
       run: |
-        docker build -t PskDockerImage .   
+        docker build -t psk_docker_image .   
     # 7. Docker 컨테이너 실행
     - name: Run Docker container
       run: |
-        docker run -d --name my-container my-app
+        docker run -d --name psk_docker_container pskdockerimage
       
     - name: Copy dist folder to server
       run: |
