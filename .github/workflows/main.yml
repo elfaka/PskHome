@@ -16,38 +16,47 @@ jobs:
     # 1. 체크아웃
     - name: Checkout code
       uses: actions/checkout@v3
-    # 2. Node.js버전 설정
+
+    # 2. Node.js 버전 설정
     - name: Set up Node.js
       uses: actions/setup-node@v3
       with:
         node-version: '22'
+
     # 3. 의존성 설치  
     - name: Install dependencies
       run: npm install
+
     # 4. 코드 빌드
     - name: TypeScript Build Check
       run: npm run build
+
     # 5. 코드 Lint
     - name: Run lint
       run: npm run lint
+
     # 6. Docker 이미지 빌드
     - name: Build Docker image
-      # 6-1. Docker 이미지 이름 지정(PskDockerImage) . 은 Dockerfile이 위치한 현재 디렉토리를 의미
       run: |
         docker build -t psk_docker_image .   
+
     # 7. Docker 컨테이너 실행
     - name: Run Docker container
       run: |
         docker run -d --name psk_docker_container psk_docker_image
-   # 8. 서버의 호스트 키 추가
-    - name: Add server to known_hosts
+
+    # 8. SSH 서버 접근 테스트
+    - name: SSH server access test
       run: |
         mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
         ssh-keyscan -p 2222 ssh.elfaka.kr >> ~/.ssh/known_hosts
-
-   # 9. dist 폴더 서버에 복사
-    - name: Copy dist folder to server
-      run: |
-        scp -P 2222 -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+        ssh -p 2222 qkrtjsrb312@ssh.elfaka.kr "echo 'SSH connection successful'"
       env:
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    # 9. dist 폴더 서버에 복사
+    - name: Copy dist folder to server
+      run: |
+        scp -P 2222 -i ~/.ssh/id_rsa -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
