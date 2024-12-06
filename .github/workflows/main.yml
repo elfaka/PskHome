@@ -50,4 +50,4 @@ jobs:
     - name: Replace dist folder on server
       run: |
         ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "rm -rf /home/qkrtjsrb312/PskHome/dist"
-        scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+        scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./front/dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
