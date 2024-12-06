@@ -38,7 +38,7 @@ jobs:
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: backend/dist/, server/
+          source: backend/, server/
           target: ~/${{ github.event.repository.name }}
 
         # 6. run docker
