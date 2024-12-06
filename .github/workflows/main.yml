@@ -49,5 +49,11 @@ jobs:
     # 6. 기존 dist 폴더 삭제 및 새로운 dist 폴더 업로드
     - name: Replace dist folder on server
       run: |
-        ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "rm -rf /home/qkrtjsrb312/PskHome/dist"
-        scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./front/dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+          ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "
+          set -e
+          echo 'Removing existing dist folder...'
+          rm -rf /home/qkrtjsrb312/PskHome/dist;
+          mkdir -p /home/qkrtjsrb312/PskHome;
+          "
+          echo 'Uploading new dist folder...'
+          scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/
