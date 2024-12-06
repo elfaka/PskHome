@@ -20,7 +20,7 @@ jobs:
     # 2. Docker 이미지 빌드
     - name: Build Docker image
       run: |
-        docker build -t psk_docker_image .
+        docker build -t psk_docker_image ./front
 
     # 3. Docker 컨테이너에서 빌드 및 테스트 실행
     - name: Run build and tests in Docker container
