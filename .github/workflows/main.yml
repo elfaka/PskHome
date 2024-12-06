@@ -25,8 +25,8 @@ jobs:
     # 3. Docker 컨테이너에서 빌드 및 테스트 실행
     - name: Run build and tests in Docker container
       run: |
-        docker run --rm psk_docker_image npm install
-        docker run --rm psk_docker_image npm run build
+        docker run --rm -v $(pwd):/app -w /app psk_docker_image npm install
+        docker run --rm -v $(pwd):/app -w /app psk_docker_image npm run build
 
     # 4. Docker 이미지 푸시 (Docker Hub 사용 시)
     #- name: Push Docker image to Docker Hub
