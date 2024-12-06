@@ -1,4 +1,4 @@
-name: Front-End Deploy
+name: Back-End Deploy
 
 on:
   push:
@@ -30,8 +30,19 @@ jobs:
         working-directory: backend
         run: npm run build
 
-        # 5. run docker
-      - name: Update de
+        # 5. Copy dist
+      - name: Copy dist
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST_NAME }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: backend/dist/, server/
+          target: ~/${{ github.event.repository.name }}
+
+        # 6. run docker
+      - name: Update be
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST_NAME }}
