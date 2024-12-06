@@ -9,4 +9,9 @@ services:
     volumes:
       - ../backend:/opt
     working_dir: /opt
-    entrypoint: [node, main]
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        npm install
+        node dist/main
