@@ -1,0 +1,45 @@
+name: Front-End Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+        # 2. Node.js 22 설치
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22
+
+      # 3. npm install
+      - name: Install modules
+        working-directory: backend
+        run: npm install
+
+        # 4. npm run build
+      - name: Build
+        working-directory: backend
+        run: npm run build
+
+        # 5. run docker
+      - name: Update de
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST_NAME }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd ~/${{ github.event.repository.name }}/server
+            docker compose -f docker-compose-be.yaml pull
+            docker compose -f docker-compose-be.yaml down
+            docker compose -f docker-compose-be.yaml up -d
