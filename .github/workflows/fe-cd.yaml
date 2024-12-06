@@ -41,19 +41,16 @@ jobs:
           source: frontend/dist/, server/
           target: ~/${{ github.event.repository.name }}
 
-      # 5. SSH 서버 접근 테스트
-      # - name: SSH server access test
-      #   run: |
-      #     mkdir -p ~/.ssh
-      #     echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/elfaka.kr.pem
-      #     chmod 600 ~/.ssh/elfaka.kr.pem
-      #     ssh-keyscan -p 2222 ssh.elfaka.kr >> ~/.ssh/known_hosts
-      #     ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "echo 'SSH connection successful'"
-      #   env:
-      #     SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      # 6. 기존 dist 폴더 삭제 및 새로운 dist 폴더 업로드
-      # - name: Replace dist folder on server
-      #   run: |
-      #     ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "rm -rf /home/qkrtjsrb312/PskHome/dist"
-      #     scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./frontend/dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+        # 6. run docker
+      - name: Update fe
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST_NAME }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd ~/${{ github.event.repository.name }}/server
+            docker compose -f docker-compose-fe.yaml pull
+            docker compose -f docker-compose-fe.yaml down
+            docker compose -f docker-compose-fe.yaml up -d
