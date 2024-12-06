@@ -25,8 +25,9 @@ jobs:
     # 3. Docker 컨테이너에서 빌드 및 테스트 실행
     - name: Run build and tests in Docker container
       run: |
-        docker run --rm -v $(pwd):/app -w /app psk_docker_image npm install
-        docker run --rm -v $(pwd):/app -w /app psk_docker_image npm run build
+        docker run --rm -v $(pwd)/front:/app -w /app psk_docker_image npm install
+        docker run --rm -v $(pwd)/front:/app -w /app psk_docker_image npm run build
+
 
     # 4. Docker 이미지 푸시 (Docker Hub 사용 시)
     #- name: Push Docker image to Docker Hub
@@ -49,11 +50,5 @@ jobs:
     # 6. 기존 dist 폴더 삭제 및 새로운 dist 폴더 업로드
     - name: Replace dist folder on server
       run: |
-          ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "
-          set -e
-          echo 'Removing existing dist folder...'
-          rm -rf /home/qkrtjsrb312/PskHome/dist;
-          mkdir -p /home/qkrtjsrb312/PskHome;
-          "
-          echo 'Uploading new dist folder...'
-          scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/
+        ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "rm -rf /home/qkrtjsrb312/PskHome/dist"
+        scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
