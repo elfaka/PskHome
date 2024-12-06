@@ -4,6 +4,14 @@ on:
   push:
     branches:
       - main
+    paths:
+      - frontend/**
+      - .github/workflows/fe-cd.yaml
+      - server/docker-compose-fe.yaml
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
 
 jobs:
   build:
