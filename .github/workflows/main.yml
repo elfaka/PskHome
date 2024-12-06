@@ -20,13 +20,13 @@ jobs:
     # 2. Docker 이미지 빌드
     - name: Build Docker image
       run: |
-        docker build -t psk_docker_image ./front
+        docker build -t psk_docker_image ./frontend
 
     # 3. Docker 컨테이너에서 빌드 및 테스트 실행
     - name: Run build and tests in Docker container
       run: |
-        docker run --rm -v $(pwd)/front:/app -w /app psk_docker_image npm install
-        docker run --rm -v $(pwd)/front:/app -w /app psk_docker_image npm run build
+        docker run --rm -v $(pwd)/frontend:/app -w /app psk_docker_image npm install
+        docker run --rm -v $(pwd)/frontend:/app -w /app psk_docker_image npm run build
 
 
     # 4. Docker 이미지 푸시 (Docker Hub 사용 시)
@@ -51,4 +51,4 @@ jobs:
     - name: Replace dist folder on server
       run: |
         ssh -i ~/.ssh/elfaka.kr.pem -p 2222 qkrtjsrb312@ssh.elfaka.kr "rm -rf /home/qkrtjsrb312/PskHome/dist"
-        scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./front/dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
+        scp -P 2222 -i ~/.ssh/elfaka.kr.pem -r ./frontend/dist qkrtjsrb312@ssh.elfaka.kr:/home/qkrtjsrb312/PskHome/dist
