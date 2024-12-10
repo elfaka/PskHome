@@ -2,9 +2,9 @@ import { Input, Button } from '@mui/base';
 import { useState } from "react";
 
 export default function InputName() {
-    const [name, setName] = useState(""); // Input 값 저장
-    const [characterInfo, setCharacterInfo] = useState(null); // API 결과 저장
-    const [error, setError] = useState(null); // 에러 메시지 저장
+    const [name, setName] = useState<string>(""); // Input 값 저장
+    const [characterInfo, setCharacterInfo] = useState<null | object>(null); // API 결과 저장
+    const [error, setError] = useState<string | null>(null); // 에러 메시지 저장
 
     const handleSearch = async () => {
         if (!name) {
