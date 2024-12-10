@@ -14,7 +14,7 @@ export default function InputName() {
         setError(null); // 에러 초기화
 
         try {
-            const response = await fetch(`http://localhost:3000/api/lostark/character-info?name=${name}`);
+            const response = await fetch(`/api/lostark/character-info?name=${name}`);
             if (!response.ok) {
                 throw new Error("API 호출 실패");
             }
