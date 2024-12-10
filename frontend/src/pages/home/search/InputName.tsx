@@ -69,7 +69,19 @@ export default function InputName() {
             </Button>
             {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
             {characterInfo && (
-                <div style={{ marginTop: '20px', textAlign: 'left', display: 'inline-block' }}>
+                <div
+                    style={{
+                        marginTop: '20px',
+                        textAlign: 'left',
+                        display: 'inline-block',
+                        maxHeight: '400px', // 최대 높이를 제한
+                        overflow: 'auto', // 스크롤 활성화
+                        padding: '10px',
+                        border: '1px solid #ccc',
+                        borderRadius: '4px',
+                        width: '80%', // 너비도 적절하게 제한
+                    }}
+                >
                     <h2>검색 결과:</h2>
                     <pre style={{ backgroundColor: '#f4f4f4', padding: '10px', borderRadius: '4px' }}>
                         {JSON.stringify(characterInfo, null, 2)}
