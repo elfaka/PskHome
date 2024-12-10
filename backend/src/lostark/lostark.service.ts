@@ -10,7 +10,7 @@ export class LostArkService {
   constructor(private readonly httpService: HttpService) {}
 
   async getPlayerInfo(playerName: string) {
-    const url = `${this.apiUrl}/characters/${playerName}/siblings`;
+    const url = `${this.apiUrl}/characters/${playerName}/profiles`;
     console.log(url);
     return this.httpService.get(url, {
       headers: {
