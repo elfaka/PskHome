@@ -1,11 +1,11 @@
 import { Route, Routes } from "react-router-dom";
 import Home from "./pages/home/page";
-import Topbar from "./components/layout/TopBar";
+import TopBar from "./components/layout/TopBar";
 
 export default function App() {
   return (
     <div>
-      <Topbar />
+      <TopBar />
       <Routes>
         <Route path="/" element={<Home />} />
       </Routes>
