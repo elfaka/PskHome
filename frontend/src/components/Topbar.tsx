@@ -8,7 +8,7 @@ import Logo from "../assets/Logo.svg";
 export default function AppBarComponent() {
 
     // Custom styled AppBar
-    const StyledAppBar = styled(AppBar)(({ theme }) => ({
+    const StyledAppBar = styled(AppBar)(({
         background: '#cfe2f3',
         boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)',
         width: '100%',
