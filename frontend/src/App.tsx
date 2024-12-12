@@ -1,6 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import Home from "./pages/home/page";
-import Topbar from "./components/layout/Topbar";
+import Topbar from "./components/layout/TopBar";
 
 export default function App() {
   return (
