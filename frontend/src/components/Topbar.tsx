@@ -1,54 +1,53 @@
 //import React from 'react';
 import { styled } from '@mui/material/styles';
-import { Drawer, IconButton } from '@mui/material';
+import { AppBar, Toolbar, IconButton, Box } from '@mui/material';
 import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import CalculateOutlinedIcon from '@mui/icons-material/CalculateOutlined';
 import Logo from "../assets/Logo.svg";
 
-export default function Sidebar() {
+export default function AppBarComponent() {
 
-    // Custom styled drawer (sidebar)
-    const StyledDrawer = styled(Drawer)(({ theme }) => ({
-        width: 240,  // Sidebar width
-        flexShrink: 0,
-        '& .MuiDrawer-paper': {
-            width: 240, // Sidebar paper width
-            background: '#cfe2f3',
-            padding: theme.spacing(2),
-            display: 'flex',
-            flexDirection: 'column',
-            //justifyContent: 'center',
-            boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)',
-        }
+    // Custom styled AppBar
+    const StyledAppBar = styled(AppBar)(({ theme }) => ({
+        background: '#cfe2f3',
+        boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)',
+        width: '100%',
+        position: 'fixed',
+        top: 0,
+        left: 0,
     }));
 
     return (
-        <StyledDrawer
-            variant="permanent" // This makes the sidebar permanent
-            anchor="left" // This positions the sidebar on the left side
-        >
-            <div>
-                <img
-                    src={Logo}
-                    alt="Logo"
-                    style={{
-                        width: '200px',
-                        height: 'auto',
-                        marginBottom: '20px',
-                    }}
-                />
-                <IconButton
-                    sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '10px',
-                    }}
-                >
-                    <HomeRoundedIcon fontSize="large" color="secondary" />
-                    <CalculateOutlinedIcon fontSize="large" color="secondary" />
-                </IconButton>
-            </div>
-        </StyledDrawer>
+        <StyledAppBar position="static">
+            <Toolbar sx={{ position: 'relative', padding: '0 16px', minHeight: '64px' }}>
+                {/* Logo on the left */}
+                <Box sx={{ position: 'absolute', left: '16px', display: 'flex', alignItems: 'center' }}>
+                    <img
+                        src={Logo}
+                        alt="Logo"
+                        style={{
+                            width: '240px',
+                            height: 'auto',
+                        }}
+                    />
+                </Box>
+
+                {/* Icons in the center */}
+                <Box sx={{
+                    position: 'absolute',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    display: 'flex',
+                    gap: '20px',
+                }}>
+                    <IconButton>
+                        <HomeRoundedIcon fontSize="large" color="secondary" />
+                    </IconButton>
+                    <IconButton>
+                        <CalculateOutlinedIcon fontSize="large" color="secondary" />
+                    </IconButton>
+                </Box>
+            </Toolbar>
+        </StyledAppBar>
     );
 }
