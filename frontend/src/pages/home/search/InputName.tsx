@@ -31,8 +31,8 @@ export default function InputName() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
-        height: "50vh",
+
+        height: "auto",
         textAlign: "center",
       }}
     >
@@ -74,7 +74,7 @@ export default function InputName() {
             marginTop: "20px",
             textAlign: "left",
             display: "inline-block",
-            maxHeight: "400px", // 최대 높이를 제한
+            maxHeight: "500px", // 최대 높이를 제한
             overflow: "auto", // 스크롤 활성화
             padding: "10px",
             border: "1px solid #ccc",
