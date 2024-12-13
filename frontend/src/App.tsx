@@ -7,7 +7,7 @@ export default function App() {
   return (
     <Grid container sx={{ height: "100vh", width: "100%" }}>
       {/* Header */}
-      <Grid size={12} sx={{ height: "80px" }}>
+      <Grid size={12} sx={{ height: "120px" }}>
         <Top />
       </Grid>
 
@@ -23,7 +23,7 @@ export default function App() {
       <Grid
         size={12}
         sx={{
-          height: "60px",
+          height: "50px",
           backgroundColor: "disabled.main",
           textAlign: "center",
           display: "flex",
