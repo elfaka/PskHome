@@ -2,7 +2,7 @@ import { useState } from "react";
 import SearchForm from "./SearchForm";
 import CharacterInfo from "./CharacterInfo";
 import Container from "@mui/material/Container";
-import { CharacterInfoType } from "../../../types/CharacterInfo";
+import { CharacterInfoType } from "../../../types/character/BasicInfo";
 export default function InputName() {
   const [characterInfo, setCharacterInfo] = useState<null | CharacterInfoType>(
     null

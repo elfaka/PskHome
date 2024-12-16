@@ -1,7 +1,7 @@
 import Card from "@mui/material/Card";
 import Container from "@mui/material/Container";
 import Grid from "@mui/material/Grid2";
-import { CharacterInfoType } from "../../../types/CharacterInfo";
+import { CharacterInfoType } from "../../../types/character/BasicInfo";
 interface CharacterInfoProps {
   characterInfo: CharacterInfoType | null;
 }
