@@ -11,8 +11,8 @@ export default function TopBar() {
         <AppBar
           sx={{
             display: "flex",
-            justifyContent: "center", // 수평 중앙 정렬
-            alignItems: "center", // 수직 중앙 정렬
+            //justifyContent: "center", // 수평 중앙 정렬
+            //alignItems: "center", // 수직 중앙 정렬
             height: "60px", // 높이 설정 (기존과 동일)
           }}
         >

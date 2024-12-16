@@ -1,6 +1,8 @@
 import { Route, Routes } from "react-router-dom";
 import Top from "./components/layout/Top";
 import Home from "./pages/home/page";
+import Infomation from "./pages/infomation/page";
+import Optimize from "./pages/optimize/page";
 import Grid from "@mui/material/Grid2"; // Grid2를 사용합니다.
 
 export default function App() {
@@ -15,7 +17,8 @@ export default function App() {
       <Grid size={12} sx={{ flexGrow: 1, overflowY: "auto", padding: 2 }}>
         <Routes>
           <Route path="/" element={<Home />} />
-          {/* 다른 라우트 추가 */}
+          <Route path="/infomation" element={<Infomation />} />
+          <Route path="/optimize" element={<Optimize />} />
         </Routes>
       </Grid>
 

@@ -1,5 +1,3 @@
-import InputName from "./search/InputName";
-
-export default function Home() {
-  return <InputName />;
+export default function home() {
+  return <></>;
 }
