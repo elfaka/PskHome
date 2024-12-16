@@ -1,17 +1,14 @@
-import { Input, Button } from "@mui/base";
 import { useState } from "react";
+import SearchForm from "./SearchForm";
+import CharacterInfo from "./CharacterInfo";
 
 export default function InputName() {
-  const [name, setName] = useState<string>(""); // Input 값 저장
   const [characterInfo, setCharacterInfo] = useState<null | object>(null); // API 결과 저장
   const [error, setError] = useState<string | null>(null); // 에러 메시지 저장
 
-  const handleSearch = async () => {
-    if (!name) {
-      setError("캐릭터명을 입력해주세요.");
-      return;
-    }
+  const handleSearch = async (name: string) => {
     setError(null); // 에러 초기화
+    setCharacterInfo(null); // 이전 결과 초기화
 
     try {
       const response = await fetch(`/api/lostark/character-info?name=${name}`);
@@ -31,69 +28,13 @@ export default function InputName() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-
-        height: "auto",
         textAlign: "center",
       }}
     >
       <h1>캐릭터 정보 검색</h1>
-      <Input
-        type="text"
-        placeholder="캐릭터명을 입력하세요."
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        slotProps={{
-          root: {
-            style: {
-              marginBottom: "10px",
-              padding: "10px",
-              border: "1px solid #ccc",
-              borderRadius: "4px",
-              width: "300px",
-            },
-          },
-        }}
-      />
-      <Button
-        onClick={handleSearch}
-        style={{
-          padding: "10px 20px",
-          backgroundColor: "#007BFF",
-          color: "white",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
-        }}
-      >
-        검색
-      </Button>
+      <SearchForm onSearch={handleSearch} />
       {error && <p style={{ color: "red", marginTop: "10px" }}>{error}</p>}
-      {characterInfo && (
-        <div
-          style={{
-            marginTop: "20px",
-            textAlign: "left",
-            display: "inline-block",
-            maxHeight: "500px", // 최대 높이를 제한
-            overflow: "auto", // 스크롤 활성화
-            padding: "10px",
-            border: "1px solid #ccc",
-            borderRadius: "4px",
-            width: "80%", // 너비도 적절하게 제한
-          }}
-        >
-          <h2>검색 결과:</h2>
-          <pre
-            style={{
-              backgroundColor: "#f4f4f4",
-              padding: "10px",
-              borderRadius: "4px",
-            }}
-          >
-            {JSON.stringify(characterInfo, null, 2)}
-          </pre>
-        </div>
-      )}
+      <CharacterInfo characterInfo={characterInfo} />
     </div>
   );
 }

@@ -1,5 +1,9 @@
 import InputName from "./search/InputName";
-
+import Container from "@mui/material/Container";
 export default function information() {
-  return <InputName />;
+  return (
+    <Container>
+      <InputName />
+    </Container>
+  );
 }
