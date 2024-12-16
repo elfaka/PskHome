@@ -1,9 +1,12 @@
 import { useState } from "react";
 import SearchForm from "./SearchForm";
 import CharacterInfo from "./CharacterInfo";
-
+import Container from "@mui/material/Container";
+import { CharacterInfoType } from "../../../types/CharacterInfo";
 export default function InputName() {
-  const [characterInfo, setCharacterInfo] = useState<null | object>(null); // API 결과 저장
+  const [characterInfo, setCharacterInfo] = useState<null | CharacterInfoType>(
+    null
+  ); // API 결과 저장
   const [error, setError] = useState<string | null>(null); // 에러 메시지 저장
 
   const handleSearch = async (name: string) => {
@@ -23,7 +26,7 @@ export default function InputName() {
   };
 
   return (
-    <div
+    <Container
       style={{
         display: "flex",
         flexDirection: "column",
@@ -35,6 +38,6 @@ export default function InputName() {
       <SearchForm onSearch={handleSearch} />
       {error && <p style={{ color: "red", marginTop: "10px" }}>{error}</p>}
       <CharacterInfo characterInfo={characterInfo} />
-    </div>
+    </Container>
   );
 }
