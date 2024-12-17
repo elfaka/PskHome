@@ -10,16 +10,15 @@ export class LostArkService {
   constructor(private readonly httpService: HttpService) {}
 
   async getPlayerInfo(playerName: string) {
-    const url = `${this.apiUrl}/armories/characters/${playerName}/profiles`;
-    return this.httpService.get(url, {
-      headers: {
-        'accept': `application/json`,
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-    })
-    .pipe(
-      map(response => response.data),
-    )
-    .toPromise();
+    const url = `${this.apiUrl}/armories/characters/${playerName}`;
+    return this.httpService
+      .get(url, {
+        headers: {
+          accept: `application/json`,
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+      })
+      .pipe(map((response) => response.data))
+      .toPromise();
   }
 }
