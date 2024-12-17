@@ -1,19 +1,19 @@
 import Card from "@mui/material/Card";
 import Container from "@mui/material/Container";
 import Grid from "@mui/material/Grid2";
-import { CharacterInfoType } from "../../../types/character/BasicInfo";
-interface CharacterInfoProps {
-  characterInfo: CharacterInfoType | null;
+import { ArmoryProfile } from "../../../types/character/ArmoryProfile";
+interface ArmoryProfileProps {
+  ArmoryProfile: ArmoryProfile | null;
 }
 
-export default function CharacterInfo({ characterInfo }: CharacterInfoProps) {
-  if (!characterInfo) return null;
+export default function CharacterInfo({ ArmoryProfile }: ArmoryProfileProps) {
+  if (!ArmoryProfile) return null;
 
   return (
     <Grid container>
       <Container>
         <Card>
-          <img src={characterInfo.CharacterImage} />
+          <img src={ArmoryProfile.CharacterImage} />
         </Card>
       </Container>
     </Grid>
