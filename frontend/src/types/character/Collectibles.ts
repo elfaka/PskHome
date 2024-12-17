@@ -6,7 +6,7 @@ export interface CollectiblePoint {
 }
 
 // Collectible 타입 정의
-export interface Collectible {
+export interface Collectibles {
   Type: string; // 수집 가능한 아이템의 종류 (예: '모코코 씨앗', '위대한 미술품')
   Icon: string; // 아이콘 이미지 URL
   Point: number; // 현재 포인트

@@ -17,7 +17,7 @@ export interface Rune {
 }
 
 // ArmorySkill 타입 정의
-export interface ArmorySkill {
+export interface ArmorySkills {
   Name: string; // 스킬 이름
   Icon: string; // 스킬 아이콘 URL
   Level: number; // 스킬 레벨
