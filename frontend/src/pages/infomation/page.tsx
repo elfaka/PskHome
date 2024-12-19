@@ -9,6 +9,7 @@ export default function Information() {
 
   const handleResult = (data: ArmoryTotal) => {
     setArmoryTotal(data); // API 결과 저장
+    console.log(data);
   };
 
   return (

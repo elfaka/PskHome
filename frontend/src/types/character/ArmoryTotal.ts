@@ -14,7 +14,7 @@ export interface ArmoryTotal {
   ArmoryAvatars: ArmoryAvatars; // 아바타
   ArmoryCard: ArmoryCard; // 카드
   ArmoryEngraving: ArmoryEngraving; // 각인
-  ArmoryEquipment: ArmoryEquipment; // 장비
+  ArmoryEquipment: ArmoryEquipment[]; // 장비
   ArmoryGem: ArmoryGem; // 보석
   ArmoryProfile: ArmoryProfile; // 캐릭터 정보
   ArmorySkills: ArmorySkills; // 스킬
