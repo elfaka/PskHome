@@ -2,7 +2,8 @@ import { Card, Box, Tooltip } from "@mui/material";
 import Grid from "@mui/material/Grid2";
 import { styled } from "@mui/material/styles";
 import { ArmoryTotal } from "../../../types/character/ArmoryTotal";
-import EquipmentTooltip from "../../../components/content/ItemTooltip";
+import ItemTooltip from "../../../components/content/ItemTooltip";
+
 interface ArmoryTotalProps {
   ArmoryTotal: ArmoryTotal | null;
 }
@@ -21,6 +22,8 @@ export default function CharacterInfo({ ArmoryTotal }: ArmoryTotalProps) {
       backgroundColor: "#1A2027",
     }),
   }));
+
+  console.log(ArmoryTotal.ArmoryEquipment[1].Tooltip);
 
   return (
     <Box>
@@ -45,11 +48,7 @@ export default function CharacterInfo({ ArmoryTotal }: ArmoryTotalProps) {
                 {equipment.Type}
                 <br />
                 <Tooltip
-                  title={
-                    <EquipmentTooltip
-                      tooltipData={JSON.parse(equipment.Tooltip)}
-                    />
-                  }
+                  title={<ItemTooltip EquipmentTooltip={equipment.Tooltip} />}
                   arrow
                 >
                   <img src={equipment.Icon} alt="equipment icon" />

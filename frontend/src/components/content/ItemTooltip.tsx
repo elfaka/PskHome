@@ -1,14 +1,14 @@
 import React from "react";
 import { Typography, Box } from "@mui/material";
+import {
+  EquipmentTooltip,
+  IndentStringGroup,
+  ItemPartBox,
+  ItemTitle,
+  Progress,
+} from "../../types/tooltip/EquipmentTooltip";
 
-type TooltipElement = {
-  type: string;
-  value: string | Record<string, any>;
-};
-
-type TooltipData = Record<string, TooltipElement>;
-
-// Helper function to render JSON data with HTML and apply styles
+// Helper function to render HTML content and apply custom styles
 const renderHTMLContent = (html: string, style: React.CSSProperties = {}) => (
   <span
     style={{ fontSize: "14px", ...style }}
@@ -17,11 +17,14 @@ const renderHTMLContent = (html: string, style: React.CSSProperties = {}) => (
 );
 
 interface EquipmentTooltipProps {
-  tooltipData: TooltipData | null | undefined;
+  EquipmentTooltip: EquipmentTooltip | null | undefined;
 }
 
-const EquipmentTooltip: React.FC<EquipmentTooltipProps> = ({ tooltipData }) => {
-  if (!tooltipData) {
+export default function ItemTooltip({
+  EquipmentTooltip,
+}: EquipmentTooltipProps) {
+  // Check if the tooltip data exists
+  if (!EquipmentTooltip) {
     return (
       <Box sx={{ padding: 2, maxWidth: 300 }}>
         <Typography variant="body2" style={{ fontSize: "14px" }}>
@@ -31,37 +34,38 @@ const EquipmentTooltip: React.FC<EquipmentTooltipProps> = ({ tooltipData }) => {
     );
   }
 
+  // Render elements based on the EquipmentTooltip data
   return (
     <Box sx={{ padding: 2, maxWidth: 300 }}>
-      {/* Render each element dynamically */}
-      {Object.entries(tooltipData).map(([key, element]) => {
+      {/* Iterate through each element in the EquipmentTooltip */}
+      {Object.entries(EquipmentTooltip).map(([key, element]) => {
         if (!element) return null;
 
-        switch (element.type) {
+        switch (element?.type) {
           case "NameTagBox":
             return (
               <Box key={key} mb={1}>
                 {renderHTMLContent(element.value as string, {
                   fontSize: "16px",
-                  color: "#E3C7A1",
+                  color: "#E3C7A1", // Customize for NameTagBox
                 })}
               </Box>
             );
 
           case "ItemTitle":
-            const value = element.value as Record<string, string> | null;
-            if (!value) return null;
+            const itemTitleValue = element.value as ItemTitle | null;
+            if (!itemTitleValue) return null;
             return (
               <Box key={key} mb={2}>
-                {renderHTMLContent(value.leftStr0 || "", {
+                {renderHTMLContent(itemTitleValue.leftStr0 || "", {
                   fontSize: "14px",
-                  color: "#E3C7A1",
+                  color: "#E3C7A1", // Customize for ItemTitle
                 })}
                 <Typography variant="body2" style={{ fontSize: "14px" }}>
-                  {renderHTMLContent(value.leftStr1 || "")}
+                  {renderHTMLContent(itemTitleValue.leftStr1 || "")}
                 </Typography>
                 <Typography variant="body2" style={{ fontSize: "14px" }}>
-                  {renderHTMLContent(value.leftStr2 || "")}
+                  {renderHTMLContent(itemTitleValue.leftStr2 || "")}
                 </Typography>
               </Box>
             );
@@ -80,25 +84,21 @@ const EquipmentTooltip: React.FC<EquipmentTooltipProps> = ({ tooltipData }) => {
             );
 
           case "ItemPartBox":
-            const partValue = element.value as Record<string, string> | null;
-            if (!partValue) return null;
+            const partBoxValue = element.value as ItemPartBox | null;
+            if (!partBoxValue) return null;
             return (
               <Box key={key} mb={2}>
                 <Typography variant="body2" style={{ fontSize: "14px" }}>
-                  {renderHTMLContent(partValue.Element_000 || "")}
+                  {renderHTMLContent(partBoxValue.Element_000 || "")}
                 </Typography>
                 <Typography variant="body2" style={{ fontSize: "14px" }}>
-                  {renderHTMLContent(partValue.Element_001 || "")}
+                  {renderHTMLContent(partBoxValue.Element_001 || "")}
                 </Typography>
               </Box>
             );
 
           case "Progress":
-            const progressValue = element.value as {
-              title: string;
-              value: number;
-              maximum: number;
-            } | null;
+            const progressValue = element.value as Progress | null;
             if (!progressValue) return null;
             return (
               <Box key={key} mb={2}>
@@ -114,19 +114,14 @@ const EquipmentTooltip: React.FC<EquipmentTooltipProps> = ({ tooltipData }) => {
             );
 
           case "IndentStringGroup":
-            const groupValue = element.value as {
-              Element_000: {
-                topStr: string;
-                contentStr: Record<string, { contentStr: string }> | null;
-              };
-            } | null;
-            if (!groupValue || !groupValue.Element_000) return null;
+            const indentGroupValue = element.value as IndentStringGroup | null;
+            if (!indentGroupValue || !indentGroupValue.Element_000) return null;
             return (
               <Box key={key} mb={2}>
                 <Typography variant="body2" style={{ fontSize: "14px" }}>
-                  {renderHTMLContent(groupValue.Element_000.topStr || "")}
+                  {renderHTMLContent(indentGroupValue.Element_000.topStr || "")}
                 </Typography>
-                {Object.values(groupValue.Element_000.contentStr || {}).map(
+                {indentGroupValue.Element_000.contentStr?.map(
                   (content, idx) => (
                     <Typography
                       key={idx}
@@ -146,6 +141,4 @@ const EquipmentTooltip: React.FC<EquipmentTooltipProps> = ({ tooltipData }) => {
       })}
     </Box>
   );
-};
-
-export default EquipmentTooltip;
+}
