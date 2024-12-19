@@ -1,10 +1,8 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
-import Tabs from "@mui/material/Tabs";
-import Tab from "@mui/material/Tab";
-import Box from "@mui/material/Box";
+import { Tabs, Tab, Box } from "@mui/material";
 
-export default function ColorTabs() {
+export default function PageTab() {
   const [value, setValue] = React.useState("tab1");
   const navigate = useNavigate(); // React Router의 useNavigate 사용
 

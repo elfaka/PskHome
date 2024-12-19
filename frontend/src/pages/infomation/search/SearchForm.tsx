@@ -56,7 +56,7 @@ export default function SearchForm({ onResult }: SearchFormProps) {
         margin: "0 auto",
       }}
     >
-      <h1>캐락터 정보 입력</h1>
+      <h1>캐릭터 정보 입력</h1>
       <TextField
         label="캐릭터 이름"
         variant="outlined"
