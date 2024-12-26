@@ -2,10 +2,10 @@ name: pskhome
 
 services:
   be:
-    image: node:22
+    image: openjdk:21-jdk-slim
     restart: unless-stopped
     ports:
-      - 3000:3000
+      - 8080:8080
     volumes:
       - ../backend:/opt
     working_dir: /opt
@@ -13,5 +13,5 @@ services:
       - sh
       - -euc
       - |
-        npm install
-        node dist/main
+        ./gradlew bootJar
+        java -jar build/libs/*.jar

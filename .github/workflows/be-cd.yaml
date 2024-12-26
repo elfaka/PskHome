@@ -1,4 +1,4 @@
-name: Back-End Deploy
+name: Backend Deploy
 
 on:
   push:
@@ -12,6 +12,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -21,32 +22,37 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-        # 2. Node.js 22 설치
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v3
+      # 2. Java 21 설치
+      - name: Set up Java 21
+        uses: actions/setup-java@v3
         with:
-          node-version: 22
+          distribution: "temurin"
+          java-version: "21"
 
-      # 3. npm install
-      - name: Install modules
+      # 3. Gradle 설치 및 캐싱
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      # 4. Gradle 빌드
+      - name: Build with Gradle
         working-directory: backend
-        run: npm install
+        run: ./gradlew clean build -x test
 
-        # 4. npm run build
-      - name: Build
-        working-directory: backend
-        run: npm run build
-
-        # 5. Copy dist
-      - name: Copy dist
+      # 5. Copy JAR
+      - name: Copy JAR
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST_NAME }}
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: backend/, server/
-          target: ~/${{ github.event.repository.name }}
+          source: backend/build/libs/*.jar
+          target: ~/${{ github.event.repository.name }}/backend/
 
       - name: Setup environment variables
         uses: appleboy/ssh-action@v1.0.3
@@ -58,7 +64,8 @@ jobs:
           script: |
             cd ~/${{ github.event.repository.name }}/backend
             echo "LOSTARK_API_KEY=${{ secrets.LOSTARK_API_KEY }}" > .env
-        # 6. run docker
+
+      # 6. Run Docker
       - name: Update be
         uses: appleboy/ssh-action@v1.0.3
         with:
