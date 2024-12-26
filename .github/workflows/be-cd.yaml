@@ -54,7 +54,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
           source: backend/build/libs/*.jar
-          target: ~/${{ github.event.repository.name }}/backend/
+          target: ~/${{ github.event.repository.name }}
 
       - name: Setup environment variables
         uses: appleboy/ssh-action@v1.0.3
