@@ -41,7 +41,9 @@ jobs:
       # 4. Gradle 빌드
       - name: Build with Gradle
         working-directory: backend
-        run: ./gradlew clean build -x test
+        run: |
+          chmod +x gradlew
+          ./gradlew build -x test
 
       # 5. Copy JAR
       - name: Copy JAR
