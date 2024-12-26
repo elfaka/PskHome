@@ -7,7 +7,7 @@ services:
     ports:
       - 8080:8080
     volumes:
-      - ../backend:/opt
+      - ../backend/build/libs:/opt
     working_dir: /opt
     entrypoint:
       - sh
