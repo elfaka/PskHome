@@ -19,7 +19,7 @@ export default function PageTab() {
         navigate("/optimize");
         break;
       case "tab4":
-        navigate("/equipment-inspection");
+        navigate("/checkequipment");
         break;
       default:
         break;
