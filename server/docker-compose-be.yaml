@@ -13,4 +13,4 @@ services:
       - sh
       - -euc
       - |
-        java -jar build/libs/*.jar
+        java -jar *.jar
