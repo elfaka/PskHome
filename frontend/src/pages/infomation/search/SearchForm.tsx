@@ -23,7 +23,7 @@ export default function SearchForm({ onResult }: SearchFormProps) {
     setIsLoading(true); // 로딩 시작
 
     try {
-      const response = await fetch(`/api/lostark/character-info?name=${name}`);
+      const response = await fetch(`/api/character/${name}`);
       if (!response.ok) {
         throw new Error("API 호출 실패");
       }
