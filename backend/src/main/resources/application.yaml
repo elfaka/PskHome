@@ -1,0 +1,8 @@
+spring:
+  cloud.openfeign:
+    okhttp.enabled: true
+    client.config:
+      open-api:
+        url: https://developer-lostark.game.onstove.com
+
+jasypt.encryptor.password: ${JASYPT_ENCRYPTOR_PASSWORD}
