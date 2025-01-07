@@ -4,6 +4,8 @@ services:
   be:
     image: openjdk:21-jdk-slim
     restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
     ports:
       - 8080:8080
     volumes:

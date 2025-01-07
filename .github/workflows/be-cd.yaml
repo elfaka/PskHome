@@ -65,7 +65,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd ~/${{ github.event.repository.name }}/backend/build/libs
-            echo "LOSTARK_API_KEY=${{ secrets.LOSTARK_API_KEY }}" > .env
+            echo "LOSTARK_API_KEY=${{ secrets.JASYPT_ENCRYPTOR_PASSWORD }}" > .env
 
       # 6. Run Docker
       - name: Update be
