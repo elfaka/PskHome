@@ -1,8 +1,15 @@
 spring:
+  # .env import
+  config:
+    import: optional:file:.env[.properties]
+  # openfegin import
   cloud.openfeign:
     okhttp.enabled: true
     client.config:
       open-api:
+        # set url and header
         url: https://developer-lostark.game.onstove.com
 
-jasypt.encryptor.password: ${JASYPT_ENCRYPTOR_PASSWORD}
+jasypt:
+  encryptor:
+    password: ${JASYPT_ENCRYPTOR_PASSWORD}
