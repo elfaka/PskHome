@@ -22,7 +22,7 @@ services:
     environment:
       MYSQL_EXPIRE_LOGS_DAYS: 7
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: webpage
+      MYSQL_DATABASE: page
       LANG: C.UTF-8
       TZ: Asia/Seoul
     volumes:
