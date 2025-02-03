@@ -8,6 +8,7 @@ on:
       - backend/**
       - .github/workflows/be-cd.yaml
       - server/docker-compose-be.yaml
+      - server/docker-compose-db.yaml
 
 concurrency:
   group: ${{ github.workflow }}

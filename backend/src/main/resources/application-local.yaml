@@ -1,4 +1,10 @@
 spring:
+  data.redis.host: pskhome-mem-1
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://pskhome-db-1/maple
+    username: root
+    password: ${MYSQL_ROOT_PASSWORD}
   cloud.openfeign.client.config:
     open-api:
       default-request-headers:
