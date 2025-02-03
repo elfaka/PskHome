@@ -69,7 +69,7 @@ jobs:
             echo "JASYPT_ENCRYPTOR_PASSWORD=${{ secrets.JASYPT_ENCRYPTOR_PASSWORD }}" > .env
 
       # 6. Run Docker
-      - name: Update be
+      - name: Update be and db
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST_NAME }}
@@ -81,3 +81,7 @@ jobs:
             docker compose -f docker-compose-be.yaml pull
             docker compose -f docker-compose-be.yaml down
             docker compose -f docker-compose-be.yaml up -d
+
+            docker compose -f docker-compose-db.yaml pull
+            docker compose -f docker-compose-db.yaml down
+            docker compose -f docker-compose-db.yaml up -d
