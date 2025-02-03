@@ -67,6 +67,7 @@ jobs:
           script: |
             cd ~/${{ github.event.repository.name }}/backend/build/libs
             echo "JASYPT_ENCRYPTOR_PASSWORD=${{ secrets.JASYPT_ENCRYPTOR_PASSWORD }}" > .env
+            echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" >> .env
 
       # 6. Run Docker
       - name: Update be and db
