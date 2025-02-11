@@ -1,3 +1,5 @@
+name: pskhome
+
 volumes:
   db:
 
