@@ -1,5 +1,3 @@
-name: pskhome
-
 services:
   be:
     image: openjdk:21-jdk-slim
