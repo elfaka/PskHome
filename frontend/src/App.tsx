@@ -34,7 +34,7 @@ export default function App() {
           justifyContent: "center",
         }}
       >
-        <footer>&copy; 2024 Your Company. All rights reserved.</footer>
+        <footer>&copy; 2025 Your Company. All rights reserved.</footer>
       </Grid>
     </Grid>
   );

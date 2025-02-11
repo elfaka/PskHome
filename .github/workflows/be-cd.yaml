@@ -83,10 +83,13 @@ jobs:
             docker compose -f docker-compose-be.yaml pull
             docker compose -f docker-compose-db.yaml pull
 
+            docker compose -f docker-compose-be.yaml down
+            docker compose -f docker-compose-db.yaml down
+
             export $(cat .env)
 
-            docker compose -f docker-compose-db.yaml up -d --remove-orphans
-            docker compose -f docker-compose-be.yaml up -d --remove-orphans
+            docker compose -f docker-compose-db.yaml up -d
+            docker compose -f docker-compose-be.yaml up -d
 
             docker image prune -af
 
