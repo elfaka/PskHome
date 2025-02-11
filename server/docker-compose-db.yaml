@@ -1,10 +1,5 @@
 name: pskhome
 
-networks:
-  default:
-    external: true
-    name: traefik
-
 volumes:
   db:
 
