@@ -1,4 +1,7 @@
-name: pskhome
+networks:
+  default:
+    external: true
+    name: traefik
 
 services:
   be:
