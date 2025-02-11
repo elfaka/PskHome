@@ -5,6 +5,9 @@ networks:
     external: true
     name: traefik
 
+volumes:
+  db:
+
 services:
   mem:
     image: redis:alpine
