@@ -79,16 +79,19 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd ~/${{ github.event.repository.name }}/server
+
             docker compose -f docker-compose-be.yaml pull
             docker compose -f docker-compose-db.yaml pull
 
             export $(cat .env)
-            REPO_NAME=$(echo ${{ github.event.repository.name }} | tr '[:upper:]' '[:lower:]')
+
             docker compose -f docker-compose-db.yaml up -d
             docker compose -f docker-compose-be.yaml up -d
 
             docker image prune -af
-            STATUS=$(docker service inspect ${REPO_NAME}_be --format {{.UpdateStatus.State}})
-            if [[ ${STATUS} != "completed" ]]; then
+
+            STATUS=$(docker compose ps -q be | xargs docker inspect -f '{{.State.Status}}')
+
+            if [[ ${STATUS} != "running" ]]; then
               exit 1
             fi
