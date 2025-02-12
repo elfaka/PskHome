@@ -1,4 +1,4 @@
-name: pskhome
+name: pskhome-db-1
 
 volumes:
   db:
