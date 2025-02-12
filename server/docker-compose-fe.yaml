@@ -3,7 +3,7 @@ name: frontend
 services:
   fe:
     image: nginx:alpine
-    container_name: pskhome-fe
+    container_name: pskhome-fe-1
     restart: unless-stopped
     ports:
       - 5173:80

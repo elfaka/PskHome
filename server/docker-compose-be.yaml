@@ -3,11 +3,12 @@ name: backend
 services:
   be:
     image: openjdk:21-jdk-slim
-    container_name: pskhome-be
+    container_name: pskhome-be-1
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
       JASYPT_PASSWORD: ${JASYPT_ENCRYPTOR_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     ports:
       - 8080:8080
     volumes:
