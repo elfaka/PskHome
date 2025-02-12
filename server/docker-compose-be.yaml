@@ -1,8 +1,7 @@
-name: pskhome-be-1
-
 services:
   be:
     image: openjdk:21-jdk-slim
+    container_name: pskhome-be
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod

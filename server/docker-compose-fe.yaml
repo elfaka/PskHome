@@ -3,6 +3,7 @@ name: pskhome-fe-1
 services:
   fe:
     image: nginx:alpine
+    container_name: pskhome-fe
     restart: unless-stopped
     ports:
       - 5173:80
