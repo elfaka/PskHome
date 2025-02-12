@@ -1,5 +1,3 @@
-name: pskhome-fe-1
-
 services:
   fe:
     image: nginx:alpine

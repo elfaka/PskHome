@@ -1,4 +1,4 @@
-name: pskhome-db-1
+name: pskhome
 
 volumes:
   db:
@@ -6,7 +6,6 @@ volumes:
 services:
   mem:
     image: redis:alpine
-    container_name: pskhome-mem
     restart: unless-stopped
     ports:
       - 6379:6379
@@ -15,7 +14,6 @@ services:
 
   db:
     image: mysql:8.0
-    container_name: pskhome-db
     restart: unless-stopped
     ports:
       - 3306:3306
