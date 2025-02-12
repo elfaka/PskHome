@@ -92,3 +92,9 @@ jobs:
             docker compose -f docker-compose-be.yaml up -d
 
             docker image prune -af
+
+            STATUS=$(docker inspect -f '{{.State.Status}}' pskhome-be-1)
+
+            if [[ ${STATUS} != "running" ]]; then
+              exit 1
+            fi
