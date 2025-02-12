@@ -83,18 +83,15 @@ jobs:
             docker compose -f docker-compose-be.yaml pull
             docker compose -f docker-compose-db.yaml pull
 
-            docker compose -f docker-compose-be.yaml down
-            docker compose -f docker-compose-db.yaml down
-
             export $(cat .env)
-
+            REPO_NAME=$(echo ${{ github.event.repository.name }} | tr '[:upper:]' '[:lower:]')
             docker compose -f docker-compose-db.yaml up -d
-            docker compose -f docker-compose-be.yaml up -d
-
+            docker service ls | grep -iw ${REPO_NAME}_be \
+              && docker service update --force ${REPO_NAME}_be \
+              || docker stack deploy -c docker-compose-be.yaml ${REPO_NAME}
+              
             docker image prune -af
-
-            STATUS=$(docker compose ps -q be | xargs docker inspect -f '{{.State.Status}}')
-
-            if [[ ${STATUS} != "running" ]]; then
+            STATUS=$(docker service inspect ${REPO_NAME}_be --format {{.UpdateStatus.State}})
+            if [[ ${STATUS} != "completed" ]]; then
               exit 1
             fi
