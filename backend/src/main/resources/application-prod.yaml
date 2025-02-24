@@ -9,7 +9,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://pskhome-db-1/page
     username: root
-    password: ${MYSQL_ROOT_PASSWORD}
+    password: qkrtjsrb312
 
   cloud.openfeign.client.config:
     open-api:

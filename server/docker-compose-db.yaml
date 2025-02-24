@@ -21,7 +21,7 @@ services:
       - 3306:3306
     environment:
       MYSQL_EXPIRE_LOGS_DAYS: 7
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: qkrtjsrb312
       MYSQL_DATABASE: page
       LANG: C.UTF-8
       TZ: Asia/Seoul
