@@ -7,7 +7,7 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://pskhome-db-1/page
+    url: jdbc:mysql://pskhome-db-1:3306/page
     username: root
     password: qkrtjsrb312
 
