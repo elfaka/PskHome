@@ -1,5 +1,10 @@
 name: backend
 
+networks:
+  default:
+    external: true
+    name: traefik
+
 services:
   be:
     image: openjdk:21-jdk-slim
@@ -8,7 +13,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       JASYPT_PASSWORD: ${JASYPT_ENCRYPTOR_PASSWORD}
-      MYSQL_ROOT_PASSWORD: qkrtjsrb312
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     ports:
       - 8080:8080
     volumes:
