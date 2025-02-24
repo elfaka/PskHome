@@ -2,6 +2,7 @@ spring:
   jpa.open-in-view: false
   data.redis.repositories.enabled: false
   web.resources.add-mappings: false
+
   # .env import
   config:
     import: optional:file:.env[.properties]
