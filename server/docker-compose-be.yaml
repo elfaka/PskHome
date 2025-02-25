@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      JASYPT_PASSWORD: ${JASYPT_ENCRYPTOR_PASSWORD}
+      JASYPT_ENCRYPTOR_PASSWORD: ${JASYPT_ENCRYPTOR_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     ports:
       - 8080:8080
