@@ -13,8 +13,6 @@ spring:
       open-api:
         # set url and header
         url: https://developer-lostark.game.onstove.com
-        default-request-headers:
-          Authorization: ENC(OU4YZnfHyQiyC+B5kM+SLsRyiL0Gd+UTzUGG1hsre1kI8akRfVqhnR6P1slmEO6+qiKcLD5dYDOeSyWv3vIYNeYaNqd7ylt2xcwZlklvzkuiU4ZATNCNe2lnxO/bwHf//1/DMPxa7BUTcEvPJUhVsAL5ZUScgnPqXTj+0Z8ZCVtYyuVtNt+LHPL9iwaDX5fUogDz2+2WAJgkfok/wejpdvbc7S2WuX1+vBbQncZJ3LiK1ehQKXrGDW5p9iPxWNM316CBZstluxQ4OCLoEuZ/c46JJM6lpHmM5dPr30IJdItUTRyxwPImK+Fv9Wc+4ji3fV39YBKsmgB+sz5j1boJW0xC+daM6A5OsCpMXXh5CVzt+/pvriWIoAls3cMq4JQ1Y5I90V1txW07mInCnM8Aa1aJ8mDS64mpRUvCsxtWOaSPzFkBMvX8s2rl1RTziMM6Bgg9c3Q7ELOdElQ1ahCRpYgGijIYQQuSkQyTq/nGs7c1QZKDHGcGUcgMpRg6x0Q9FO9K2MuuKzZ88ILKEPbcAJWkEBsqmZL0eD/xEQmr8fW/DktiKxDz8iRNSkGtBrbKfyQZBA6p+Gj4wsak5lUzN5Fn5kVLyK1Rdb3QQUP7mNxmGqb1jmR5PfDvEQP9fuVtKmYvb9fYaAnXuc4NxvQH4b4KrsmidXeyKdhV770zczYBYWJuqqOS5ea5ENbWBGxFJXeoOtrCS+Zf+qQLimSZJB6YLPvfoAu6Lcgll+dOOp61JhHT7kGuEKCkVgCd2ZN5gEBIY+SkOcm0TjwV4alptefZ9aaoiAKc9LD1Cqf+latG1jPh7i9sO5CbkkKX2J+7lFcAnZprZOmnFqkNPn0N04uooPozVVlRoqdF+rHcFYcESKaHZB8/1ZRauGU6P6lo8bq483p+42xy8wuuW5eyqA==)
 
 jasypt:
   encryptor:
