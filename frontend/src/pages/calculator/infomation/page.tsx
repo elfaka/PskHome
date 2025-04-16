@@ -2,7 +2,7 @@ import Container from "@mui/material/Container";
 import { useState } from "react";
 import SearchForm from "./search/SearchForm";
 import CharacterInfo from "./search/CharacterInfo";
-import { ArmoryTotal } from "../../types/character/ArmoryTotal";
+import { ArmoryTotal } from "../../../types/character/ArmoryTotal";
 
 export default function Information() {
   const [ArmoryTotal, setArmoryTotal] = useState<null | ArmoryTotal>(null); // API 결과 저장

@@ -1,4 +1,4 @@
-import Top from "../../components/layout/Top";
+import Top from "../../../components/layout/Top";
 import Grid from "@mui/material/Grid2"; // Grid2를 사용합니다.
 
 export default function main() {
