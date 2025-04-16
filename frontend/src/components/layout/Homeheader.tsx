@@ -1,6 +1,5 @@
 import elfaka from "../../assets/elfaka.png";
 import github from "../../assets/github.svg";
-import Appbar from "@mui/material/AppBar";
 
 export default function Homeheader() {
   return (
