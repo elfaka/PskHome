@@ -1,8 +1,8 @@
 import React from "react";
 import Tooltip from "@mui/material/Tooltip";
 import Grid from "@mui/material/Grid2";
-import ItemTooltip from "../../../components/content/ItemTooltip";
-import StyledItem from "../../../components/layout/StyledItem";
+import ItemTooltip from "../../../../components/content/ItemTooltip";
+import StyledItem from "../../../../components/layout/StyledItem";
 
 // Equipment 타입 정의
 interface Equipment {

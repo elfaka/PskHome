@@ -1,7 +1,7 @@
 import { Box } from "@mui/material";
 import Grid from "@mui/material/Grid2";
-import { ArmoryTotal } from "../../../types/character/ArmoryTotal";
-import StyledItem from "../../../components/layout/StyledItem";
+import { ArmoryTotal } from "../../../../types/character/ArmoryTotal";
+import StyledItem from "../../../../components/layout/StyledItem";
 import CharacterEquipment from "./CharacterEquipment";
 import CharacterAccessory from "./CharacterAccessory";
 import CharacterSpecial from "./CharacterSpecial";
