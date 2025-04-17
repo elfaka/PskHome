@@ -1,0 +1,14 @@
+/* Homeheader.css */
+.home-header-container {
+  width: 100%;
+  height: 100%;
+}
+
+.hover-img {
+  display: block;
+  transition: transform 0.3s ease; /* 부드러운 애니메이션 */
+}
+
+.hover-img:hover {
+  transform: scale(1.2); /* 이미지 크기 확대 */
+}

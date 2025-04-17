@@ -1,8 +1,8 @@
 import Grid from "@mui/material/Grid2";
-import Homeheader from "../../components/layout/Homeheader";
+import Homeheader from "../../components/layout/Homeheader/Homeheader";
 export default function home() {
   return (
-    <Grid>
+    <Grid container direction="column">
       <Grid>
         <Homeheader />
       </Grid>
