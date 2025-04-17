@@ -8,7 +8,7 @@ import Optimize from "./pages/calculator/optimize/page";
 
 export default function App() {
   return (
-    <Contaioner style={{ maxWidth: "100%", background: "#FFFFDF" }}>
+    <Contaioner style={{ maxWidth: "100%", background: "#FFFFEF" }}>
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/about" element={<About />} />
