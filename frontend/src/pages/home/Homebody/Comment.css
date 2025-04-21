@@ -1,0 +1,9 @@
+.link {
+  border: 1px solid #8ee8a1;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: #8ee8a144;
+  word-break: break-all;
+  line-height: 2;
+  text-decoration: none;
+}
