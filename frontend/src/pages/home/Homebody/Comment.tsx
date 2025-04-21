@@ -6,14 +6,15 @@ export default function Comment() {
         <hr style={{ background: "#afafff", height: "3px" }} />
       </h1>
       <h3>
-        <ul>
+        <ul style={{ lineHeight: "3.0em" }}>
           <li>
             해당 사이트는 그 동안 공부를 한 흔적을 기록하기 위해 만들었습니다.
           </li>
           <li>
-            <ul>
-              <li>111</li>
-            </ul>
+            제 소개는 <a href="/about">여기</a>에 있습니다.
+          </li>
+          <li>
+            제 소개는 <a href="/about">여기</a>에 있습니다.
           </li>
         </ul>
       </h3>
