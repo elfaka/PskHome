@@ -4,11 +4,23 @@ export default function Comment() {
   return (
     <div>
       <h1 style={{ paddingTop: "20px", paddingBottom: "20px" }}>
-        👋 만나서 반갑습니다. ELFAKA 입니다.
-        <hr style={{ background: "#afafff", height: "3px" }} />
+        <span style={{ display: "inline-block", position: "relative" }}>
+          👋 만나서 반갑습니다. ELFAKA 입니다.
+          <hr
+            style={{
+              position: "absolute",
+              bottom: "-10px",
+              left: 0,
+              background: "#afafff",
+              height: "2px",
+              width: "100%",
+              border: "none",
+            }}
+          />
+        </span>
       </h1>
       <h3>
-        <ul style={{ lineHeight: "3.0em" }}>
+        <ul style={{ lineHeight: "4.0em" }}>
           <li>
             해당 사이트는 그 동안 공부를 한 흔적을 기록하고 토이 프로젝트 구축을
             위해 만들었습니다.
@@ -21,7 +33,7 @@ export default function Comment() {
             에 있습니다.
           </li>
           <li>
-            여태 것 풀었던 PS(Problem Solving)은
+            그동안 풀었던 PS(Problem Solving)은
             <a href="/Solve" className="link">
               Solve
             </a>
@@ -43,7 +55,6 @@ export default function Comment() {
           </li>
         </ul>
       </h3>
-      <h2>Still Working...</h2>
     </div>
   );
 }

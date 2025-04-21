@@ -4,13 +4,19 @@ import HomeBody from "./Homebody/Homebody";
 
 export default function Home() {
   return (
-    <Grid container spacing={10} direction="column" sx={{ height: "200vh" }}>
-      {/* Homeheader: 고정 크기 설정 */}
-      <Grid>
+    <Grid
+      container
+      spacing={10}
+      direction="column"
+      sx={{ height: "100vh", overflow: "hidden" }} // 화면 높이에 맞춤
+    >
+      {/* Homeheader: 고정 크기 */}
+      <Grid sx={{ flexShrink: 0 }}>
         <Homeheader />
       </Grid>
-      {/* HomeBody: 남은 공간을 차지하도록 설정 */}
-      <Grid sx={{ flex: 1, overflowY: "auto" }}>
+
+      {/* HomeBody: 남은 영역을 차지하고 스크롤 가능 */}
+      <Grid sx={{ flexGrow: 1, overflowY: "auto" }}>
         <HomeBody />
       </Grid>
     </Grid>
