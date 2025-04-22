@@ -13,7 +13,7 @@
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
   max-width: 100%;
   margin: 0 auto;
   gap: 1rem;
@@ -31,7 +31,6 @@
   flex: 1;
   display: flex;
   justify-content: flex-start;
-  align-items: center;
 }
 
 /* 오른쪽 GitHub */
@@ -39,7 +38,6 @@
   flex: 1;
   display: flex;
   justify-content: flex-end;
-  align-items: center;
 }
 
 /* 호버 효과 */

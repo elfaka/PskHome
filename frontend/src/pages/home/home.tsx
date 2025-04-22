@@ -15,17 +15,11 @@ export default function Home() {
 
       {/* HomeBody: 나중에 본문 넣을 영역 */}
       <div className="home-body">
-        <div className="homebody-container">
-          <div className="homebody-spacer" />
-          <div className="homebody-content">
-            <Routes>
-              <Route path="/" element={<Main />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/solve" element={<Solve />} />
-            </Routes>
-          </div>
-          <div className="homebody-spacer" />
-        </div>
+        <Routes>
+          <Route path="/" element={<Main />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/solve" element={<Solve />} />
+        </Routes>
       </div>
     </div>
   );

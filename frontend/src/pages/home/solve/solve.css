@@ -1,18 +1,6 @@
-/* 전체 컨테이너: 세로 방향 flex 레이아웃 */
-.solve-container {
+.SolveContainer {
   display: flex;
   flex-direction: column;
-  height: 100dvh; /* 동적 높이, F12 콘솔 열어도 안정적 */
-  overflow: hidden;
-}
-
-/* 고정된 헤더 */
-.solve-header {
-  flex-shrink: 0;
-}
-
-/* 나머지 영역은 자동으로 채우고 스크롤 가능 */
-.solve-body {
-  flex-grow: 1;
-  overflow-y: auto;
+  justify-content: center;
+  align-items: center;
 }
