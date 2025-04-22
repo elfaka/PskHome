@@ -1,7 +1,7 @@
 import Grid from "@mui/material/Grid2";
 import Homeheader from "../../../components/layout/Homeheader/Homeheader";
 
-export default function about() {
+export default function About() {
   return (
     <Grid
       container

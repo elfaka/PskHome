@@ -1,5 +1,5 @@
 import { Route, Routes } from "react-router-dom";
-import HomeBody from "./Homebody/Homebody";
+import HomeBody from "./Homebody/homebody";
 import About from "./about/about";
 import Solve from "./solve/solve";
 import Homeheader from "../../components/layout/Homeheader/Homeheader";
