@@ -1,4 +1,4 @@
-import "./homebody.css";
+import "./Homebody.css";
 
 export default function Homebody() {
   return (
