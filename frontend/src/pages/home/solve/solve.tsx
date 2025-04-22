@@ -1,5 +1,5 @@
 import Homeheader from "../../../components/layout/Homeheader/Homeheader";
-import "./Solve.css"; // 스타일은 따로 관리
+import "./solve.css"; // 스타일은 따로 관리
 
 export default function Solve() {
   return (

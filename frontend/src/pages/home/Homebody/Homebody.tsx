@@ -1,6 +1,6 @@
-import "./Homebody.css";
+import "./homebody.css";
 
-export default function Comment() {
+export default function Homebody() {
   return (
     <div>
       <h1 style={{ paddingTop: "20px", paddingBottom: "20px" }}>

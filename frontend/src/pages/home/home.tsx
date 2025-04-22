@@ -1,5 +1,5 @@
 import { Route, Routes } from "react-router-dom";
-import Homebody from "./Homebody/Homebody";
+import HomeBody from "./Homebody/Homebody";
 import About from "./about/about";
 import Solve from "./solve/solve";
 import Homeheader from "../../components/layout/Homeheader/Homeheader";
@@ -19,7 +19,7 @@ export default function Home() {
           <div className="homebody-spacer" />
           <div className="homebody-content">
             <Routes>
-              <Route path="/" element={<Homebody />} />
+              <Route path="/" element={<HomeBody />} />
               <Route path="/about" element={<About />} />
               <Route path="/solve" element={<Solve />} />
             </Routes>
