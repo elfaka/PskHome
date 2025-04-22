@@ -1,8 +1,7 @@
 import Grid from "@mui/material/Grid2";
-import Homeheader from "../../components/layout/Homeheader/Homeheader";
-import HomeBody from "./Homebody/Homebody";
+import Homeheader from "../../../components/layout/Homeheader/Homeheader";
 
-export default function Home() {
+export default function about() {
   return (
     <Grid
       container
@@ -16,9 +15,7 @@ export default function Home() {
       </Grid>
 
       {/* HomeBody: 남은 영역을 차지하고 스크롤 가능 */}
-      <Grid sx={{ flexGrow: 1, overflowY: "auto" }}>
-        <HomeBody />
-      </Grid>
+      <Grid sx={{ flexGrow: 1, overflowY: "auto" }}></Grid>
     </Grid>
   );
 }

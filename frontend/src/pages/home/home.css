@@ -1,0 +1,48 @@
+/* 전체 컨테이너: 세로 방향 flex 레이아웃 */
+.home-container {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh; /* 동적 높이, F12 콘솔 열어도 안정적 */
+  overflow: hidden;
+}
+
+/* 고정된 헤더 */
+.home-header {
+  flex-shrink: 0;
+}
+
+/* 나머지 영역은 자동으로 채우고 스크롤 가능 */
+.home-body {
+  flex-grow: 1;
+  overflow-y: auto;
+}
+/* 부모 컨테이너: 가로 방향 flexbox */
+.homebody-container {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2rem; /* spacing={4}에 대응 */
+  padding: 1rem;
+}
+
+/* 양 옆 여백 */
+.homebody-spacer {
+  flex: 1 1 0%;
+  max-width: 25%; /* md:3에 해당하는 너비 */
+  display: none;
+}
+
+.homebody-content {
+  flex: 0 1 50%; /* md:6에 해당 */
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+/* 반응형 대응: xs일 때 중앙 영역만 보이도록 */
+@media (min-width: 768px) {
+  .homebody-spacer {
+    display: block;
+  }
+}
