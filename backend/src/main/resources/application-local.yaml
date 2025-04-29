@@ -1,14 +1,21 @@
 spring:
-  data.redis.host: pskhome-mem-1
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/page
+    username: root
+    password: chopr159~~
+
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://pskhome-db-1/page
-    username: root
-    password: ${MYSQL_ROOT_PASSWORD}
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      repositories:
+        enabled: false
 
   cloud.openfeign:
     client.config:
