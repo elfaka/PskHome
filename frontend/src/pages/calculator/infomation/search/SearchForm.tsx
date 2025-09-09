@@ -4,7 +4,7 @@ import {
   InputAdornment,
   Box,
   CircularProgress,
-  Typography,
+  Typography
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 
