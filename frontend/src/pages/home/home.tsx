@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 import Main from "./main/main";
 import About from "./about/about";
 import Solve from "./solve/solve";
+import Project from "./project/project";
 import Homeheader from "../../components/layout/Homeheader/Homeheader";
 
 export default function Home() {
@@ -18,6 +19,7 @@ export default function Home() {
           <Route path="/" element={<Main />} />
           <Route path="/about" element={<About />} />
           <Route path="/solve" element={<Solve />} />
+          <Route path="/project" element={<Project />} />
         </Routes>
       </div>
     </div>
