@@ -1,3 +1,10 @@
+server:
+  port: 8080
+  servlet:
+    session:
+      cookie:
+        same-site: LAX
+
 spring:
   jpa.open-in-view: false
   data.redis.repositories.enabled: false
@@ -13,7 +20,29 @@ spring:
       open-api:
         # set url and header
         url: https://developer-lostark.game.onstove.com
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - openid
+              - profile
+              - email
+              - https://www.googleapis.com/auth/drive.readonly
+              - https://www.googleapis.com/auth/spreadsheets.readonly
+              - https://www.googleapis.com/auth/forms.body.readonly
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          google:
+            issuer-uri: https://accounts.google.com
 
 jasypt:
   encryptor:
     password: ${JASYPT_ENCRYPTOR_PASSWORD}
+
+app:
+  # Step 1-2에서는 프론트 연결 전이니까 일단 "/"로 둠
+  login-success-redirect: "http://localhost:8080/api/ping"

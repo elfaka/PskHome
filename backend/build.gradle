@@ -24,12 +24,24 @@ ext {
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
     implementation 'com.github.ulisesbocchio:jasypt-spring-boot-starter:3.0.5'
+
+    // Google API Client base
+    implementation 'com.google.api-client:google-api-client:2.6.0'
+    implementation 'com.google.oauth-client:google-oauth-client:1.36.0'
+    implementation 'com.google.http-client:google-http-client-jackson2:1.44.2'
+
+    // Drive / Sheets / Forms (서비스 라이브러리)
+    implementation 'com.google.apis:google-api-services-drive:v3-rev20251210-2.0.0'
+    implementation 'com.google.apis:google-api-services-sheets:v4-rev20240811-2.0.0'
+    implementation 'com.google.apis:google-api-services-forms:v1-rev20240625-2.0.0'
 
     annotationProcessor 'org.projectlombok:lombok'
 
