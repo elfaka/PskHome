@@ -1,4 +1,5 @@
 server:
+  forward-headers-strategy: framework
   port: 8080
   servlet:
     session:
@@ -34,7 +35,7 @@ spring:
               - https://www.googleapis.com/auth/drive.readonly
               - https://www.googleapis.com/auth/spreadsheets.readonly
               - https://www.googleapis.com/auth/forms.body.readonly
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            redirect-uri: "{baseUrl}/api/login/oauth2/code/{registrationId}"
         provider:
           google:
             issuer-uri: https://accounts.google.com
