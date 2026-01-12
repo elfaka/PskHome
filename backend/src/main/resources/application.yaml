@@ -33,8 +33,9 @@ spring:
               - profile
               - email
               - https://www.googleapis.com/auth/drive.readonly
-              - https://www.googleapis.com/auth/spreadsheets.readonly
+              # - https://www.googleapis.com/auth/spreadsheets.readonly
               - https://www.googleapis.com/auth/forms.body.readonly
+              - https://www.googleapis.com/auth/forms.responses.readonly
             redirect-uri: "{baseUrl}/api/login/oauth2/code/{registrationId}"
         provider:
           google:
