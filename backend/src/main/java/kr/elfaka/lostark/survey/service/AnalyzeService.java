@@ -35,7 +35,7 @@ public class AnalyzeService {
             // 값 수집(복수선택이면 여러 개)
             List<String> allValues = new ArrayList<>();
 
-            for (FormResponsesDto.FormResponseDto r : responses) {
+            for (FormResponsesDto.FormResponseDto r : Objects.requireNonNull(responses)) {
                 if (r.answers() == null) continue;
                 FormResponsesDto.AnswerDto ans = r.answers().get(qid);
                 if (ans == null || ans.values() == null) continue;
