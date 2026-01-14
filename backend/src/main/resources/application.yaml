@@ -44,7 +44,3 @@ spring:
 jasypt:
   encryptor:
     password: ${JASYPT_ENCRYPTOR_PASSWORD}
-
-app:
-  # Step 1-2에서는 프론트 연결 전이니까 일단 "/"로 둠
-  login-success-redirect: "http://localhost:8080/api/ping"
