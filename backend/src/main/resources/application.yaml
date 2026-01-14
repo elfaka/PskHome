@@ -1,11 +1,3 @@
-server:
-  forward-headers-strategy: framework
-  port: 8080
-  servlet:
-    session:
-      cookie:
-        same-site: LAX
-
 spring:
   jpa.open-in-view: false
   data.redis.repositories.enabled: false
