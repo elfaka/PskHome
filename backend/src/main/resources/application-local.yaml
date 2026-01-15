@@ -20,7 +20,7 @@ spring:
               # - https://www.googleapis.com/auth/spreadsheets.readonly
               - https://www.googleapis.com/auth/forms.body.readonly
               - https://www.googleapis.com/auth/forms.responses.readonly
-            redirect-uri: "https://localhost:8080/api/login/oauth2/code/{registrationId}"
+            redirect-uri: "http://localhost:8080/api/login/oauth2/code/{registrationId}"
         provider:
           google:
             issuer-uri: https://accounts.google.com
