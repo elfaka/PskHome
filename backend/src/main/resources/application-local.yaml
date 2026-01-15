@@ -5,6 +5,26 @@ spring:
     username: root
     password: chopr159~~
 
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - openid
+              - profile
+              - email
+              - https://www.googleapis.com/auth/drive.readonly
+              # - https://www.googleapis.com/auth/spreadsheets.readonly
+              - https://www.googleapis.com/auth/forms.body.readonly
+              - https://www.googleapis.com/auth/forms.responses.readonly
+            redirect-uri: "https://localhost:8080/api/login/oauth2/code/{registrationId}"
+        provider:
+          google:
+            issuer-uri: https://accounts.google.com
+
   jpa:
     hibernate:
       ddl-auto: update

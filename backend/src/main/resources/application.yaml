@@ -16,25 +16,6 @@ spring:
       open-api:
         # set url and header
         url: https://developer-lostark.game.onstove.com
-  security:
-    oauth2:
-      client:
-        registration:
-          google:
-            client-id: ${GOOGLE_CLIENT_ID}
-            client-secret: ${GOOGLE_CLIENT_SECRET}
-            scope:
-              - openid
-              - profile
-              - email
-              - https://www.googleapis.com/auth/drive.readonly
-              # - https://www.googleapis.com/auth/spreadsheets.readonly
-              - https://www.googleapis.com/auth/forms.body.readonly
-              - https://www.googleapis.com/auth/forms.responses.readonly
-            redirect-uri: "{baseUrl}/api/login/oauth2/code/{registrationId}"
-        provider:
-          google:
-            issuer-uri: https://accounts.google.com
 
 jasypt:
   encryptor:
