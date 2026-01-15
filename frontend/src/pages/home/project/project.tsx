@@ -19,6 +19,7 @@ const projects: ProjectInfo[] = [
       "Google Forms API를 활용해 설문 응답 데이터를 불러오고, 응답 수·문항별 응답 분포 등을 표와 그래프로 간편하게 확인할 수 있는 웹 페이지입니다. 설문 소유자가 폼 ID 또는 응답 스프레드시트 정보를 등록하면, 별도 엑셀 작업 없이도 기본적인 통계를 바로 볼 수 있도록 하는 것을 목표로 합니다.",
     status: "in-progress",
     tags: ["Google Forms API", "Spring Boot", "React", "Data Visualization"],
+    link: "https://elfaka.kr/googleform/login"
   },
   {
     id: 2,
