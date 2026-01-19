@@ -17,9 +17,9 @@ const projects: ProjectInfo[] = [
     subtitle: "Google Forms API 기반 설문 분석 페이지",
     description:
       "Google Forms API를 활용해 설문 응답 데이터를 불러오고, 응답 수·문항별 응답 분포 등을 표와 그래프로 간편하게 확인할 수 있는 웹 페이지입니다. 설문 소유자가 폼 ID 또는 응답 스프레드시트 정보를 등록하면, 별도 엑셀 작업 없이도 기본적인 통계를 바로 볼 수 있도록 하는 것을 목표로 합니다.",
-    status: "in-progress",
+    status: "done",
     tags: ["Google Forms API", "Spring Boot", "React", "Data Visualization"],
-    link: "https://elfaka.kr/googleform/login"
+    link: "https://elfaka.kr/googleform/login",
   },
   {
     id: 2,
@@ -29,7 +29,6 @@ const projects: ProjectInfo[] = [
       "하루 운동 기록과 체중 변화를 저장하고, 기간별 변화를 확인할 수 있는 간단한 웹 서비스입니다. Spring Boot + React + MySQL 기반으로 구현하여, 개인의 운동 루틴과 체중 관리를 돕는 것을 목표로 합니다.",
     status: "planning",
     tags: ["Spring Boot", "React", "MySQL", "Toy Project"],
-    // link: "https://..." // 나중에 실제 배포 링크나 GitHub 주소 넣기
   },
   {
     id: 3,
@@ -40,7 +39,18 @@ const projects: ProjectInfo[] = [
     status: "planning",
     tags: ["Spring Boot", "React", "Finance"],
   },
+  {
+    id: 4,
+    title: "JSON Prettier",
+    subtitle: "JSON Formatter & Validator (Toy Project)",
+    description:
+      "JSON 문자열을 입력하면 가독성 좋은 형태로 포맷팅(pretty print)해주고, 문법 오류를 검증해주는 간단한 웹 도구입니다. React(TypeScript) 기반 UI와 Spring Boot API를 활용하여 JSON 파싱, 정렬 옵션, 에러 위치 표시 등의 기능을 제공하는 것을 목표로 합니다.",
+    status: "planning",
+    tags: ["React", "TypeScript", "Spring Boot", "JSON", "Toy Project"],
+    // link: "https://..." // 추후 배포 또는 GitHub 링크
+  },
 ];
+
 
 function getStatusLabel(status: ProjectInfo["status"]) {
   switch (status) {
