@@ -53,10 +53,8 @@ function getMiniDesc(q: Summary) {
   const optsTotal =
     (q.allOptions?.length ?? 0) > 0 ? (q.allOptions?.length ?? 0) : (q.options?.length ?? 0);
 
-  // 응답 있는 보기 수
   const answeredOptions = (q.options ?? []).filter((o) => (o.count ?? 0) > 0).length;
 
-  // TOP1
   const top = [...(q.options ?? [])].sort((a, b) => (b.count ?? 0) - (a.count ?? 0))[0];
   const topText = top ? `TOP: ${top.label} (${top.rate}%)` : "TOP: -";
 
@@ -75,7 +73,10 @@ export default function AnalyzePage() {
   const [filter, setFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | "CHOICE" | "SCALE" | "TEXT">("ALL");
 
-  // ✅ 문항카드로 스크롤 이동: id->ref 맵
+  // ✅ 맨 위로 이동용 ref
+  const topRef = useRef<HTMLDivElement | null>(null);
+
+  // 문항카드로 이동(ref map)
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   async function load() {
@@ -119,9 +120,20 @@ export default function AnalyzePage() {
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function scrollToTop() {
+    const el = topRef.current;
+    if (!el) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   return (
     <div className="min-h-screen">
-      {/* ✅ 배경/톤 정리 */}
+      {/* ✅ 최상단 앵커 */}
+      <div ref={topRef} />
+
       <div className="rounded-3xl bg-gradient-to-b from-[#f6f7ff] to-[#ffffef] p-4 sm:p-6">
         {/* 상단 */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -201,9 +213,8 @@ export default function AnalyzePage() {
           </div>
         )}
 
-        {/* ✅ 본문 레이아웃: 왼쪽 사이드바 + 오른쪽 카드(1열) */}
         <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-          {/* 왼쪽: 문항 요약 리스트 */}
+          {/* 왼쪽: 문항 요약 */}
           <aside className="sticky top-4 h-[calc(100vh-140px)] overflow-auto rounded-3xl border border-zinc-200/70 bg-white/70 p-3 shadow-sm backdrop-blur">
             <div className="mb-2 px-2 text-xs font-extrabold uppercase tracking-wider text-zinc-500">
               Questions
@@ -229,9 +240,7 @@ export default function AnalyzePage() {
                         </div>
                       </div>
 
-                      <span
-                        className={`shrink-0 rounded-xl px-2 py-1 text-xs font-extrabold ring-1 ${badge.cls}`}
-                      >
+                      <span className={`shrink-0 rounded-xl px-2 py-1 text-xs font-extrabold ring-1 ${badge.cls}`}>
                         {badge.label}
                       </span>
                     </div>
@@ -251,7 +260,7 @@ export default function AnalyzePage() {
             </div>
           </aside>
 
-          {/* 오른쪽: 문항 카드 1열 */}
+          {/* 오른쪽: 1열 카드 */}
           <main className="space-y-4">
             {filteredSummaries.map((q, idx) => {
               const nt = normalizeType(q.type);
@@ -265,14 +274,22 @@ export default function AnalyzePage() {
                   }}
                   className="scroll-mt-24"
                 >
-                  {/* ✅ 카드 위에 작은 헤더(번호/배지) */}
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="text-sm font-extrabold text-zinc-700">
-                      Q{idx + 1}
+                  {/* ✅ 카드 상단: Q번호 / 배지 / 맨 위로 */}
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="text-sm font-extrabold text-zinc-700">Q{idx + 1}</div>
+
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-xl px-2 py-1 text-xs font-extrabold ring-1 ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+
+                      <button
+                        onClick={scrollToTop}
+                        className="rounded-xl border border-zinc-200 bg-white/70 px-3 py-1.5 text-xs font-extrabold text-zinc-800 shadow-sm hover:bg-white"
+                      >
+                        맨 위로 ↑
+                      </button>
                     </div>
-                    <span className={`rounded-xl px-2 py-1 text-xs font-extrabold ring-1 ${badge.cls}`}>
-                      {badge.label}
-                    </span>
                   </div>
 
                   <QuestionCard q={q} />
