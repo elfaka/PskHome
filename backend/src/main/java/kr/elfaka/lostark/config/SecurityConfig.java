@@ -1,4 +1,4 @@
-package kr.elfaka.lostark.survey.config;
+package kr.elfaka.lostark.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
@@ -58,7 +58,9 @@ public class SecurityConfig {
                                 "/api/auth/me",              // 프론트에서 로그인 상태 확인
                                 "/error",                    // Spring 기본 에러 엔드포인트
                                 "/api/oauth2/**",            // OAuth2 로그인 시작 엔드포인트
-                                "/api/login/oauth2/**"       // OAuth2 콜백(인가코드 수신) 엔드포인트
+                                "/api/login/oauth2/**",       // OAuth2 콜백(인가코드 수신) 엔드포인트
+
+                                "/api/json/**"  // ✅ JSON Prettier 공개 API
                         ).permitAll()
 
                         // ✅ 앞으로 만들 API는 로그인 필요 (보안 경계를 /api/**로 단순화)
