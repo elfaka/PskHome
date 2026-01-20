@@ -45,9 +45,9 @@ const projects: ProjectInfo[] = [
     subtitle: "JSON Formatter & Validator (Toy Project)",
     description:
       "JSON 문자열을 입력하면 가독성 좋은 형태로 포맷팅(pretty print)해주고, 문법 오류를 검증해주는 간단한 웹 도구입니다. React(TypeScript) 기반 UI와 Spring Boot API를 활용하여 JSON 파싱, 정렬 옵션, 에러 위치 표시 등의 기능을 제공하는 것을 목표로 합니다.",
-    status: "in-progress",
+    status: "done",
     tags: ["React", "TypeScript", "Spring Boot", "JSON", "Toy Project"],
-    // link: "https://..." // 추후 배포 또는 GitHub 링크
+    link: "https://elfaka.kr/jsonprettier"
   },
 ];
 

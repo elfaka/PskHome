@@ -36,7 +36,9 @@ type Me = { authenticated: boolean; name?: string };
 export default function GoogleForm() {
   // 로그인 사용자 정보
   const [me, setMe] = useState<Me | null>(null);
-
+  useEffect(() => {
+    document.title = "GoogleForm Analyzer";
+  }, []);
   // 로그인 상태 확인 중 로딩 표시용
   const [loading, setLoading] = useState(true);
 

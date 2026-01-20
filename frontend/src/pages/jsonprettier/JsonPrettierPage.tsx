@@ -1,5 +1,7 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import { formatJson, JsonFormatMode } from "./jsonPrettierApi";
+
+
 
 function clampIndent(v: number): 2 | 4 {
   return v === 4 ? 4 : 2;
@@ -78,7 +80,9 @@ export default function JsonPrettierPage() {
   const [restoreAlsoInput, setRestoreAlsoInput] = useState<boolean>(true);
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-
+  useEffect(() => {
+    document.title = "JSON Prettier";
+  }, []);
   const canRun = useMemo(() => input.trim().length > 0 && !loading, [input, loading]);
 
   const pushHistory = (item: Omit<HistoryItem, "id" | "createdAt">) => {
