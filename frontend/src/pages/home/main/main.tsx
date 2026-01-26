@@ -50,7 +50,7 @@ export default function Homebody() {
                   >
                     Project
                   </a>{" "}
-                  에서 보실 수 있습니다. (Still Working...)
+                  에서 보실 수 있습니다.
                 </li>
                 <li>
                   정리해야 할 글들은{" "}
