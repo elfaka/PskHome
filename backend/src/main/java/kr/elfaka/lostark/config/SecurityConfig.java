@@ -60,8 +60,10 @@ public class SecurityConfig {
                                 "/api/oauth2/**",            // OAuth2 로그인 시작 엔드포인트
                                 "/api/login/oauth2/**",       // OAuth2 콜백(인가코드 수신) 엔드포인트
 
-                                "/api/json/**"  // ✅ JSON Prettier 공개 API
-                        ).permitAll()
+                                "/api/json/**",  // ✅ JSON Prettier 공개 API
+                                "/api/posts/**"
+
+                ).permitAll()
 
                         // ✅ 앞으로 만들 API는 로그인 필요 (보안 경계를 /api/**로 단순화)
                         .requestMatchers("/api/**").authenticated()

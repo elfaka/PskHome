@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
-import { formatJson, JsonFormatMode } from "./jsonPrettierApi";
+import { formatJson, JsonFormatMode } from "../../api/jsonPrettierApi";
 
 
 

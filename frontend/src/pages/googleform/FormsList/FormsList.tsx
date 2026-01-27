@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../../../api";
+import { api } from "../../../api/client";
 
 /**
  * 백엔드 FormListItemDto와 구조가 동일

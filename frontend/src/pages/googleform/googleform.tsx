@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Routes, Route, Navigate, Link, useNavigate } from "react-router-dom";
-import { api } from "../../api";
+import { api } from "../../api/client";
 
 import Login from "./Login/Login";
 import FormsList from "./FormsList/FormsList";

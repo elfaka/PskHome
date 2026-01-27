@@ -1,7 +1,9 @@
 import { Route, Routes } from "react-router-dom";
 import Main from "./main/main";
 import About from "./about/about";
-import Solve from "./solve/solve";
+import PostsListPage from "./pspost/PostsListPage";
+import PostDetailPage from "./pspost/PostDetailPage";
+import PostFormPage from "./pspost/PostFormPage";
 import Project from "./project/project";
 import Homeheader from "../../components/layout/Homeheader/Homeheader";
 
@@ -18,7 +20,10 @@ export default function Home() {
         <Routes>
           <Route path="/" element={<Main />} />
           <Route path="/about" element={<About />} />
-          <Route path="/solve" element={<Solve />} />
+          <Route path="pspost/" element={<PostsListPage />} />
+          <Route path="pspost/new" element={<PostFormPage />} />
+          <Route path="pspost/:id" element={<PostDetailPage />} />
+          <Route path="pspost/:id/edit" element={<PostFormPage />} />
           <Route path="/project" element={<Project />} />
         </Routes>
       </div>

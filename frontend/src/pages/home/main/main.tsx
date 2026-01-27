@@ -35,12 +35,12 @@ export default function Homebody() {
                 <li>
                   그동안 풀었던 PS(Problem Solving)은{" "}
                   <a
-                    href="/solve"
+                    href="/pspost"
                     className="inline-block rounded-[10px] border border-[#8ee8a1] bg-[#8ee8a144] px-2 py-1 text-sm leading-relaxed no-underline break-words transition hover:border-[#6ddf8c] hover:bg-[#8ee8a166] md:text-base"
                   >
                     Solve
                   </a>{" "}
-                  에 기록 했습니다. (Still Working...)
+                  에 기록 했습니다.
                 </li>
                 <li>
                   그동안 개발한 토이 프로젝트 리스트는{" "}

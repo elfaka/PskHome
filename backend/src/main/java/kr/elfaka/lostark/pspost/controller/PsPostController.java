@@ -25,8 +25,8 @@ public class PsPostController {
     // 게시글 목록 조회
     @GetMapping
     public Page<PsPostResponseDto> getPosts(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size
     ) {
         return psPostService.getPosts(page, size);
     }
