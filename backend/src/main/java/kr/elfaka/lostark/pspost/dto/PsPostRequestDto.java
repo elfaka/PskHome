@@ -14,4 +14,6 @@ public class PsPostRequestDto {
     private String language;
     private String solution;
     private String contentMd;
+    private Boolean isSolved;
 }
+

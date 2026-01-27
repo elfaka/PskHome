@@ -5,6 +5,7 @@ import kr.elfaka.lostark.pspost.dto.PsPostResponseDto;
 import kr.elfaka.lostark.pspost.service.PsPostService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
 
 import java.util.List;
 
@@ -23,8 +24,11 @@ public class PsPostController {
 
     // 게시글 목록 조회
     @GetMapping
-    public List<PsPostResponseDto> getAllPosts() {
-        return psPostService.getAllPosts();
+    public Page<PsPostResponseDto> getPosts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return psPostService.getPosts(page, size);
     }
 
     // 게시글 상세 조회

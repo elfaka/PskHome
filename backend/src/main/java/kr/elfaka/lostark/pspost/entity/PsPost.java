@@ -5,6 +5,7 @@ import kr.elfaka.lostark.pspost.dto.PsPostRequestDto;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 // jakarta.persistence.*;
 import java.sql.Timestamp;
@@ -25,17 +26,19 @@ public class PsPost {
     @Column(name = "problem_number")
     private String problemNumber;
 
+    @Column(columnDefinition = "TEXT")
     private String link;
     private String level;
     private String language;
     private String solution;
 
-    @Column(name = "content_md")
-    private String contentMd;  // 마크다운 형식 본문 추가
+    @Column(columnDefinition = "LONGTEXT")
+    private String contentMd;
 
     @Column(name = "is_solved")
     private Boolean isSolved;
 
+    @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Timestamp createdAt;
 
@@ -62,5 +65,6 @@ public class PsPost {
         this.language = dto.getLanguage();
         this.solution = dto.getSolution();
         this.contentMd = dto.getContentMd();
+        if (dto.getIsSolved() != null) this.isSolved = dto.getIsSolved();
     }
 }

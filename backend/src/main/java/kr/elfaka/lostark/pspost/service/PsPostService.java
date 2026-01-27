@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 @Service
 @RequiredArgsConstructor
@@ -28,16 +30,13 @@ public class PsPostService {
                 .solution(dto.getSolution())
                 .contentMd(dto.getContentMd())
                 .isSolved(true)
-                .createdAt(new Timestamp(System.currentTimeMillis()))
                 .build();
         return psPostRepository.save(post).getId();
     }
-
     // 게시글 전체 조회
-    public List<PsPostResponseDto> getAllPosts() {
-        return psPostRepository.findAll().stream()
-                .map(PsPostResponseDto::fromEntity)
-                .collect(Collectors.toList());
+    public Page<PsPostResponseDto> getPosts(int page, int size) {
+        return psPostRepository.findAllByOrderByCreatedAtDesc(PageRequest.of(page, size))
+                .map(PsPostResponseDto::fromEntity);
     }
 
     // 게시글 단건 조회
