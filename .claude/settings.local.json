@@ -1,0 +1,64 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew test:*)",
+      "Read(//c/Users/user/.gradle/**)",
+      "Read(//c/Program Files/Java/**)",
+      "Read(//c/Program Files/**)",
+      "Bash(where java:*)",
+      "Bash(java -version)",
+      "Bash(echo \"JAVA_HOME=$JAVA_HOME\")",
+      "Bash(JAVA_HOME=\"C:/Program Files/Java/jdk-21\" ./gradlew test --no-daemon)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(node_modules/.bin/vitest run:*)",
+      "Bash(claude -p:*)",
+      "Bash(bash .harness/run.sh:*)",
+      "Bash(bash C:/Users/user/source/PskHome/.harness/run.sh:*)",
+      "Bash(git -C \"C:/Users/user/source/PskHome/.claude/worktrees/musing-boyd\" ls-files --cached \".claude/\" \".harness/\")",
+      "Bash(git -C \"C:/Users/user/source/PskHome\" worktree list)",
+      "Bash(git -C \"C:/Users/user/source/PskHome\" status)",
+      "Bash(git -C \"C:/Users/user/source/PskHome\" log --oneline -5)",
+      "Bash(git -C \"C:/Users/user/source/PskHome\" diff --stat)",
+      "Bash(git -C \"C:/Users/user/source/PskHome\" add .gitignore .claude/settings.local.json CLAUDE.md backend/CLAUDE.md frontend/CLAUDE.md frontend/vite.config.ts frontend/vitest.config.ts)",
+      "Bash(git -C \"C:/Users/user/source/PskHome\" add .gitignore .claude/settings.local.json CLAUDE.md backend/CLAUDE.md frontend/CLAUDE.md frontend/vite.config.ts)",
+      "Bash(git -C \"C:/Users/user/source/PskHome\" rm frontend/vitest.config.ts)",
+      "Bash(git -C \"C:/Users/user/source/PskHome\" status --short)",
+      "Bash(git -C:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const p=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); const cmd=(p.tool_input?.command||''); if(!/git commit/.test(cmd)||/--no-verify/.test(cmd)) process.exit(0); const {execSync}=require('child_process'); try{execSync('bash C:/Users/user/source/PskHome/.harness/run.sh --from-git-staged',{cwd:'C:/Users/user/source/PskHome',stdio:'inherit',timeout:300000});}catch(e){process.exit(1);}\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const p=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); const f=(p.tool_input?.file_path||'').replace(/\\\\\\\\/g,'/'); const ROOT='C:/Users/user/source/PskHome'; if(!f.includes(ROOT+'/backend/')&&!f.includes(ROOT+'/frontend/')) process.exit(0); const isJava=/\\.java$/.test(f)&&f.includes('/src/main/'); const isTs=/\\.(ts|tsx)$/.test(f)&&f.includes('/frontend/src/')&&!f.includes('.test.'); if(!isJava&&!isTs) process.exit(0); const {execSync}=require('child_process'); try{execSync('bash '+ROOT+'/.harness/run.sh --files '+f,{cwd:ROOT,stdio:'inherit',timeout:300000});}catch(e){}\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const {execSync}=require('child_process'); const ROOT='C:/Users/user/source/PskHome'; try{const s=execSync('git diff --stat HEAD',{cwd:ROOT,encoding:'utf8'}); if(s.trim()){console.log('\\n=== Session Changes ==='); console.log(s);}}catch(e){}\""
+          }
+        ]
+      }
+    ]
+  }
+}
