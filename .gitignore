@@ -1,2 +1,5 @@
-# Claude Code AI 하네스 (로컬 전용, push 불필요)
+# Claude Code 로컬 설정 (worktree, 훅 설정 등 — push 불필요)
+.claude/
+
+# Claude Code AI 하네스 에이전트 프롬프트 (로컬 전용)
 .harness/
