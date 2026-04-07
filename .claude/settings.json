@@ -1,0 +1,51 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew test:*)",
+      "Read(C:/Users/**/.gradle/**)",
+      "Read(C:/Program Files/Java/**)",
+      "Read(C:/Program Files/**)",
+      "Bash(where java:*)",
+      "Bash(java -version)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(node_modules/.bin/vitest run:*)",
+      "Bash(claude -p:*)",
+      "Bash(bash .harness/run.sh:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const p=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); const cmd=(p.tool_input?.command||''); if(!/git commit/.test(cmd)||/--no-verify/.test(cmd)) process.exit(0); const {execSync}=require('child_process'); const ROOT=process.cwd(); try{execSync('bash '+ROOT+'/.harness/run.sh --from-git-staged',{cwd:ROOT,stdio:'inherit',timeout:300000});}catch(e){process.exit(1);}\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const p=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')); const f=(p.tool_input?.file_path||'').replace(/\\\\\\\\/g,'/'); const ROOT=process.cwd().replace(/\\\\\\\\/g,'/'); if(!f.includes(ROOT+'/backend/')&&!f.includes(ROOT+'/frontend/')) process.exit(0); const isJava=/\\.java$/.test(f)&&f.includes('/src/main/'); const isTs=/\\.(ts|tsx)$/.test(f)&&f.includes('/frontend/src/')&&!f.includes('.test.'); if(!isJava&&!isTs) process.exit(0); const {execSync}=require('child_process'); try{execSync('bash '+ROOT+'/.harness/run.sh --files '+f,{cwd:ROOT,stdio:'inherit',timeout:300000});}catch(e){}\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const {execSync}=require('child_process'); const ROOT=process.cwd(); try{ const branch=execSync('git rev-parse --abbrev-ref HEAD',{cwd:ROOT,encoding:'utf8'}).trim(); if(branch==='main'){const s=execSync('git diff --stat HEAD',{cwd:ROOT,encoding:'utf8'});if(s.trim()){console.log('\\n=== Session Changes ===');console.log(s);} process.exit(0);} const ahead=execSync('git rev-list main..'+branch+' --count',{cwd:ROOT,encoding:'utf8'}).trim(); if(ahead==='0'){console.log('[stop] worktree에 새 커밋 없음. 건너뜀.');process.exit(0);} console.log('[stop] '+ahead+'개 커밋을 main에 merge 후 push합니다...'); execSync('git -C '+ROOT+' checkout main',{stdio:'inherit'}); execSync('git -C '+ROOT+' merge --ff-only '+branch,{stdio:'inherit'}); execSync('git -C '+ROOT+' push origin main',{stdio:'inherit'}); execSync('git -C '+ROOT+' checkout '+branch,{stdio:'inherit'}); console.log('[stop] GitHub push 완료');}catch(e){console.error('[stop] 자동 push 실패:',e.message);}\""
+          }
+        ]
+      }
+    ]
+  }
+}
