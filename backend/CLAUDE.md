@@ -93,6 +93,10 @@ export JASYPT_ENCRYPTOR_PASSWORD=your_password
 # 전체 테스트 (H2 인메모리 사용, MySQL/Redis 불필요)
 cd backend && ./gradlew test
 
+# 모듈별 빠른 테스트 (변경한 모듈만 실행)
+cd backend && ./gradlew test --tests "kr.elfaka.lostark.jsonprettier.*"
+cd backend && ./gradlew test --tests "kr.elfaka.lostark.pspost.*"
+
 # 단일 테스트 클래스
 cd backend && ./gradlew test --tests "kr.elfaka.lostark.jsonprettier.service.JsonFormatServiceTest"
 
@@ -102,6 +106,35 @@ open backend/build/reports/tests/test/index.html
 
 **주의:** 모든 `@SpringBootTest` 테스트에는 반드시 `@ActiveProfiles("test")` 필요.
 누락 시 MySQL/Redis 연결을 시도해 컨텍스트 로드 실패.
+
+## 공통 실수 패턴
+
+### 1. `@ActiveProfiles("test")` 누락
+
+`@SpringBootTest` 사용 시 `@ActiveProfiles("test")` 없으면 MySQL/Redis 연결 시도 → 컨텍스트 로드 실패.
+
+```java
+// 올바른 패턴
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")  // ← 반드시 필요
+@Transactional
+class MyControllerTest { ... }
+```
+
+### 2. SecurityConfig `permitAll()` 누락
+
+새 공개 엔드포인트 추가 시 `config/SecurityConfig.java`의 `permitAll()` 목록 업데이트 필수.
+누락 시 테스트에서 401 Unauthorized 응답.
+
+### 3. 새 모듈에 테스트 파일 누락
+
+새 모듈 추가 시 반드시 service + controller 테스트 파일 생성:
+```
+src/test/java/kr/elfaka/lostark/{newmodule}/
+├── service/NewModuleServiceTest.java    (Mockito 단위 테스트)
+└── controller/NewModuleControllerTest.java (MockMvc 통합 테스트)
+```
 
 ## 테스트 파일 위치
 

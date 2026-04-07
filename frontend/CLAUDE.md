@@ -69,6 +69,10 @@ MUI 6 + Tailwind CSS 4 혼용:
 # 전체 테스트 실행 (서버 불필요, MSW가 API 요청 인터셉트)
 cd frontend && npm run test
 
+# 특정 테스트 파일만 실행 (빠른 검증)
+cd frontend && npx vitest run src/api/pspost.test.ts
+cd frontend && npx vitest run src/api/jsonPrettierApi.test.ts
+
 # Watch 모드
 cd frontend && npm run test:watch
 
@@ -96,6 +100,24 @@ describe("myFunction", () => {
 ```
 
 새 API 엔드포인트 테스트 시 `src/test/mocks/handlers.ts`에 handler 추가 필요.
+
+## 공통 실수 패턴
+
+### 1. 새 API 엔드포인트에 MSW 핸들러 누락
+
+새 API 함수 추가 시 `src/test/mocks/handlers.ts`에 MSW handler를 함께 추가해야 함.
+누락 시 테스트에서 실제 네트워크 요청 시도 → `TypeError: Failed to fetch` 오류.
+
+```typescript
+// src/test/mocks/handlers.ts 에 추가
+http.get("/api/newfeature/:id", ({ params }) => {
+  return HttpResponse.json({ id: params.id, name: "mock" });
+}),
+```
+
+### 2. TypeScript `any` 타입 사용
+
+ESLint 규칙으로 `any` 사용 시 lint 경고. 명시적 타입 정의 또는 `unknown` 사용.
 
 ## 빌드 출력
 
