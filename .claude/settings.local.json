@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew test:*)",
+      "Read(//c/Users/user/.gradle/**)",
+      "Read(//c/Program Files/Java/**)",
+      "Read(//c/Program Files/**)",
+      "Bash(where java:*)",
+      "Bash(java -version)",
+      "Bash(echo \"JAVA_HOME=$JAVA_HOME\")",
+      "Bash(JAVA_HOME=\"C:/Program Files/Java/jdk-21\" ./gradlew test --no-daemon)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(node_modules/.bin/vitest run:*)"
+    ]
+  }
+}
