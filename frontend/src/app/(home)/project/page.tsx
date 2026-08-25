@@ -1,4 +1,15 @@
-// src/pages/home/project/project.tsx
+import type { Metadata } from "next";
+import Link from "next/link";
+
+import Badge, { BadgeTone } from "@/components/ui/Badge";
+import Container from "@/components/ui/Container";
+import PageHeader from "@/components/ui/PageHeader";
+import { cardClass } from "@/components/ui/Card";
+
+export const metadata: Metadata = {
+  title: "Project",
+  description: "만들었거나 만들 예정인 토이 프로젝트 목록.",
+};
 
 type ProjectInfo = {
   id: number;
@@ -7,9 +18,15 @@ type ProjectInfo = {
   description: string;
   status: "planning" | "in-progress" | "done";
   tags: string[];
-  link?: string; // GitHub나 배포 링크
+  /** 이 사이트 안의 경로면 internal, 외부 주소면 external */
+  link?: { href: string; internal?: boolean };
 };
 
+/*
+  스택 표기는 실제 구현 스택을 따른다.
+  이 저장소는 Express(백엔드) + Next.js(프론트엔드) 다 —
+  기존 목록에 남아 있던 "Spring Boot", "React" 는 프레임워크 이관 전의 잔재였다.
+*/
 const projects: ProjectInfo[] = [
   {
     id: 1,
@@ -18,17 +35,17 @@ const projects: ProjectInfo[] = [
     description:
       "Google Forms API를 활용해 설문 응답 데이터를 불러오고, 응답 수·문항별 응답 분포 등을 표와 그래프로 간편하게 확인할 수 있는 웹 페이지입니다. 설문 소유자가 폼 ID 또는 응답 스프레드시트 정보를 등록하면, 별도 엑셀 작업 없이도 기본적인 통계를 바로 볼 수 있도록 하는 것을 목표로 합니다.",
     status: "done",
-    tags: ["Google Forms API", "Spring Boot", "React", "Data Visualization"],
-    link: "https://elfaka.kr/googleform/login",
+    tags: ["Google Forms API", "Express", "Next.js", "Data Visualization"],
+    link: { href: "/googleform", internal: true },
   },
   {
     id: 2,
     title: "운동 · 체중 기록 서비스",
     subtitle: "Fitness Tracker (Toy Project)",
     description:
-      "하루 운동 기록과 체중 변화를 저장하고, 기간별 변화를 확인할 수 있는 간단한 웹 서비스입니다. Spring Boot + React + MySQL 기반으로 구현하여, 개인의 운동 루틴과 체중 관리를 돕는 것을 목표로 합니다.",
+      "하루 운동 기록과 체중 변화를 저장하고, 기간별 변화를 확인할 수 있는 간단한 웹 서비스입니다. Express + Next.js + MySQL 기반으로 구현하여, 개인의 운동 루틴과 체중 관리를 돕는 것을 목표로 합니다.",
     status: "planning",
-    tags: ["Spring Boot", "React", "MySQL", "Toy Project"],
+    tags: ["Express", "Next.js", "MySQL", "Toy Project"],
   },
   {
     id: 3,
@@ -37,124 +54,105 @@ const projects: ProjectInfo[] = [
     description:
       "월 적립식 투자 금액, 기간, 예상 수익률을 기준으로 목표 금액과 예상 성과를 계산해 보는 시뮬레이터입니다. 단순 계산을 넘어, 여러 시나리오를 저장하고 비교할 수 있는 기능까지 확장하는 것을 목표로 합니다.",
     status: "planning",
-    tags: ["Spring Boot", "React", "Finance"],
+    tags: ["Express", "Next.js", "Finance"],
   },
   {
     id: 4,
     title: "JSON Prettier",
     subtitle: "JSON Formatter & Validator (Toy Project)",
     description:
-      "JSON 문자열을 입력하면 가독성 좋은 형태로 포맷팅(pretty print)해주고, 문법 오류를 검증해주는 간단한 웹 도구입니다. React(TypeScript) 기반 UI와 Spring Boot API를 활용하여 JSON 파싱, 정렬 옵션, 에러 위치 표시 등의 기능을 제공하는 것을 목표로 합니다.",
+      "JSON 문자열을 입력하면 가독성 좋은 형태로 포맷팅(pretty print)해주고, 문법 오류를 검증해주는 간단한 웹 도구입니다. Next.js(TypeScript) 기반 UI와 Express API를 활용하여 JSON 파싱, 정렬 옵션, 에러 위치 표시 등의 기능을 제공합니다.",
     status: "done",
-    tags: ["React", "TypeScript", "Spring Boot", "JSON", "Toy Project"],
-    link: "https://elfaka.kr/jsonprettier"
+    tags: ["Next.js", "TypeScript", "Express", "JSON", "Toy Project"],
+    link: { href: "/jsonprettier", internal: true },
   },
 ];
 
-
-function getStatusLabel(status: ProjectInfo["status"]) {
-  switch (status) {
-    case "planning":
-      return "기획 중";
-    case "in-progress":
-      return "진행 중";
-    case "done":
-      return "완료";
-  }
-}
-
-function getStatusColor(status: ProjectInfo["status"]) {
-  switch (status) {
-    case "planning":
-      return "bg-amber-100 text-amber-700";
-    case "in-progress":
-      return "bg-sky-100 text-sky-700";
-    case "done":
-      return "bg-emerald-100 text-emerald-700";
-  }
-}
+const STATUS: Record<
+  ProjectInfo["status"],
+  { label: string; tone: BadgeTone }
+> = {
+  planning: { label: "기획 중", tone: "warning" },
+  "in-progress": { label: "진행 중", tone: "info" },
+  done: { label: "완료", tone: "success" },
+};
 
 export default function Project() {
   return (
-    <div className="px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-      <div className="mx-auto max-w-5xl">
-        {/* 제목 영역 */}
-        <header className="mb-6 border-b border-slate-200 pb-4">
-          <h1 className="text-2xl font-semibold md:text-3xl">
-            토이 프로젝트 목록
-          </h1>
-          <p className="mt-2 text-sm text-slate-600 md:text-base">
-            진행 예정인 프로젝트와 진행 중인 프로젝트들을 한 곳에서 정리합니다.
-          </p>
-        </header>
+    <Container className="py-12 sm:py-16">
+      <PageHeader
+        eyebrow="Project"
+        title="토이 프로젝트 목록"
+        description="진행 예정인 프로젝트와 진행 중인 프로젝트들을 한 곳에서 정리합니다."
+      />
 
-        {/* 카드 리스트 */}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {projects.map((project) => (
+      <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {projects.map((project) => {
+          const status = STATUS[project.status];
+
+          return (
             <article
               key={project.id}
-              className="flex h-full flex-col rounded-2xl border border-slate-100 bg-white/80 p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+              className={cardClass({ className: "flex h-full flex-col p-5" })}
             >
-              {/* 상태 배지 */}
-              <div className="mb-2 flex items-center justify-between">
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(
-                    project.status
-                  )}`}
-                >
-                  {getStatusLabel(project.status)}
-                </span>
-                {/* 태그 갯수 간단 표시 */}
-                <span className="text-xs text-slate-400">
+              <div className="flex items-center justify-between gap-3">
+                <Badge tone={status.tone}>{status.label}</Badge>
+
+                <span className="text-xs text-fg-subtle">
                   {project.tags.length} tags
                 </span>
               </div>
 
-              {/* 제목 */}
-              <h2 className="text-lg font-semibold md:text-xl">
+              <h2 className="mt-3 text-lg font-semibold text-fg">
                 {project.title}
               </h2>
+
               {project.subtitle && (
-                <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                <p className="mt-1 text-xs font-medium tracking-wide text-fg-subtle uppercase">
                   {project.subtitle}
                 </p>
               )}
 
-              {/* 설명 */}
-              <p className="mt-3 flex-1 text-sm leading-relaxed text-slate-700 md:text-base">
+              <p className="mt-3 flex-1 text-sm leading-relaxed text-fg-muted">
                 {project.description}
               </p>
 
-              {/* 태그 */}
               <div className="mt-4 flex flex-wrap gap-2">
                 {project.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full bg-slate-50 px-2 py-0.5 text-xs text-slate-500 ring-1 ring-slate-100"
-                  >
-                    {tag}
-                  </span>
+                  <Badge key={tag}>{tag}</Badge>
                 ))}
               </div>
 
-              {/* 링크 영역 */}
               {project.link && (
-                <div className="mt-4">
-                  <a
-                    href={project.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center text-sm font-medium text-sky-600 hover:text-sky-700"
-                  >
-                    자세히 보기
-                    <span className="ml-1 text-xs">↗</span>
-                  </a>
+                <div className="mt-5">
+                  {/*
+                    같은 사이트 안의 페이지는 next/link 로 이동한다.
+                    기존에는 https://elfaka.kr/... 절대주소를 <a> 로 걸어
+                    같은 사이트인데도 전체 새로고침이 일어났다.
+                  */}
+                  {project.link.internal ? (
+                    <Link
+                      href={project.link.href}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-accent-soft-fg underline-offset-4 hover:underline"
+                    >
+                      자세히 보기 <span aria-hidden>→</span>
+                    </Link>
+                  ) : (
+                    <a
+                      href={project.link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm font-medium text-accent-soft-fg underline-offset-4 hover:underline"
+                    >
+                      자세히 보기 <span aria-hidden>↗</span>
+                    </a>
+                  )}
                 </div>
               )}
             </article>
-          ))}
-        </div>
+          );
+        })}
       </div>
-    </div>
+    </Container>
   );
 }
