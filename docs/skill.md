@@ -20,7 +20,7 @@
 | TypeScript | 5.9 | 언어 (NodeNext ESM) |
 | Node.js | 22 | 런타임 |
 | Prisma + `@prisma/adapter-mariadb` | 7.x | MySQL ORM |
-| express-session + connect-redis | - | 세션 (Redis) |
+| express-session | - | 세션 (프로세스 메모리) |
 | Passport (`passport-google-oauth20`) | - | Google OAuth2 로그인 |
 | googleapis | - | Google Drive v3 / Forms v1 |
 | zod | 4.x | 환경변수 검증 |
@@ -39,7 +39,6 @@
 
 ### 인프라 (`server/`)
 - **MySQL** — PS Post 데이터 저장 (`ps_post` 테이블)
-- **Redis** — 세션 저장 (survey 모듈 로그인)
 - **Docker Compose** — 3개 파일로 DB/백엔드/프론트엔드 분리 운영
   (백엔드/프론트엔드는 각 폴더의 `dockerfile` 로 서버에서 직접 빌드)
 - **GitHub Actions** — CI/CD (`be-cd.yaml`, `fe-cd.yaml`) — lint/test/build 게이트 후 배포
@@ -47,7 +46,7 @@
 ## 로컬 개발 빠른 시작
 
 ```bash
-# 1. 인프라 (MySQL:3306, Redis:6379)
+# 1. 인프라 (MySQL:3306)
 cd server && docker compose -f docker-compose-db.yaml up -d
 
 # 2. 백엔드 (localhost:8080)  — .env 준비 필요 (.env.example 참고)
@@ -65,7 +64,7 @@ backend/src/
 ├── app.ts                           # createApp() — 공개/인증 경계가 여기서 결정됨
 ├── config/
 │   ├── env.ts                       # zod 환경변수 스키마
-│   ├── session.ts                   # express-session + Redis
+│   ├── session.ts                   # express-session (MemoryStore)
 │   └── passport.ts                  # Google OAuth2 전략, scope
 ├── middleware/
 │   ├── requireAuth.ts               # 인증 게이트 (401 JSON)
@@ -116,10 +115,9 @@ frontend/src/
 
 | 변수 | 기본값 | 용도 |
 |------|--------|------|
-| `NODE_ENV` | `development` | `test` 면 Redis 대신 MemoryStore |
+| `NODE_ENV` | `development` | `production` 이면 세션 쿠키에 secure 플래그 |
 | `PORT` | `8080` | |
 | `DATABASE_URL` | (없음) | `mysql://user:pass@host:3306/page` |
-| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | 세션 저장소 |
 | `SESSION_SECRET` | 개발용 기본값 | 운영에서는 반드시 지정 |
 | `SESSION_COOKIE_NAME` | `psk.sid` | |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (없음) | 없으면 로그인 경로만 503 |
@@ -140,7 +138,7 @@ frontend/src/
 ## 테스트 실행
 
 ```bash
-# 백엔드 (외부 의존 없음 — MySQL/Redis/Google 불필요)
+# 백엔드 (외부 의존 없음 — MySQL/Google 불필요)
 cd backend && npm test
 
 # 프론트엔드 (MSW 목 서버, 실제 서버 불필요)

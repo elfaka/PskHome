@@ -22,10 +22,8 @@ services:
       # MySQL (기존 docker-compose-db.yaml 의 pskhome-db-1)
       DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@pskhome-db-1:3306/page
 
-      # Redis 세션 저장소 (기존 docker-compose-db.yaml 의 pskhome-mem-1)
-      REDIS_HOST: pskhome-mem-1
-      REDIS_PORT: 6379
-
+      # 세션은 프로세스 메모리에 둔다 (기존 Spring 백엔드와 동일).
+      # 재배포하면 로그인 세션이 사라지고, 인스턴스를 늘리면 공유되지 않는다.
       SESSION_SECRET: ${SESSION_SECRET}
 
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}

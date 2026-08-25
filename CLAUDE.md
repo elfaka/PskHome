@@ -49,7 +49,7 @@
 
 **백엔드:**
 ```bash
-# 전체 테스트 (외부 의존 없음 — MySQL/Redis/Google 불필요)
+# 전체 테스트 (외부 의존 없음 — MySQL/Google 불필요)
 cd backend && npm test
 
 # 모듈별 빠른 테스트 (변경한 모듈만)
@@ -80,7 +80,7 @@ cd frontend && npm run test
 # 의존성 설치
 cd backend && npm install
 
-# 로컬 실행 (로컬 MySQL + Redis 필요, 파일 변경 시 자동 재시작)
+# 로컬 실행 (로컬 MySQL 필요, 파일 변경 시 자동 재시작)
 cd backend && npm run dev
 
 # 프로덕션 빌드 (prisma generate + tsc, 출력: backend/dist/)
@@ -125,7 +125,8 @@ cd frontend && npm run test:watch
 
 ### 인프라 (Docker Compose)
 ```bash
-# DB 시작 (MySQL:3306) + 캐시 (Redis:6379)
+# DB 시작 (MySQL:3306)
+# 이 compose 파일은 Redis(pskhome-mem-1)도 함께 띄우지만, 현재 쓰는 곳이 없다.
 cd server && docker compose -f docker-compose-db.yaml up -d
 
 # 백엔드 시작 (이미지 빌드 포함, :8080)
@@ -162,7 +163,8 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 **설정:** 프로파일 대신 `.env` + `config/env.ts`(zod 스키마) 하나로 관리한다.
 시크릿은 전부 optional 이라, 없더라도 앱은 기동되고 해당 엔드포인트만 실패한다.
 
-**세션:** `express-session` + `connect-redis`. `NODE_ENV=test` 면 Redis 대신 MemoryStore.
+**세션:** `express-session` 기본 MemoryStore. 기존 Spring 백엔드도 spring-session-data-redis 가 없어
+세션이 프로세스 메모리에 있었으므로 동작이 같다. 재배포하면 로그인 세션이 사라진다.
 
 ### 프론트엔드 (`frontend/src/`)
 

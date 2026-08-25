@@ -29,8 +29,20 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 # 빌드 단계에서 생성된 Prisma Client 를 그대로 가져온다.
 # (runner 에는 prisma CLI 가 없으므로 여기서 generate 할 수 없다)
+#
+# [주의] prisma generate 는 산출물을 두 곳에 만든다:
+#   - node_modules/@prisma/client : 얇은 진입점. `require('.prisma/client/default')` 로 재export 한다.
+#   - node_modules/.prisma/client : 실제 생성된 클라이언트 코드
+# 둘 중 하나라도 빠지면 Node 의 ESM↔CJS 인터롭이 named export 를 찾지 못해
+# `SyntaxError: Named export 'PrismaClient' not found` 로 기동 즉시 죽는다.
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /app/dist ./dist
+
+# 이미지 빌드 시점에 앱 모듈 그래프를 실제로 import 해본다.
+# 위와 같은 런타임 전용 문제(누락된 의존성, ESM/CJS 인터롭)를
+# 프로덕션 crash-loop 가 아니라 빌드 실패로 잡아내기 위한 검증이다.
+RUN node --input-type=module -e "await import('./dist/app.js'); console.log('startup check ok')"
 
 EXPOSE 8080
 

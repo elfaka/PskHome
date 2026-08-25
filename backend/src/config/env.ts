@@ -20,10 +20,6 @@ const envSchema = z.object({
   // --- MySQL (Prisma) ---
   DATABASE_URL: z.string().optional(),
 
-  // --- Redis (세션 저장소) ---
-  REDIS_HOST: z.string().default("localhost"),
-  REDIS_PORT: z.coerce.number().int().positive().default(6379),
-
   // --- 세션 ---
   SESSION_SECRET: z.string().default("psk-home-dev-session-secret"),
   SESSION_COOKIE_NAME: z.string().default("psk.sid"),

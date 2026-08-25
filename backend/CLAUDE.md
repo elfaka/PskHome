@@ -9,7 +9,7 @@ Express 5 + TypeScript 백엔드 개발 가이드. 루트 [`CLAUDE.md`](../CLAUD
 | Express 5 | HTTP 프레임워크 |
 | TypeScript (NodeNext ESM) | 언어 |
 | Prisma 7 + `@prisma/adapter-mariadb` | MySQL ORM |
-| express-session + connect-redis | 세션 (Redis) |
+| express-session | 세션 (프로세스 메모리) |
 | Passport (`passport-google-oauth20`) | Google OAuth2 로그인 |
 | googleapis | Google Drive v3 / Forms v1 |
 | zod | 환경변수 스키마 검증 |
@@ -27,7 +27,7 @@ src/
 ├── app.ts                      # createApp() — 미들웨어/라우터 조립
 ├── config/
 │   ├── env.ts                  # zod 환경변수 스키마
-│   ├── session.ts              # express-session + Redis store
+│   ├── session.ts              # express-session (MemoryStore)
 │   └── passport.ts             # Google OAuth2 전략, scope 정의
 ├── middleware/
 │   ├── requireAuth.ts          # 인증 게이트 (401 JSON)
@@ -102,10 +102,9 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 
 | 변수 | 기본값 | 비고 |
 |------|--------|------|
-| `NODE_ENV` | `development` | `test` 면 Redis 대신 MemoryStore 사용 |
+| `NODE_ENV` | `development` | `production` 이면 세션 쿠키에 secure 플래그 |
 | `PORT` | `8080` | |
 | `DATABASE_URL` | (없음) | `mysql://user:pass@host:3306/page` |
-| `REDIS_HOST` / `REDIS_PORT` | `localhost` / `6379` | 세션 저장소 |
 | `SESSION_SECRET` | 개발용 기본값 | **운영에서는 반드시 지정** |
 | `SESSION_COOKIE_NAME` | `psk.sid` | |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (없음) | 없으면 로그인 경로만 503 |
@@ -136,7 +135,7 @@ cd backend && npm run prisma:generate
 ## 테스트
 
 ```bash
-# 전체 (외부 의존 없음 — MySQL/Redis/Google 불필요)
+# 전체 (외부 의존 없음 — MySQL/Google 불필요)
 # pretest 훅이 prisma generate 를 먼저 돌리므로 클린 체크아웃에서도 바로 동작한다.
 cd backend && npm test
 
@@ -154,8 +153,7 @@ cd backend && npm run test:watch
 **테스트는 반드시 외부 의존 없이 돌아야 한다.**
 - DB: `vi.mock("../../lib/prisma.js")` + `src/testing/fakePrisma.ts` (기존 H2 역할)
 - Google: `vi.mock("./google/googleClientFactory.js")`
-- 세션: `NODE_ENV=test` 면 `config/session.ts` 가 Redis 대신 MemoryStore 를 쓴다
-  (`vitest.config.ts` 가 `NODE_ENV=test` 를 강제한다)
+- 세션: 저장소가 프로세스 메모리라 별도 준비가 필요 없다
 
 ## 공통 실수 패턴
 

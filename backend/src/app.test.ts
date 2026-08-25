@@ -6,7 +6,7 @@ import { isTest } from "./config/env.js";
 
 /**
  * 기존 `BackendApplicationTests.contextLoads()` 대응 smoke test.
- * 앱이 외부 의존(MySQL/Redis/Google) 없이 조립되는지 확인한다.
+ * 앱이 외부 의존(MySQL/Google) 없이 조립되는지 확인한다.
  */
 describe("app", () => {
   const app = createApp();
@@ -16,10 +16,11 @@ describe("app", () => {
   });
 
   /**
-   * 테스트가 Redis 를 붙잡지 않도록 NODE_ENV 가 확실히 test 여야 한다.
-   * (.env 의 NODE_ENV=development 가 새어들어오면 세션 저장소가 Redis 로 붙는다)
+   * 쿠키의 secure 플래그 등 환경에 따라 갈리는 동작이 있으므로
+   * 테스트가 항상 test 프로파일로 도는지 확인한다.
+   * (.env 의 NODE_ENV=development 가 새어들어오면 안 된다)
    */
-  it("runs with NODE_ENV=test so no external session store is used", () => {
+  it("runs with NODE_ENV=test", () => {
     expect(isTest).toBe(true);
   });
 
