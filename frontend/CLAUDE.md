@@ -1,22 +1,71 @@
 # Frontend CLAUDE.md
 
-React + Vite 프론트엔드 개발 가이드. 루트 [`CLAUDE.md`](../CLAUDE.md)의 명령어와 함께 참고할 것.
+Next.js (App Router) + TypeScript 프론트엔드 개발 가이드.
+루트 [`CLAUDE.md`](../CLAUDE.md)의 명령어와 함께 참고할 것.
+
+## 스택
+
+| 기술 | 용도 |
+|------|------|
+| Next.js 16 (App Router) | 프레임워크 / 라우팅 / 빌드 |
+| React 19 | UI |
+| TypeScript | 언어 |
+| Tailwind CSS 4 (`@tailwindcss/postcss`) | 스타일링 |
+| axios | HTTP 클라이언트 |
+| react-markdown | PS 게시글 본문 렌더링 |
+| Vitest + MSW + Testing Library | 테스트 |
+
+> 이 프로젝트는 **클라이언트 중심**이다. 데이터는 서버 컴포넌트가 아니라
+> 브라우저에서 axios 로 `/api/**` 를 호출해 가져온다.
+> 백엔드 세션 쿠키(`withCredentials`)에 의존하기 때문이다.
 
 ## 라우트 구조
 
 ```
-App.tsx
-├── /*           → pages/home/home.tsx
-│   ├── /        → pages/home/main/main.tsx
-│   ├── /about   → pages/home/about/about.tsx
-│   ├── /project → pages/home/project/project.tsx
-│   └── /pspost  → pages/home/pspost/ (List, Detail, Form)
-├── /googleform/* → pages/googleform/googleform.tsx
-│   ├── /        → Login.tsx
-│   ├── /forms   → FormsList.tsx
-│   └── /analyze → AnalyzePage.tsx
-└── /jsonprettier/* → pages/jsonprettier/ (JsonPrettierPage.tsx)
+src/app/
+├── layout.tsx                                   # 루트 레이아웃 (html/body, globals.css)
+├── (home)/                                      # 라우트 그룹 — URL 에는 나타나지 않음
+│   ├── layout.tsx                               #   Homeheader 고정 + 본문 스크롤
+│   ├── page.tsx                                 # /
+│   ├── about/page.tsx                           # /about
+│   ├── project/page.tsx                         # /project
+│   └── pspost/
+│       ├── page.tsx                             # /pspost        (목록)
+│       ├── new/page.tsx                         # /pspost/new    (작성)
+│       └── [id]/
+│           ├── page.tsx                         # /pspost/:id      (상세)
+│           └── edit/page.tsx                    # /pspost/:id/edit (수정)
+├── googleform/
+│   ├── layout.tsx                               # metadata + GoogleFormShell
+│   ├── page.tsx                                 # /googleform (로그인 여부로 분기)
+│   ├── login/page.tsx                           # /googleform/login
+│   ├── forms/page.tsx                           # /googleform/forms
+│   ├── forms/[formId]/analyze/page.tsx          # /googleform/forms/:formId/analyze
+│   └── [...slug]/page.tsx                       # 그 외 → /googleform 으로 리다이렉트
+└── jsonprettier/
+    ├── layout.tsx                               # metadata
+    ├── page.tsx                                 # /jsonprettier
+    └── [...slug]/page.tsx                       # 그 외 → /jsonprettier 로 리다이렉트
 ```
+
+**라우트 페이지는 얇게 유지한다.** 실제 화면 구현은 `src/components/` 에 두고
+페이지는 조립만 한다. (`/pspost/new` 와 `/pspost/[id]/edit` 가 같은 `PostForm` 을 공유하는 이유)
+
+## 디렉터리
+
+```
+src/
+├── app/          # 라우트 (파일 라우팅)
+├── api/          # 백엔드 호출 함수 + 응답 타입
+├── components/   # 화면 구현체
+│   ├── layout/Homeheader/
+│   ├── pspost/PostForm.tsx
+│   └── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
+├── lib/          # 공용 유틸 (errorMessage 등)
+└── test/         # Vitest 셋업 + MSW 목
+```
+
+경로 별칭은 `@/*` → `src/*` 이다. (`import { api } from "@/api/client"`)
 
 ## API 클라이언트 패턴
 
@@ -24,7 +73,7 @@ App.tsx
 
 새 API 함수 추가 시:
 1. `src/api/` 에 기능별 파일 생성 (예: `src/api/newfeature.ts`)
-2. `client`를 import해 axios 인스턴스 사용
+2. `client` 를 import 해 axios 인스턴스 사용
 3. 타입을 파일 내에 정의
 
 ```typescript
@@ -42,41 +91,42 @@ export async function fetchData(id: number) {
 - `src/api/pspost.ts` — PS 게시글 CRUD (`listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`)
 - `src/api/jsonPrettierApi.ts` — JSON 포맷 (`formatJson`)
 
-## 컴포넌트 조직
+**에러 메시지**는 `@/lib/errorMessage` 의 `errorMessage(e, fallback)` 로 뽑는다.
+백엔드 실패 응답 형태(`{ error: { code, message } }`)를 알고 있으므로 화면마다 파싱하지 않는다.
 
-- `src/components/` — 여러 페이지에서 재사용되는 공통 컴포넌트
-- `src/pages/` — 라우트 단위 페이지 컴포넌트 (라우트별 폴더로 분리)
-- `src/types/` — 공통 TypeScript 타입 정의
+## 인증 (googleform 영역)
 
-## 스타일링
-
-MUI 6 + Tailwind CSS 4 혼용:
-- **MUI** — 복잡한 UI 컴포넌트 (`Button`, `Table`, `Dialog` 등)
-- **Tailwind** — 레이아웃, 간단한 유틸리티 클래스 (`flex`, `gap-4`, `text-sm` 등)
-- 두 시스템 혼용 가능: `<Button className="mt-4">` (MUI 컴포넌트 + Tailwind 클래스)
+- `GoogleFormShell` 이 `/api/auth/me` 를 **한 번만** 호출해 컨텍스트로 내려준다.
+  각 페이지에서 중복 확인하지 않는다.
+- 인증이 필요한 페이지는 `RequireGoogleFormAuth` 로 감싼다.
+  미인증이면 `/googleform/login` 으로 `router.replace` 한다.
+- 로그인 시작은 `window.location.href = "/api/oauth2/authorization/google"` 이다.
+  **`router.push` 로 바꾸면 안 된다** — Next 페이지가 아니라 백엔드 엔드포인트로의
+  브라우저 리다이렉트이기 때문이다.
 
 ## 환경 설정
 
-**개발:** Vite dev server가 `/api` 요청을 `http://localhost:8080`으로 프록시
-- 설정 위치: `vite.config.ts`의 `server.proxy`
+**개발:** `next dev -p 5173` — `next.config.ts` 의 `rewrites` 가 `/api/*` 를
+`http://localhost:8080` 으로 프록시한다. (`API_PROXY_TARGET` 으로 변경 가능)
 
-**프로덕션:** `frontend/dist/`를 Nginx가 서빙 (`server/docker-compose-fe.yaml`)
-- Nginx가 `/api/*` 요청을 백엔드로 프록시
+> 포트가 5173 인 이유: 백엔드의 `APP_LOGIN_SUCCESS_REDIRECT` 기본값이
+> `http://localhost:5173/googleform/forms` 라서 OAuth 로그인 후 돌아올 주소와 맞춰야 한다.
+
+**프로덕션:** `output: "standalone"` 빌드를 Node 컨테이너가 실행한다
+(`server/docker-compose-fe.yaml`, 외부 포트 5173 → 컨테이너 3000).
+`/api` 는 Next 가 아니라 리버스 프록시(traefik)가 백엔드로 보낸다.
 
 ## 테스트
 
 ```bash
-# 전체 테스트 실행 (서버 불필요, MSW가 API 요청 인터셉트)
+# 전체 (서버 불필요 — MSW 가 API 요청 인터셉트)
 cd frontend && npm run test
 
-# 특정 테스트 파일만 실행 (빠른 검증)
+# 특정 파일만
 cd frontend && npx vitest run src/api/pspost.test.ts
-cd frontend && npx vitest run src/api/jsonPrettierApi.test.ts
 
-# Watch 모드
+# watch / UI
 cd frontend && npm run test:watch
-
-# UI로 확인
 cd frontend && npm run test:ui
 ```
 
@@ -86,43 +136,55 @@ cd frontend && npm run test:ui
 - `src/test/mocks/handlers.ts` — API 엔드포인트 목 핸들러
 - `src/api/*.test.ts` — API 함수 단위 테스트
 
-**새 테스트 작성 패턴:**
-```typescript
-import { describe, it, expect } from "vitest";
-import { myFunction } from "./myModule";
-
-describe("myFunction", () => {
-  it("does something", async () => {
-    const result = await myFunction();
-    expect(result).toHaveProperty("id");
-  });
-});
-```
-
-새 API 엔드포인트 테스트 시 `src/test/mocks/handlers.ts`에 handler 추가 필요.
-
 ## 공통 실수 패턴
 
-### 1. 새 API 엔드포인트에 MSW 핸들러 누락
+### 1. `"use client"` 누락
 
-새 API 함수 추가 시 `src/test/mocks/handlers.ts`에 MSW handler를 함께 추가해야 함.
-누락 시 테스트에서 실제 네트워크 요청 시도 → `TypeError: Failed to fetch` 오류.
+훅(`useState`/`useEffect`/`useRouter`)이나 이벤트 핸들러를 쓰는 컴포넌트는
+파일 최상단에 `"use client";` 가 있어야 한다. 없으면 빌드 시 서버 컴포넌트로 취급돼 실패한다.
+
+### 2. 클라이언트 컴포넌트에서 `metadata` export
+
+`export const metadata` 는 서버 컴포넌트에서만 가능하다.
+페이지 제목은 같은 폴더의 `layout.tsx`(서버 컴포넌트)에서 선언한다.
+`document.title` 을 직접 세팅하지 말 것.
+
+### 3. 새 API 엔드포인트에 MSW 핸들러 누락
+
+새 API 함수 추가 시 `src/test/mocks/handlers.ts` 에 handler 를 함께 추가한다.
+누락 시 실제 네트워크 요청을 시도한다.
 
 ```typescript
-// src/test/mocks/handlers.ts 에 추가
 http.get("/api/newfeature/:id", ({ params }) => {
   return HttpResponse.json({ id: params.id, name: "mock" });
 }),
 ```
 
-### 2. TypeScript `any` 타입 사용
+### 4. 내부 링크에 `<a>` 사용
 
-ESLint 규칙으로 `any` 사용 시 lint 경고. 명시적 타입 정의 또는 `unknown` 사용.
+Next 페이지로 가는 링크는 `next/link` 를 쓴다.
+`@next/next/no-html-link-for-pages` 규칙이 lint 에러로 잡는다.
+(백엔드 엔드포인트나 존재하지 않는 페이지로 가는 링크는 `<a>` 가 맞다)
+
+### 5. `catch (e: any)`
+
+`@typescript-eslint/no-explicit-any` 에러다. `catch (e)` + `errorMessage(e, ...)` 를 쓴다.
+
+### 6. ESLint 버전
+
+`eslint-config-next` 가 의존하는 `eslint-plugin-react` 가 아직 ESLint 10 과 호환되지 않는다.
+**ESLint 는 9.x 로 고정**되어 있다. 올리면 `npm run lint` 가 내부 오류로 죽는다.
 
 ## 빌드 출력
 
 ```bash
 cd frontend && npm run build
-# 출력: frontend/dist/
-# Docker: server/docker-compose-fe.yaml이 dist/ 를 Nginx로 서빙 (:5173)
+# 출력: .next/standalone (+ .next/static, public)
+# Docker: frontend/dockerfile 이 위 세 가지를 담아 `node server.js` 로 실행
 ```
+
+## 알려진 경고 (lint)
+
+`react-hooks/set-state-in-effect` 경고가 5곳 있다.
+"마운트 시 fetch → setState" 패턴을 쓰는 기존 화면들이며,
+데이터 로딩 구조를 손볼 때 정리한다. (`eslint.config.mjs` 에서 warn 으로 낮춰 둠)
