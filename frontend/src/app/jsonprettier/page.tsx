@@ -8,9 +8,14 @@ import {
   type JsonFormatMode,
   type JsonFormatResponse,
 } from "@/api/jsonPrettierApi";
+import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import Container from "@/components/ui/Container";
+import PageHeader from "@/components/ui/PageHeader";
+import { Select } from "@/components/ui/Field";
+import { cardClass } from "@/components/ui/Card";
+import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/errorMessage";
-
-
 
 /** axios 에러에서 JSON Prettier 응답 본문을 꺼낸다. */
 function axiosErrorBody(e: unknown): JsonFormatResponse | null {
@@ -24,7 +29,11 @@ function clampIndent(v: number): 2 | 4 {
   return v === 4 ? 4 : 2;
 }
 
-function indexFromLineCol(text: string, line?: number, col?: number): number | null {
+function indexFromLineCol(
+  text: string,
+  line?: number,
+  col?: number
+): number | null {
   if (!line || !col || line < 1 || col < 1) return null;
 
   let curLine = 1;
@@ -73,13 +82,59 @@ function formatTime(ts: number) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
+/** 체크박스 옵션 — 라벨 전체가 클릭 영역이다. */
+function CheckOption({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
-    <span className="rounded-full border bg-white/70 px-2 py-0.5 text-xs text-gray-700 shadow-sm">
-      {children}
-    </span>
+    <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-control border border-line bg-surface px-3 text-sm text-fg-muted transition hover:border-line-strong hover:bg-surface-hover">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="size-4 accent-accent"
+      />
+      <span className="font-mono text-xs">{label}</span>
+    </label>
   );
 }
+
+/** 등폭 텍스트 패널 — Input/Output 이 같은 껍데기를 쓴다. */
+function CodePanel({
+  title,
+  hint,
+  actions,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cardClass({ className: "flex min-w-0 flex-col p-4" })}>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-fg">{title}</div>
+          {hint && <div className="mt-0.5 text-xs text-fg-subtle">{hint}</div>}
+        </div>
+
+        {actions}
+      </div>
+
+      {children}
+    </div>
+  );
+}
+
+const TEXTAREA_CLASS =
+  "h-[26rem] w-full resize-none rounded-control border border-line p-3 font-mono text-sm leading-6 text-fg outline-none";
 
 export default function JsonPrettierPage() {
   const [mode, setMode] = useState<JsonFormatMode>("prettify");
@@ -89,8 +144,15 @@ export default function JsonPrettierPage() {
 
   const [input, setInput] = useState(SAMPLE);
   const [output, setOutput] = useState("");
-  const [stats, setStats] = useState<{ inputLength: number; outputLength: number } | null>(null);
-  const [error, setError] = useState<{ message: string; line?: number; column?: number } | null>(null);
+  const [stats, setStats] = useState<{
+    inputLength: number;
+    outputLength: number;
+  } | null>(null);
+  const [error, setError] = useState<{
+    message: string;
+    line?: number;
+    column?: number;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -98,7 +160,10 @@ export default function JsonPrettierPage() {
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const canRun = useMemo(() => input.trim().length > 0 && !loading, [input, loading]);
+  const canRun = useMemo(
+    () => input.trim().length > 0 && !loading,
+    [input, loading]
+  );
 
   const pushHistory = (item: Omit<HistoryItem, "id" | "createdAt">) => {
     const newItem: HistoryItem = {
@@ -154,7 +219,7 @@ export default function JsonPrettierPage() {
 
       // 백엔드는 잘못된 JSON 을 400 + { ok:false, error:{ message, line, column } } 로 알려준다.
       // axios 는 4xx 를 reject 하므로 위의 `!res.ok` 분기가 아니라 여기로 온다.
-      // 위치정보(line/column)를 살려야 "오류 위치로 이동" 버튼이 동작한다.
+      // 위치정보(line/column)를 살려야 "에러 위치로 이동" 버튼이 동작한다.
       const body = axiosErrorBody(e);
 
       if (body?.error) {
@@ -210,279 +275,268 @@ export default function JsonPrettierPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* 헤더 */}
-      <div className="mb-6 overflow-hidden rounded-3xl border bg-gradient-to-br from-white to-gray-50 p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">JSON Prettier</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              JSON을 검증하고 포맷팅(prettify) 또는 압축(minify)합니다. 결과는 히스토리에 저장됩니다.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge>FE: React/TS</Badge>
-            <Badge>BE: Spring Boot</Badge>
-          </div>
-        </div>
-      </div>
+    <Container size="wide" className="py-10 sm:py-14">
+      <PageHeader
+        eyebrow="Tool"
+        title="JSON Prettier"
+        description="JSON을 검증하고 포맷팅(prettify) 또는 압축(minify)합니다. 결과는 히스토리에 저장됩니다."
+        actions={
+          <>
+            {/* 실제 구현 스택. 예전 표기(React / Spring Boot)는 이관 전 잔재였다. */}
+            <Badge>FE: Next.js / TS</Badge>
+            <Badge>BE: Express</Badge>
+          </>
+        }
+      />
 
       {/* 옵션 바 */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-3xl border bg-white p-3 shadow-sm">
-        <div className="flex items-center gap-2">
-          <button
-            className={`rounded-2xl px-3 py-2 text-sm transition ${
-              mode === "prettify"
-                ? "bg-gray-900 text-white shadow-sm"
-                : "border bg-white text-gray-700 hover:bg-gray-50"
-            }`}
-            onClick={() => setMode("prettify")}
-            type="button"
-          >
-            Prettify
-          </button>
-          <button
-            className={`rounded-2xl px-3 py-2 text-sm transition ${
-              mode === "minify"
-                ? "bg-gray-900 text-white shadow-sm"
-                : "border bg-white text-gray-700 hover:bg-gray-50"
-            }`}
-            onClick={() => setMode("minify")}
-            type="button"
-          >
-            Minify
-          </button>
+      <div
+        className={cardClass({
+          className: "mt-8 flex flex-wrap items-center gap-2 p-3",
+        })}
+      >
+        {/* 모드 — 둘 중 하나만 켜지는 세그먼트 */}
+        <div
+          role="group"
+          aria-label="출력 모드"
+          className="flex items-center gap-1 rounded-control bg-surface-2 p-1"
+        >
+          {(["prettify", "minify"] as JsonFormatMode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              aria-pressed={mode === m}
+              className={cn(
+                "h-8 rounded-control px-3 text-sm font-medium capitalize transition",
+                mode === m
+                  ? "bg-accent text-accent-fg shadow-card"
+                  : "text-fg-muted hover:text-fg"
+              )}
+            >
+              {m}
+            </button>
+          ))}
         </div>
 
         <div className="flex items-center gap-2 sm:ml-2">
-          <label className="text-sm text-gray-600">Indent</label>
-          <select
-            className="rounded-2xl border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          <label htmlFor="json-indent" className="text-sm text-fg-muted">
+            Indent
+          </label>
+
+          <Select
+            id="json-indent"
+            className="h-10 w-32"
             value={indent}
             onChange={(e) => setIndent(clampIndent(Number(e.target.value)))}
+            // minify 는 들여쓰기를 쓰지 않는다.
             disabled={mode === "minify"}
           >
             <option value={2}>2 spaces</option>
             <option value={4}>4 spaces</option>
-          </select>
+          </Select>
         </div>
 
-        <label className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 sm:ml-2">
-          <input type="checkbox" checked={sortKeys} onChange={(e) => setSortKeys(e.target.checked)} />
-          sortKeys
-        </label>
+        <CheckOption
+          label="sortKeys"
+          checked={sortKeys}
+          onChange={setSortKeys}
+        />
 
-        <label className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-          <input type="checkbox" checked={ensureAscii} onChange={(e) => setEnsureAscii(e.target.checked)} />
-          ensureAscii
-        </label>
+        <CheckOption
+          label="ensureAscii"
+          checked={ensureAscii}
+          onChange={setEnsureAscii}
+        />
 
         <div className="ml-auto flex flex-wrap gap-2">
-          <button
-            className="rounded-2xl border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            type="button"
-            onClick={() => setInput(SAMPLE)}
-          >
-            샘플 로드
-          </button>
-          <button
-            className="rounded-2xl border px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            type="button"
-            onClick={clearAll}
-          >
-            비우기
-          </button>
-          <button
-            className="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
-            type="button"
-            onClick={run}
-            disabled={!canRun}
-          >
+          <Button onClick={() => setInput(SAMPLE)}>샘플 로드</Button>
+          <Button onClick={clearAll}>비우기</Button>
+
+          <Button variant="primary" onClick={run} disabled={!canRun}>
             {loading ? "처리 중..." : "실행"}
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* 에러 표시 */}
+      {/* 에러 표시 — 위치 정보가 있으면 해당 지점으로 커서를 옮길 수 있다 */}
       {error && (
-        <div className="mb-4 rounded-3xl border border-red-200 bg-red-50 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-2">
+        <div
+          role="alert"
+          className="mt-4 rounded-card border border-danger/30 bg-danger-soft p-4"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-red-700">JSON 파싱 오류</div>
-              <div className="mt-1 text-sm text-red-700">{error.message}</div>
+              <div className="text-sm font-semibold text-danger-soft-fg">
+                JSON 파싱 오류
+              </div>
+
+              <div className="mt-1 text-sm text-danger-soft-fg">
+                {error.message}
+              </div>
+
               {(error.line || error.column) && (
-                <div className="mt-1 text-xs text-red-700">
+                <div className="mt-1 font-mono text-xs text-danger-soft-fg">
                   위치: line {error.line ?? "-"}, column {error.column ?? "-"}
                 </div>
               )}
             </div>
-            <button
-              className="rounded-2xl border border-red-200 bg-white px-3 py-2 text-sm text-red-700 hover:bg-red-100 disabled:opacity-50"
-              type="button"
+
+            <Button
+              size="sm"
               onClick={moveToError}
               disabled={!error.line || !error.column}
             >
               에러 위치로 이동
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Input / Output */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Input 카드: 카드 내부가 스크롤 가능한 레이아웃 */}
-        <div className="rounded-3xl border bg-white p-4 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold text-gray-800">Input</div>
-              <div className="text-xs text-gray-500">붙여넣고 실행하세요.</div>
-            </div>
-            <button
-              className="rounded-2xl border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-              type="button"
-              onClick={() => copy(input, "입력을 복사했어요.")}
-            >
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <CodePanel
+          title="Input"
+          hint="붙여넣고 실행하세요."
+          actions={
+            <Button size="sm" onClick={() => copy(input, "입력을 복사했어요.")}>
               복사
-            </button>
-          </div>
+            </Button>
+          }
+        >
+          <textarea
+            ref={inputRef}
+            className={cn(TEXTAREA_CLASS, "bg-surface")}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={'{"hello":"world"}'}
+            spellCheck={false}
+            aria-label="JSON 입력"
+          />
+        </CodePanel>
 
-          <div className="h-[420px] overflow-auto rounded-2xl border">
-            <textarea
-              ref={inputRef}
-              className="h-full w-full resize-none bg-white p-3 font-mono text-sm leading-5 outline-none focus:ring-2 focus:ring-blue-200"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder='{"hello":"world"}'
-            />
-          </div>
-        </div>
-
-        {/* Output 카드 */}
-        <div className="rounded-3xl border bg-white p-4 shadow-sm">
-          <div className="mb-2 flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold text-gray-800">Output</div>
-              <div className="text-xs text-gray-500">
-                {stats ? `${stats.inputLength} → ${stats.outputLength}` : "결과가 여기에 표시됩니다."}
-              </div>
-            </div>
-
-            <button
-              className="rounded-2xl border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              type="button"
+        <CodePanel
+          title="Output"
+          hint={
+            stats
+              ? `${stats.inputLength} → ${stats.outputLength}`
+              : "결과가 여기에 표시됩니다."
+          }
+          actions={
+            <Button
+              size="sm"
               onClick={() => copy(output, "결과를 복사했어요.")}
               disabled={!output}
             >
               복사
-            </button>
-          </div>
-
-          <div className="h-[420px] overflow-auto rounded-2xl border bg-gray-50">
-            <textarea
-              className="h-full w-full resize-none bg-gray-50 p-3 font-mono text-sm leading-5 outline-none"
-              value={output}
-              readOnly
-              placeholder="실행 후 결과가 표시됩니다."
-            />
-          </div>
-        </div>
+            </Button>
+          }
+        >
+          <textarea
+            className={cn(TEXTAREA_CLASS, "bg-surface-2")}
+            value={output}
+            readOnly
+            placeholder="실행 후 결과가 표시됩니다."
+            spellCheck={false}
+            aria-label="JSON 결과"
+          />
+        </CodePanel>
       </div>
 
       {/* History */}
-      <div className="mt-6 rounded-3xl border bg-white p-4 shadow-sm">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className={cardClass({ className: "mt-6 p-4" })}>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <div className="text-sm font-semibold text-gray-800">History</div>
-            <div className="text-xs text-gray-500">최근 실행 결과가 누적됩니다(최대 30개).</div>
+            <div className="text-sm font-semibold text-fg">History</div>
+
+            <div className="mt-0.5 text-xs text-fg-subtle">
+              최근 실행 결과가 누적됩니다 (최대 30개).
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
-              <input
-                type="checkbox"
-                checked={restoreAlsoInput}
-                onChange={(e) => setRestoreAlsoInput(e.target.checked)}
-              />
-              복원 시 입력/옵션도 함께
-            </label>
+            <CheckOption
+              label="복원 시 입력/옵션도 함께"
+              checked={restoreAlsoInput}
+              onChange={setRestoreAlsoInput}
+            />
 
-            <button
-              className="rounded-2xl border px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              type="button"
-              onClick={clearHistory}
-              disabled={history.length === 0}
-            >
+            <Button onClick={clearHistory} disabled={history.length === 0}>
               히스토리 비우기
-            </button>
+            </Button>
           </div>
         </div>
 
         {history.length === 0 ? (
-          <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-gray-500">
+          <div className="rounded-card border border-dashed border-line px-6 py-10 text-center text-sm text-fg-muted">
             아직 저장된 결과가 없습니다. 위에서 실행을 눌러 결과를 만들어보세요.
           </div>
         ) : (
-          // ✅ History 전체도 길어지면 스크롤
-          <div className="max-h-[720px] overflow-auto pr-1">
-            <div className="space-y-3">
-              {history.map((h) => (
-                <div key={h.id} className="rounded-2xl border bg-gray-50 p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-gray-500">{formatTime(h.createdAt)}</span>
-                      <Badge>{h.mode}</Badge>
-                      <Badge>indent:{h.indent}</Badge>
-                      {h.sortKeys && <Badge>sortKeys</Badge>}
-                      {h.ensureAscii && <Badge>ensureAscii</Badge>}
-                      {h.stats && (
-                        <span className="text-xs text-gray-500">
-                          {h.stats.inputLength} → {h.stats.outputLength}
-                        </span>
-                      )}
-                    </div>
+          <div className="max-h-[45rem] space-y-3 overflow-auto pr-1">
+            {history.map((h) => (
+              <div
+                key={h.id}
+                className="rounded-card border border-line bg-surface-2 p-3"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-xs text-fg-subtle">
+                      {formatTime(h.createdAt)}
+                    </span>
 
-                    <div className="flex gap-2">
-                      <button
-                        className="rounded-2xl border bg-white px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
-                        type="button"
-                        onClick={() => restoreFromHistory(h)}
-                      >
-                        복원
-                      </button>
-                      <button
-                        className="rounded-2xl border bg-white px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100"
-                        type="button"
-                        onClick={() => copy(h.output, "히스토리 결과를 복사했어요.")}
-                      >
-                        결과 복사
-                      </button>
-                    </div>
+                    <Badge tone="accent">{h.mode}</Badge>
+                    <Badge>indent:{h.indent}</Badge>
+                    {h.sortKeys && <Badge>sortKeys</Badge>}
+                    {h.ensureAscii && <Badge>ensureAscii</Badge>}
+
+                    {h.stats && (
+                      <span className="font-mono text-xs text-fg-subtle">
+                        {h.stats.inputLength} → {h.stats.outputLength}
+                      </span>
+                    )}
                   </div>
 
-                  {/* ✅ 각 history 높이를 크게 + 내부 스크롤 */}
-                  <div className="mt-2 rounded-xl border bg-white p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="text-xs font-semibold text-gray-700">Preview</div>
-                      <button
-                        className="rounded-lg border px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50"
-                        type="button"
-                        onClick={() => copy(h.input, "히스토리 입력을 복사했어요.")}
-                      >
-                        입력 복사
-                      </button>
-                    </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => restoreFromHistory(h)}>
+                      복원
+                    </Button>
 
-                    {/* 높이를 3배 정도: 기존 line-clamp 대신 고정 높이 + scroll */}
-                    <pre className="h-[240px] overflow-auto whitespace-pre-wrap rounded-lg bg-gray-50 p-3 font-mono text-xs text-gray-700">
-{h.output}
-                    </pre>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        copy(h.output, "히스토리 결과를 복사했어요.")
+                      }
+                    >
+                      결과 복사
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="mt-3 rounded-control border border-line bg-surface p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-xs font-semibold text-fg-muted">
+                      Preview
+                    </div>
+
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        copy(h.input, "히스토리 입력을 복사했어요.")
+                      }
+                    >
+                      입력 복사
+                    </Button>
+                  </div>
+
+                  <pre className="h-60 overflow-auto rounded-control bg-surface-2 p-3 font-mono text-xs whitespace-pre-wrap text-fg-muted">
+                    {h.output}
+                  </pre>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
-    </div>
+    </Container>
   );
 }
