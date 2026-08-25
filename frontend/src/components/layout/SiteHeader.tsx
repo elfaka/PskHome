@@ -94,8 +94,12 @@ export default function SiteHeader({
     );
   };
 
+  /*
+    헤더에는 main 그룹만 둔다.
+    tools(JSON Prettier / Forms 분석)는 완료 상태인 프로젝트 그 자체라
+    Project 드롭다운과 중복이었다. 직접 링크는 푸터가 계속 들고 있다.
+  */
   const main = NAV_ITEMS.filter((i) => i.group === "main");
-  const tools = NAV_ITEMS.filter((i) => i.group === "tools");
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-bg/80 backdrop-blur-md">
@@ -118,10 +122,6 @@ export default function SiteHeader({
         {/* 데스크톱 내비 */}
         <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="주요 메뉴">
           {main.map((i) => renderDesktop(i))}
-
-          <span className="mx-1 h-5 w-px bg-line" aria-hidden />
-
-          {tools.map((i) => renderDesktop(i))}
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
@@ -182,12 +182,6 @@ export default function SiteHeader({
                 )}
               </div>
             ))}
-          </div>
-
-          <div className="my-2 h-px bg-line" />
-
-          <div className="flex flex-col gap-1">
-            {tools.map((i) => renderLink(i, () => setOpen(false)))}
           </div>
         </nav>
       )}

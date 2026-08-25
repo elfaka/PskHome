@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { buttonClass } from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import Container from "@/components/ui/Container";
 import { cardClass } from "@/components/ui/Card";
@@ -35,16 +34,6 @@ const DESTINATIONS: Destination[] = [
     href: "/project",
     title: "Project",
     description: "만들었거나 만들 예정인 토이 프로젝트 목록.",
-  },
-  {
-    href: "/jsonprettier",
-    title: "JSON Prettier",
-    description: "JSON 검증과 포맷팅·압축 도구.",
-  },
-  {
-    href: "/googleform",
-    title: "Forms 분석",
-    description: "Google Forms 설문 응답을 문항별로 집계.",
   },
   {
     // 기존 홈에는 `<a href="/blog">` 가 있었지만 그 라우트는 없어서 404 로 떨어졌다.
@@ -122,22 +111,6 @@ export default function Home() {
             그동안 공부한 흔적을 기록하고, 토이 프로젝트를 만들어 두는
             공간입니다.
           </p>
-
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href="/pspost"
-              className={buttonClass({ variant: "primary", size: "lg" })}
-            >
-              PS 기록 보기
-            </Link>
-
-            <Link
-              href="/project"
-              className={buttonClass({ variant: "secondary", size: "lg" })}
-            >
-              프로젝트 보기
-            </Link>
-          </div>
         </Container>
       </section>
 

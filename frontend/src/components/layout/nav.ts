@@ -9,7 +9,10 @@ export type NavItem = {
   label: string;
   /** 하위 경로까지 활성으로 볼지 (예: /pspost/12 에서도 PS 가 활성) */
   section?: boolean;
-  /** 외부/도구 영역 구분용 */
+  /**
+   * main: 헤더 + 푸터에 노출
+   * tools: 푸터에만 노출 — 완료 상태 프로젝트라 헤더에서는 Project 드롭다운이 대신한다
+   */
   group: "main" | "tools";
 };
 
