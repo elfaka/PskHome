@@ -45,16 +45,36 @@ const envSchema = z.object({
     .default("http://localhost:5173/googleform/forms"),
 });
 
-const parsed = envSchema.safeParse(process.env);
+export type Env = z.infer<typeof envSchema>;
 
-if (!parsed.success) {
-  const detail = parsed.error.issues
-    .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
-    .join("\n");
-  throw new Error(`Invalid environment variables:\n${detail}`);
+/**
+ * 환경변수를 읽어 검증한다.
+ *
+ * [빈 문자열을 "미설정"으로 취급하는 이유]
+ * CD 파이프라인은 `.env` 를 `echo "SESSION_SECRET=${{ secrets.SESSION_SECRET }}"` 로 만든다.
+ * 시크릿이 등록돼 있지 않으면 값이 비어 있는 `SESSION_SECRET=` 줄이 생기는데,
+ * 빈 문자열도 엄연한 string 이라 zod 의 default/optional 이 적용되지 않는다.
+ * 그대로 두면 express-session 이 "secret option required" 로 죽어 컨테이너가 재시작을 반복한다.
+ * → 값이 빈 문자열이면 아예 없는 것으로 보고 기본값/optional 처리에 맡긴다.
+ */
+export function parseEnv(source: NodeJS.ProcessEnv): Env {
+  const provided = Object.fromEntries(
+    Object.entries(source).filter(([, value]) => value !== undefined && value !== "")
+  );
+
+  const parsed = envSchema.safeParse(provided);
+
+  if (!parsed.success) {
+    const detail = parsed.error.issues
+      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+      .join("\n");
+    throw new Error(`Invalid environment variables:\n${detail}`);
+  }
+
+  return parsed.data;
 }
 
-export const env = parsed.data;
+export const env = parseEnv(process.env);
 
 export const isTest = env.NODE_ENV === "test";
 export const isProduction = env.NODE_ENV === "production";
