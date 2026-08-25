@@ -4,6 +4,15 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { PsPost, listPosts } from "@/api/pspost";
+import Alert from "@/components/ui/Alert";
+import Badge from "@/components/ui/Badge";
+import Button, { buttonClass } from "@/components/ui/Button";
+import Container from "@/components/ui/Container";
+import EmptyState from "@/components/ui/EmptyState";
+import PageHeader from "@/components/ui/PageHeader";
+import Skeleton from "@/components/ui/Skeleton";
+import { Input } from "@/components/ui/Field";
+import { cardClass } from "@/components/ui/Card";
 import { errorMessage } from "@/lib/errorMessage";
 
 function fmtDate(s?: string) {
@@ -11,6 +20,24 @@ function fmtDate(s?: string) {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
   return d.toLocaleDateString();
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M16 16l4.5 4.5" />
+    </svg>
+  );
 }
 
 export default function PostsListPage() {
@@ -66,145 +93,143 @@ export default function PostsListPage() {
   }, []);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
-            PS 기록
-          </h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            풀었던 문제를 정리하고, 나만의 풀이 아카이브를 만듭니다.
-          </p>
+    <Container className="py-12 sm:py-16">
+      <PageHeader
+        eyebrow="Problem Solving"
+        title="PS 기록"
+        description="풀었던 문제를 정리하고, 나만의 풀이 아카이브를 만듭니다."
+        actions={
+          <>
+            <Button onClick={() => load(page)} disabled={loading}>
+              새로고침
+            </Button>
+
+            <Link
+              href="/pspost/new"
+              className={buttonClass({ variant: "primary" })}
+            >
+              새 글 작성
+            </Link>
+          </>
+        }
+      />
+
+      {/* 검색 — 서버 요청 없이 현재 페이지 안에서만 걸러낸다 */}
+      <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-md">
+          <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-subtle">
+            <SearchIcon />
+          </span>
+
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="제목 / 사이트 / 문제번호 / 언어 / 요약 검색"
+            aria-label="게시글 검색"
+            className="pl-9"
+          />
         </div>
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => load(page)}
-            className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 shadow-sm hover:bg-zinc-50"
-          >
-            새로고침
-          </button>
-          <Link
-            href="/pspost/new"
-            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700"
-          >
-            새 글 작성
-          </Link>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="w-full sm:max-w-xl">
-          <div className="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-emerald-200">
-            <span className="text-zinc-400">⌕</span>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="제목 / 사이트 / 문제번호 / 언어 / 요약 검색"
-              className="w-full bg-transparent text-sm outline-none"
-            />
-          </div>
-        </div>
-        <div className="text-sm text-zinc-500">
+        <div className="text-sm text-fg-subtle">
           현재 {filtered.length}개 / 전체 {totalElements}개
         </div>
       </div>
 
-      {/* States */}
-      {loading && <div className="text-sm text-zinc-500">불러오는 중…</div>}
-      {!!err && (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {err}
-        </div>
-      )}
+      {!!err && <Alert className="mt-6">{err}</Alert>}
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 gap-4">
-        {filtered.map((p) => (
-          <Link
-            key={p.id}
-            href={`/pspost/${p.id}`}
-            className="group rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-          >
-            <div className="flex flex-col gap-3">
+      {/* 목록 */}
+      <div className="mt-6 grid grid-cols-1 gap-3">
+        {loading &&
+          /* 실제 카드와 비슷한 높이를 잡아 데이터가 들어올 때 화면이 튀지 않게 한다 */
+          Array.from({ length: 4 }, (_, i) => (
+            <Skeleton key={i} className="h-32 rounded-card" />
+          ))}
+
+        {!loading &&
+          filtered.map((p) => (
+            <Link
+              key={p.id}
+              href={`/pspost/${p.id}`}
+              className={cardClass({
+                interactive: true,
+                className: "group block p-5",
+              })}
+            >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <h2 className="truncate text-lg font-semibold text-zinc-900 group-hover:text-emerald-700">
+                  <h2 className="truncate text-base font-semibold text-fg transition group-hover:text-accent-soft-fg">
                     {p.title}
                   </h2>
 
                   {p.solution ? (
-                    <p className="mt-2 text-sm leading-6 text-zinc-600">
+                    <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-fg-muted">
                       {p.solution}
                     </p>
                   ) : (
-                    <p className="mt-2 text-sm text-zinc-400">요약 없음</p>
+                    <p className="mt-2 text-sm text-fg-subtle">요약 없음</p>
                   )}
                 </div>
 
-                <div className="shrink-0 text-xs text-zinc-500">
+                <time className="shrink-0 text-xs text-fg-subtle">
                   {fmtDate(p.createdAt)}
-                </div>
+                </time>
               </div>
 
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-700">
-                  {p.site || "Site"}
-                </span>
-                <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-700">
-                  #{p.problemNumber || "-"}
-                </span>
-                <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-700">
-                  {p.language || "Lang"}
-                </span>
-                <span className="rounded-full bg-zinc-100 px-2 py-1 text-zinc-700">
-                  {p.level || "Level"}
-                </span>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge>{p.site || "Site"}</Badge>
+                <Badge>#{p.problemNumber || "-"}</Badge>
+                <Badge>{p.language || "Lang"}</Badge>
+                <Badge>{p.level || "Level"}</Badge>
+
                 {p.isSolved ? (
-                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
-                    Solved
-                  </span>
+                  <Badge tone="success">Solved</Badge>
                 ) : (
-                  <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">
-                    Unsolved
-                  </span>
+                  <Badge tone="warning">Unsolved</Badge>
                 )}
               </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          ))}
 
         {!loading && !err && items.length === 0 && (
-          <div className="rounded-3xl border border-zinc-200 bg-white p-10 text-center text-sm text-zinc-500 shadow-sm">
-            아직 글이 없어요. 첫 기록을 남겨볼까요?
-          </div>
+          <EmptyState
+            title="아직 글이 없어요"
+            description="첫 기록을 남겨볼까요?"
+            action={
+              <Link
+                href="/pspost/new"
+                className={buttonClass({ variant: "primary" })}
+              >
+                새 글 작성
+              </Link>
+            }
+          />
+        )}
+
+        {!loading && !err && items.length > 0 && filtered.length === 0 && (
+          <EmptyState
+            title="검색 결과가 없습니다"
+            description={`이 페이지에서 "${q}" 와 맞는 기록을 찾지 못했습니다.`}
+          />
         )}
       </div>
 
-      {/* Pagination */}
-      <div className="mt-8 flex items-center justify-between">
-        <button
-          disabled={loading || page <= 0}
-          onClick={() => load(page - 1)}
-          className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm disabled:opacity-50"
-        >
+      {/* 페이지 이동 */}
+      <div className="mt-10 flex items-center justify-between">
+        <Button disabled={loading || page <= 0} onClick={() => load(page - 1)}>
           이전
-        </button>
+        </Button>
 
-        <div className="text-sm text-zinc-600">
+        <div className="text-sm text-fg-muted">
           {totalPages === 0 ? "0 / 0" : `${page + 1} / ${totalPages}`}
         </div>
 
-        <button
+        <Button
           disabled={loading || totalPages === 0 || page >= totalPages - 1}
           onClick={() => load(page + 1)}
-          className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm disabled:opacity-50"
         >
           다음
-        </button>
+        </Button>
       </div>
-    </div>
+    </Container>
   );
 }

@@ -6,6 +6,12 @@ import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 import { PsPost, deletePost, getPost } from "@/api/pspost";
+import Alert from "@/components/ui/Alert";
+import Badge from "@/components/ui/Badge";
+import Button, { buttonClass } from "@/components/ui/Button";
+import { cardClass } from "@/components/ui/Card";
+import Container from "@/components/ui/Container";
+import Skeleton from "@/components/ui/Skeleton";
 import { errorMessage } from "@/lib/errorMessage";
 
 function fmtDateTime(s?: string) {
@@ -53,61 +59,61 @@ export default function PostDetailPage() {
   }, [postId]);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <Link href="/pspost" className="text-sm text-zinc-600 hover:underline">
+    <Container className="py-10 sm:py-14">
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/pspost"
+          className="text-sm text-fg-muted underline-offset-4 transition hover:text-fg hover:underline"
+        >
           ← 목록으로
         </Link>
 
         <div className="flex gap-2">
           <Link
             href={`/pspost/${postId}/edit`}
-            className="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm text-zinc-700 shadow-sm hover:bg-zinc-50"
+            className={buttonClass({ size: "sm" })}
           >
             수정
           </Link>
-          <button
-            onClick={onDelete}
-            className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 shadow-sm hover:bg-red-100"
-          >
+
+          <Button variant="danger" size="sm" onClick={onDelete}>
             삭제
-          </button>
+          </Button>
         </div>
       </div>
 
-      {loading && <div className="text-sm text-zinc-500">불러오는 중…</div>}
-      {!!err && (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {err}
+      {loading && (
+        <div className="mt-6 space-y-3">
+          <Skeleton className="h-10 w-3/4" />
+          <Skeleton className="h-6 w-1/2" />
+          <Skeleton className="h-64 w-full rounded-card" />
         </div>
       )}
 
+      {!!err && <Alert className="mt-6">{err}</Alert>}
+
       {data && (
-        <article className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm sm:p-8">
-          <header className="space-y-4">
-            <h1 className="text-3xl font-bold tracking-tight text-zinc-900">
+        <article className={cardClass({ className: "mt-6 p-6 sm:p-8" })}>
+          <header>
+            <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-3xl">
               {data.title}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-700">
-              <span className="rounded-full bg-zinc-100 px-2 py-1">{data.site}</span>
-              <span className="rounded-full bg-zinc-100 px-2 py-1">#{data.problemNumber}</span>
-              <span className="rounded-full bg-zinc-100 px-2 py-1">{data.language}</span>
-              <span className="rounded-full bg-zinc-100 px-2 py-1">{data.level}</span>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <Badge>{data.site}</Badge>
+              <Badge>#{data.problemNumber}</Badge>
+              <Badge>{data.language}</Badge>
+              <Badge>{data.level}</Badge>
 
               {data.isSolved ? (
-                <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
-                  Solved
-                </span>
+                <Badge tone="success">Solved</Badge>
               ) : (
-                <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">
-                  Unsolved
-                </span>
+                <Badge tone="warning">Unsolved</Badge>
               )}
 
-              <span className="ml-auto text-xs text-zinc-500">
+              <time className="ml-auto text-xs text-fg-subtle">
                 {fmtDateTime(data.createdAt)}
-              </span>
+              </time>
             </div>
 
             {data.link ? (
@@ -115,29 +121,36 @@ export default function PostDetailPage() {
                 href={data.link}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-2 text-sm font-medium text-emerald-700 hover:underline"
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-accent-soft-fg underline-offset-4 hover:underline"
               >
                 문제 링크 열기 <span aria-hidden>↗</span>
               </a>
             ) : null}
 
             {data.solution ? (
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 text-sm text-zinc-800">
-                <div className="mb-1 text-xs font-semibold text-emerald-700">
+              <div className="mt-4 rounded-card border border-accent/25 bg-accent-soft px-4 py-3">
+                <div className="text-xs font-semibold text-accent-soft-fg">
                   한 줄 요약
                 </div>
-                {data.solution}
+
+                <p className="mt-1 text-sm leading-relaxed text-fg">
+                  {data.solution}
+                </p>
               </div>
             ) : null}
 
-            <div className="h-px bg-zinc-100" />
+            <div className="mt-6 h-px bg-line" />
           </header>
 
-          <div className="prose prose-zinc mt-6 max-w-none">
+          {/*
+            prose-app 이 typography 플러그인의 색을 테마 토큰으로 덮는다.
+            (기존 `prose prose-zinc` 는 플러그인이 설치돼 있지 않아 아무 효과가 없었다)
+          */}
+          <div className="prose prose-app mt-6 max-w-none">
             <ReactMarkdown>{data.contentMd || ""}</ReactMarkdown>
           </div>
         </article>
       )}
-    </div>
+    </Container>
   );
 }
