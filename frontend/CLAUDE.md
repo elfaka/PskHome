@@ -65,7 +65,7 @@ src/
 │   ├── layout/   # SiteShell, SiteHeader, SiteFooter, ProjectFlyout, nav.ts
 │   ├── pspost/PostForm.tsx
 │   └── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
-├── data/         # 화면이 공유하는 정적 데이터 (projects.ts)
+├── data/         # 화면이 공유하는 정적 데이터 (projects.ts, profile.ts)
 ├── lib/          # 공용 유틸 (errorMessage, cn 등)
 └── test/         # Vitest 셋업 + MSW 목
 ```

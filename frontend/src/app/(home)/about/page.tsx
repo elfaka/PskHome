@@ -1,116 +1,134 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
-import Container from "@/components/ui/Container";
-import EmptyState from "@/components/ui/EmptyState";
-import PageHeader from "@/components/ui/PageHeader";
 import Badge from "@/components/ui/Badge";
+import Container from "@/components/ui/Container";
+import PageHeader from "@/components/ui/PageHeader";
+import { buttonClass } from "@/components/ui/Button";
+import { cardClass } from "@/components/ui/Card";
+import { INTRO, LINKS, SKILLS, SUMMARY, TAGLINE } from "@/data/profile";
 
 export const metadata: Metadata = {
   title: "About",
   description: "ELFAKA 소개와 기술 스택.",
 };
 
-/*
-  ──────────────────────────────────────────────────────────────────────────
-  TODO: 아래 3개 배열을 채우면 해당 섹션이 자동으로 나타난다.
-        (경력 이력은 이 페이지가 아니라 `/career` 의 CAREER 배열에 쓴다)
-        비어 있는 동안에는 "준비 중" 안내만 보인다.
-
-        내용을 모르는 사람이 대신 쓸 수 없는 부분이라 구조만 세워 둔 상태다.
-        JSX 를 건드릴 필요 없이 데이터만 추가하면 된다.
-  ──────────────────────────────────────────────────────────────────────────
-*/
-
-/** 자기소개 문단. 한 원소가 한 단락이다. */
-const INTRO: string[] = [
-  // TODO: 예) "백엔드를 주로 다루는 개발자입니다. ..."
-];
-
-/** 기술 스택. group 은 분류명(언어, 백엔드, 프론트엔드, 인프라 ...) */
-const SKILLS: { group: string; items: string[] }[] = [
-  // TODO: 예) { group: "백엔드", items: ["Java", "Spring Boot", "Express"] }
-];
-
-/** 연락처·외부 링크. */
-const LINKS: { label: string; href: string }[] = [
-  // TODO: 예) { label: "Email", href: "mailto:..." }
-];
-
-const isEmpty =
-  INTRO.length === 0 && SKILLS.length === 0 && LINKS.length === 0;
-
 export default function About() {
   return (
     <Container size="prose" className="py-12 sm:py-16">
-      <PageHeader
-        eyebrow="About"
-        title="소개"
-        description="어떤 것을 만들어 왔고, 무엇을 다룰 수 있는지 정리한 페이지입니다."
-      />
+      <PageHeader eyebrow="About" title="소개" description={TAGLINE} />
 
-      {isEmpty && (
-        <EmptyState
-          className="mt-10"
-          title="아직 작성 중입니다"
-          description="소개 문구와 기술 스택을 정리해 곧 채워둘 예정입니다. 그동안 만든 것은 Project 와 PS 기록에서 볼 수 있습니다."
-        />
-      )}
+      {/* 요약 스트립 — 본문을 읽지 않아도 소속·학력·관심이 먼저 보이게 한다 */}
+      <dl className="mt-8 grid gap-3 sm:grid-cols-3">
+        {SUMMARY.map((item) => (
+          <div key={item.label} className={cardClass({ className: "p-4" })}>
+            <dt className="text-xs font-semibold tracking-wider text-fg-subtle uppercase">
+              {item.label}
+            </dt>
 
-      {INTRO.length > 0 && (
-        <section className="mt-10 space-y-4">
-          {INTRO.map((paragraph) => (
-            <p
-              key={paragraph}
-              className="text-base leading-relaxed text-fg-muted"
-            >
-              {paragraph}
-            </p>
-          ))}
-        </section>
-      )}
+            <dd className="mt-1.5">
+              <span className="block text-sm font-medium text-fg">
+                {item.value}
+              </span>
 
-      {SKILLS.length > 0 && (
-        <section className="mt-12">
-          <h2 className="text-lg font-semibold text-fg">기술 스택</h2>
-
-          <div className="mt-4 space-y-4">
-            {SKILLS.map((group) => (
-              <div key={group.group}>
-                <p className="text-xs font-semibold tracking-wider text-fg-subtle uppercase">
-                  {group.group}
-                </p>
-
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {group.items.map((item) => (
-                    <Badge key={item}>{item}</Badge>
-                  ))}
-                </div>
-              </div>
-            ))}
+              {item.sub && (
+                <span className="mt-0.5 block font-mono text-xs text-fg-subtle">
+                  {item.sub}
+                </span>
+              )}
+            </dd>
           </div>
-        </section>
-      )}
+        ))}
+      </dl>
 
-      {LINKS.length > 0 && (
-        <section className="mt-12">
-          <h2 className="text-lg font-semibold text-fg">연락처</h2>
+      {/* 소개 문단 */}
+      <section className="mt-12 space-y-4">
+        {INTRO.map((paragraph) => (
+          <p
+            key={paragraph}
+            className="text-base leading-relaxed text-fg-muted"
+          >
+            {paragraph}
+          </p>
+        ))}
+      </section>
 
-          <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
-            {LINKS.map((link) => (
-              <li key={link.href}>
-                <a
-                  href={link.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-accent-soft-fg underline-offset-4 hover:underline"
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {/* 기술 스택 */}
+      <section className="mt-12">
+        <h2 className="text-lg font-semibold text-fg">기술 스택</h2>
+
+        <div className="mt-5 space-y-5">
+          {SKILLS.map((group) => (
+            <div key={group.group}>
+              <p className="flex items-center gap-2 text-xs font-semibold tracking-wider text-fg-subtle uppercase">
+                {/* accent 점으로 분류 구분 — 색을 늘리지 않고 시선만 잡아준다 */}
+                <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+                {group.group}
+              </p>
+
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {group.items.map((item) => (
+                  <Badge key={item}>{item}</Badge>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* 경력은 별도 페이지로 — 여기서는 길을 열어만 준다 */}
+      <section className="mt-12">
+        <div
+          className={cardClass({
+            className:
+              "flex flex-wrap items-center justify-between gap-3 p-5",
+          })}
+        >
+          <div>
+            <p className="text-sm font-medium text-fg">
+              어디에서 무엇을 맡아 왔는지
+            </p>
+
+            <p className="mt-1 text-sm text-fg-muted">
+              경력과 학력은 Career 에 정리해 두었습니다.
+            </p>
+          </div>
+
+          <Link href="/career" className={buttonClass()}>
+            Career 보기
+          </Link>
+        </div>
+      </section>
+
+      {/* 연락처 */}
+      <section className="mt-12">
+        <h2 className="text-lg font-semibold text-fg">연락처</h2>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {LINKS.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              // mailto 는 새 탭이 의미 없고, 외부 링크만 새 탭으로 연다.
+              target={link.href.startsWith("http") ? "_blank" : undefined}
+              rel={
+                link.href.startsWith("http")
+                  ? "noopener noreferrer"
+                  : undefined
+              }
+              className={buttonClass({ className: "gap-2" })}
+            >
+              {link.label}
+
+              {link.hint && (
+                <span className="font-mono text-xs text-fg-subtle">
+                  {link.hint}
+                </span>
+              )}
+            </a>
+          ))}
+        </div>
+      </section>
     </Container>
   );
 }

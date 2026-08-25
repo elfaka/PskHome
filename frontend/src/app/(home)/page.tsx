@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import Badge from "@/components/ui/Badge";
 import Container from "@/components/ui/Container";
 import { cardClass } from "@/components/ui/Card";
 
@@ -8,11 +7,6 @@ type Destination = {
   href: string;
   title: string;
   description: string;
-  /**
-   * 페이지는 있고 내용만 채우는 중인 항목.
-   * 배지로 알리되 링크는 살린다 — 페이지가 "작성 중" 안내를 직접 보여준다.
-   */
-  preparing?: boolean;
 };
 
 /**
@@ -25,14 +19,12 @@ const DESTINATIONS: Destination[] = [
   {
     href: "/about",
     title: "About",
-    description: "소개와 기술 스택.",
-    preparing: true,
+    description: "어떤 개발자인지, 무엇을 다루는지.",
   },
   {
     href: "/career",
     title: "Career",
-    description: "어디에서 무엇을 맡아 왔는지 정리한 이력.",
-    preparing: true,
+    description: "어디에서 무엇을 맡아 왔는지.",
   },
   {
     href: "/pspost",
@@ -47,35 +39,25 @@ const DESTINATIONS: Destination[] = [
 ];
 
 function DestinationCard({ item }: { item: Destination }) {
-  const body = (
-    <>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-fg">{item.title}</h2>
-
-        {item.preparing ? (
-          <Badge tone="warning">준비 중</Badge>
-        ) : (
-          <span
-            aria-hidden
-            className="text-fg-subtle transition group-hover:translate-x-0.5 group-hover:text-accent-soft-fg"
-          >
-            →
-          </span>
-        )}
-      </div>
-
-      <p className="mt-2 text-sm leading-relaxed text-fg-muted">
-        {item.description}
-      </p>
-    </>
-  );
-
   return (
     <Link
       href={item.href}
       className={cardClass({ interactive: true, className: "group block p-5" })}
     >
-      {body}
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-fg">{item.title}</h2>
+
+        <span
+          aria-hidden
+          className="text-fg-subtle transition group-hover:translate-x-0.5 group-hover:text-accent-soft-fg"
+        >
+          →
+        </span>
+      </div>
+
+      <p className="mt-2 text-sm leading-relaxed text-fg-muted">
+        {item.description}
+      </p>
     </Link>
   );
 }
