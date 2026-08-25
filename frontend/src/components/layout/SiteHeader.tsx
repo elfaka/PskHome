@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import ThemeToggle from "@/components/theme/ThemeToggle";
+import { PROJECTS, projectAnchorId } from "@/data/projects";
 import { cn } from "@/lib/cn";
 
-import Wordmark from "./Wordmark";
+import ProjectFlyout from "./ProjectFlyout";
 import { NAV_ITEMS, NavItem, isActive } from "./nav";
 
 function GithubIcon() {
@@ -62,9 +63,8 @@ export default function SiteHeader({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  const render = (item: NavItem, onNavigate?: () => void) => (
+  const renderLink = (item: NavItem, onNavigate?: () => void) => (
     <Link
-      key={item.href}
       href={item.href}
       onClick={onNavigate}
       aria-current={isActive(pathname, item) ? "page" : undefined}
@@ -74,26 +74,54 @@ export default function SiteHeader({
     </Link>
   );
 
+  /**
+   * 데스크톱 내비 항목.
+   *
+   * Project 는 호버 시 프로젝트 목록을 펼친다. 드롭다운은 CSS(group-hover)로만
+   * 여닫으므로 상태를 들고 있지 않다 — JS 타이머로 여닫으면 마우스가 항목과
+   * 패널 사이를 지날 때 깜빡인다.
+   */
+  const renderDesktop = (item: NavItem) => {
+    if (item.href !== "/project") {
+      return <div key={item.href}>{renderLink(item)}</div>;
+    }
+
+    return (
+      <div key={item.href} className="group/project relative">
+        {renderLink(item)}
+        <ProjectFlyout />
+      </div>
+    );
+  };
+
   const main = NAV_ITEMS.filter((i) => i.group === "main");
   const tools = NAV_ITEMS.filter((i) => i.group === "tools");
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-bg/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 sm:px-6 lg:px-8">
-        <Link
-          href="/"
-          className="flex shrink-0 items-center text-fg transition hover:text-accent-soft-fg"
-        >
-          <Wordmark className="h-6 w-auto sm:h-7" />
+        <Link href="/" className="flex shrink-0 items-center" aria-label="ELFAKA 홈">
+          {/*
+            투명 배경 + 라벤더(#a0a0ff) 워드마크라 라이트·다크 양쪽에서 보인다.
+            width/height 를 명시해 로드 전 레이아웃이 밀리지 않게 한다.
+            (next/image 대신 <img> 인 이유는 eslint.config.mjs 주석 참고)
+          */}
+          <img
+            src="/elfaka.png"
+            alt="ELFAKA"
+            width={800}
+            height={200}
+            className="h-7 w-auto transition-transform duration-300 ease-in-out hover:scale-105 sm:h-8"
+          />
         </Link>
 
         {/* 데스크톱 내비 */}
         <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="주요 메뉴">
-          {main.map((i) => render(i))}
+          {main.map((i) => renderDesktop(i))}
 
           <span className="mx-1 h-5 w-px bg-line" aria-hidden />
 
-          {tools.map((i) => render(i))}
+          {tools.map((i) => renderDesktop(i))}
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
@@ -132,13 +160,34 @@ export default function SiteHeader({
           className="border-t border-line bg-surface px-4 py-3 md:hidden"
         >
           <div className="flex flex-col gap-1">
-            {main.map((i) => render(i, () => setOpen(false)))}
+            {main.map((i) => (
+              <div key={i.href} className="flex flex-col">
+                {renderLink(i, () => setOpen(false))}
+
+                {/* 모바일에는 호버가 없다. Project 하위 목록을 그대로 펼쳐 둔다. */}
+                {i.href === "/project" && (
+                  <ul className="mt-1 ml-3 border-l border-line pl-3">
+                    {PROJECTS.map((project) => (
+                      <li key={project.id}>
+                        <Link
+                          href={`/project#${projectAnchorId(project.id)}`}
+                          onClick={() => setOpen(false)}
+                          className="block truncate rounded-control px-2 py-1.5 text-sm text-fg-muted transition hover:bg-surface-hover hover:text-fg"
+                        >
+                          {project.title}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
           </div>
 
           <div className="my-2 h-px bg-line" />
 
           <div className="flex flex-col gap-1">
-            {tools.map((i) => render(i, () => setOpen(false)))}
+            {tools.map((i) => renderLink(i, () => setOpen(false)))}
           </div>
         </nav>
       )}

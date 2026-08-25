@@ -61,9 +61,10 @@ src/
 ├── components/   # 화면 구현체
 │   ├── ui/       # 디자인 프리미티브 (Button, Card, Field, Badge ...)
 │   ├── theme/    # 라이트/다크 테마 (ThemeScript, themeStore, ThemeToggle)
-│   ├── layout/   # SiteShell, SiteHeader, SiteFooter, Wordmark, nav.ts
+│   ├── layout/   # SiteShell, SiteHeader, SiteFooter, ProjectFlyout, nav.ts
 │   ├── pspost/PostForm.tsx
 │   └── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
+├── data/         # 화면이 공유하는 정적 데이터 (projects.ts)
 ├── lib/          # 공용 유틸 (errorMessage, cn 등)
 └── test/         # Vitest 셋업 + MSW 목
 ```
