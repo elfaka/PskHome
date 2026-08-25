@@ -132,6 +132,27 @@ cd backend && npm run prisma:generate
 > Prisma 7 부터 접속 URL 은 `schema.prisma` 가 아니라 `prisma.config.ts` 에서 관리한다.
 > 런타임 접속은 `src/lib/prisma.ts` 의 MariaDB driver adapter 가 담당한다.
 
+**`DATABASE_URL` 의 사용자명/비밀번호에 `@ : / ? #` 가 들어가면 퍼센트 인코딩해야 한다**
+(`p@ss` → `p%40ss`). 안 하면 host 를 잘못 잘라내 엉뚱한 곳에 붙으려 한다.
+
+### MySQL 8 인증 (`allowPublicKeyRetrieval`)
+
+MySQL 8 의 기본 인증 플러그인은 `caching_sha2_password` 다.
+서버에 자격증명이 캐시돼 있지 않으면(MySQL 재시작 직후 등) full authentication 이 필요하고,
+평문 연결에서는 서버의 RSA 공개키를 받아와야 한다.
+
+`mariadb` 커넥터의 `allowPublicKeyRetrieval` 기본값은 **false** 라서,
+끄면 handshake 가 치명적 오류로 끊기고 **커넥션이 하나도 만들어지지 않는다.**
+이때 겉으로 드러나는 증상은 엉뚱하게도 이것뿐이다:
+
+```
+pool timeout: failed to retrieve a connection from pool after 10001ms
+(pool connections: active=0 idle=0 limit=10)
+```
+
+`active=0 idle=0` 은 **풀 고갈이 아니라 연결이 아예 안 된다**는 신호로 읽어야 한다.
+`src/lib/prisma.ts` 에서 이 옵션을 켜 두었으니 지우지 말 것.
+
 ## 테스트
 
 ```bash
