@@ -6,8 +6,8 @@ import { z } from "zod";
  *
  * [설계 의도]
  * - 기존 Spring 의 application-{local,prod,test}.yaml 프로파일 분기를 .env 하나로 통합한다.
- * - 시크릿(Google OAuth, LostArk API Key, DB URL)은 **optional** 로 둔다.
- *   값이 없다고 프로세스 부팅 자체를 막으면, 예를 들어 LostArk 키 하나 때문에
+ * - 시크릿(Google OAuth, DB URL)은 **optional** 로 둔다.
+ *   값이 없다고 프로세스 부팅 자체를 막으면, 예를 들어 Google 시크릿 하나 때문에
  *   JSON Prettier / PS Post 같은 무관한 기능까지 죽는다.
  *   → 부팅은 항상 되고, 실제로 그 시크릿을 쓰는 엔드포인트만 런타임에 실패한다.
  */
@@ -43,16 +43,6 @@ const envSchema = z.object({
   APP_LOGIN_SUCCESS_REDIRECT: z
     .string()
     .default("http://localhost:5173/googleform/forms"),
-
-  // --- LostArk Open API ---
-  LOSTARK_API_BASE_URL: z
-    .string()
-    .default("https://developer-lostark.game.onstove.com"),
-  /**
-   * 기존에는 application-local.yaml 에 Jasypt ENC(...) 로 저장돼 있었다.
-   * Node 에는 Jasypt 가 없으므로 평문 환경변수로 관리한다.
-   */
-  LOSTARK_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

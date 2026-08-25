@@ -90,7 +90,6 @@ jobs:
             echo "SESSION_SECRET=${{ secrets.SESSION_SECRET }}" >> .env
             echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
             echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
-            echo "LOSTARK_API_KEY=${{ secrets.LOSTARK_API_KEY }}" >> .env
 
       # 10. 이미지 빌드 + 기동
       - name: Update be and db

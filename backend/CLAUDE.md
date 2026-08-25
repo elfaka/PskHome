@@ -12,7 +12,6 @@ Express 5 + TypeScript 백엔드 개발 가이드. 루트 [`CLAUDE.md`](../CLAUD
 | express-session + connect-redis | 세션 (Redis) |
 | Passport (`passport-google-oauth20`) | Google OAuth2 로그인 |
 | googleapis | Google Drive v3 / Forms v1 |
-| axios | LostArk Open API 호출 |
 | zod | 환경변수 스키마 검증 |
 | Vitest + Supertest | 테스트 |
 
@@ -43,8 +42,7 @@ src/
     ├── ping/                   # GET /api/ping
     ├── jsonprettier/           # /api/json/**       (공개)
     ├── pspost/                 # /api/posts/**      (공개)
-    ├── survey/                 # /api/auth/**, /api/oauth2/**, /api/forms/** 
-    └── character/              # /api/character/**  (인증 필요)
+    └── survey/                 # /api/auth/**, /api/oauth2/**, /api/forms/**
 ```
 
 모듈 내부 구조: `*.router.ts` → `*.service.ts` → `*.types.ts` (+ 필요 시 클라이언트/팩토리)
@@ -84,7 +82,6 @@ api.use(newModuleRouter);   // 라우터 안에서 router.use("/newmodule", requ
 
 **인증 필요 (`requireAuth`)**
 - `/api/forms/**`
-- `/api/character/**`
 
 미인증 요청은 Google 로 리다이렉트하지 않고 **401 JSON** (`{ error: { code: "UNAUTHORIZED" } }`) 을 반환한다.
 
@@ -114,24 +111,10 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (없음) | 없으면 로그인 경로만 503 |
 | `GOOGLE_CALLBACK_URL` | `http://localhost:8080/api/login/oauth2/code/google` | Console 등록값과 일치해야 함 |
 | `APP_LOGIN_SUCCESS_REDIRECT` | `http://localhost:5173/googleform/forms` | |
-| `LOSTARK_API_BASE_URL` | `https://developer-lostark.game.onstove.com` | |
-| `LOSTARK_API_KEY` | (없음) | 없으면 `/api/character/**` 만 503 |
 
 **시크릿은 전부 optional 이다.** 하나가 없다고 프로세스 부팅을 막지 않고,
-해당 시크릿을 쓰는 엔드포인트만 런타임에 실패한다. (예: LostArk 키가 없어도 JSON Prettier 는 동작)
-
-## LostArk API 키
-
-기존에는 `application-local.yaml` 에 Jasypt 로 `ENC(...)` 암호화되어 있었다.
-Jasypt 는 Java 전용이라 Node 에서는 복호화할 수 없으므로 **평문 `LOSTARK_API_KEY`** 로 관리한다.
-
-기존 암호문에서 값을 복원하려면 (Jasypt Spring Boot 3.x 기본 알고리즘 기준):
-
-```bash
-node -e "const c=require('crypto');const raw=Buffer.from(process.argv[1],'base64');const key=c.pbkdf2Sync(process.argv[2],raw.subarray(0,16),1000,32,'sha512');const d=c.createDecipheriv('aes-256-cbc',key,raw.subarray(16,32));console.log(Buffer.concat([d.update(raw.subarray(32)),d.final()]).toString('utf8'))" '<ENC 안의 base64>' '<JASYPT_ENCRYPTOR_PASSWORD>'
-```
-
-출력된 값을 `.env` 의 `LOSTARK_API_KEY` 에 넣는다 (`Bearer eyJ...` 형태 전체).
+해당 시크릿을 쓰는 엔드포인트만 런타임에 실패한다.
+(예: Google 시크릿이 없어도 JSON Prettier / PS Post 는 동작한다)
 
 ## 데이터베이스
 
@@ -153,7 +136,7 @@ cd backend && npm run prisma:generate
 ## 테스트
 
 ```bash
-# 전체 (외부 의존 없음 — MySQL/Redis/Google/LostArk 불필요)
+# 전체 (외부 의존 없음 — MySQL/Redis/Google 불필요)
 cd backend && npm test
 
 # 모듈별 빠른 테스트
@@ -170,7 +153,6 @@ cd backend && npm run test:watch
 **테스트는 반드시 외부 의존 없이 돌아야 한다.**
 - DB: `vi.mock("../../lib/prisma.js")` + `src/testing/fakePrisma.ts` (기존 H2 역할)
 - Google: `vi.mock("./google/googleClientFactory.js")`
-- LostArk: `vi.mock("./lostArkClient.js")`
 - 세션: `NODE_ENV=test` 면 `config/session.ts` 가 Redis 대신 MemoryStore 를 쓴다
   (`vitest.config.ts` 가 `NODE_ENV=test` 를 강제한다)
 

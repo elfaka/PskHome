@@ -23,7 +23,6 @@
 | express-session + connect-redis | - | 세션 (Redis) |
 | Passport (`passport-google-oauth20`) | - | Google OAuth2 로그인 |
 | googleapis | - | Google Drive v3 / Forms v1 |
-| axios | 1.x | LostArk API 호출 |
 | zod | 4.x | 환경변수 검증 |
 | Vitest + Supertest | - | 테스트 |
 
@@ -79,9 +78,8 @@ backend/src/
     ├── ping/ping.router.ts
     ├── jsonprettier/                # router / service / types
     ├── pspost/                      # router / service / types
-    ├── survey/                      # auth.router, forms.router,
-    │                                # forms.service, analyze.service, google/
-    └── character/                   # router / service / lostArkClient
+    └── survey/                      # auth.router, forms.router,
+                                     # forms.service, analyze.service, google/
 
 backend/prisma/schema.prisma         # 기존 ps_post 테이블 매핑 (마이그레이션 생성 안 함)
 backend/prisma.config.ts             # Prisma 7 접속 설정 (CLI 용)
@@ -127,8 +125,6 @@ frontend/src/
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (없음) | 없으면 로그인 경로만 503 |
 | `GOOGLE_CALLBACK_URL` | `http://localhost:8080/api/login/oauth2/code/google` | Console 등록값과 일치 필요 |
 | `APP_LOGIN_SUCCESS_REDIRECT` | `http://localhost:5173/googleform/forms` | |
-| `LOSTARK_API_BASE_URL` | LostArk Open API | |
-| `LOSTARK_API_KEY` | (없음) | 없으면 `/api/character/**` 만 503 |
 
 ### 프론트엔드
 
@@ -139,12 +135,12 @@ frontend/src/
 ### 배포 (GitHub Secrets)
 
 `SSH_HOST_NAME`, `SSH_USER_NAME`, `SSH_PRIVATE_KEY`, `SSH_PORT`,
-`MYSQL_ROOT_PASSWORD`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `LOSTARK_API_KEY`
+`MYSQL_ROOT_PASSWORD`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 
 ## 테스트 실행
 
 ```bash
-# 백엔드 (외부 의존 없음 — MySQL/Redis/Google/LostArk 불필요)
+# 백엔드 (외부 의존 없음 — MySQL/Redis/Google 불필요)
 cd backend && npm test
 
 # 프론트엔드 (MSW 목 서버, 실제 서버 불필요)
@@ -155,7 +151,7 @@ cd frontend && npm run test
 
 - **공개 (인증 불필요):** `/api/ping`, `/api/auth/me`, `/api/auth/logout`,
   `/api/json/**`, `/api/posts/**`, `/api/oauth2/**`, `/api/login/oauth2/**`
-- **인증 필요:** `/api/forms/**`, `/api/character/**` (Google OAuth2 세션)
+- **인증 필요:** `/api/forms/**` (Google OAuth2 세션)
 - **미인증 응답:** 302 리다이렉트가 아니라 401 JSON
 
 ## 배포

@@ -49,7 +49,7 @@
 
 **백엔드:**
 ```bash
-# 전체 테스트 (외부 의존 없음 — MySQL/Redis/Google/LostArk 불필요)
+# 전체 테스트 (외부 의존 없음 — MySQL/Redis/Google 불필요)
 cd backend && npm test
 
 # 모듈별 빠른 테스트 (변경한 모듈만)
@@ -148,8 +148,6 @@ cd server && docker compose -f docker-compose-fe.yaml up -d --build
 
 Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 
-- **`modules/character/`** — 외부 LostArk Open API(`https://developer-lostark.game.onstove.com`)를
-  axios 로 프록시. 외부 응답을 가공 없이 전달한다. API 키는 `LOSTARK_API_KEY` 환경변수.
 - **`modules/jsonprettier/`** — `/api/json/**` 에 노출된 stateless JSON 포맷 서비스 (인증 불필요).
 - **`modules/pspost/`** — Prisma 로 MySQL 에 저장되는 게시글 CRUD. 엔드포인트 `/api/posts/**` 는 공개.
   응답은 Spring Data `Page<T>` 형태를 그대로 유지한다 (`lib/page.ts`).
@@ -159,7 +157,7 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 - **`app.ts`** — 미들웨어/라우터 조립. **공개/인증 경계가 여기서 결정된다.**
   인증이 필요한 라우터만 `middleware/requireAuth.ts` 를 붙인다.
   공개: `/api/ping`, `/api/auth/me`, `/api/auth/logout`, `/api/json/**`, `/api/posts/**`, OAuth2 flow.
-  인증 필요: `/api/forms/**`, `/api/character/**`.
+  인증 필요: `/api/forms/**`.
 
 **설정:** 프로파일 대신 `.env` + `config/env.ts`(zod 스키마) 하나로 관리한다.
 시크릿은 전부 optional 이라, 없더라도 앱은 기동되고 해당 엔드포인트만 실패한다.

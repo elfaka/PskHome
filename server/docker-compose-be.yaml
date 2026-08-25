@@ -32,8 +32,5 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_CALLBACK_URL: https://elfaka.kr/api/login/oauth2/code/google
       APP_LOGIN_SUCCESS_REDIRECT: http://elfaka.kr/googleform/forms
-
-      LOSTARK_API_BASE_URL: https://developer-lostark.game.onstove.com
-      LOSTARK_API_KEY: ${LOSTARK_API_KEY}
     ports:
       - 8080:8080
