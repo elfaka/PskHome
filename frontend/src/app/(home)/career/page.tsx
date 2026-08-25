@@ -129,6 +129,12 @@ export default function Career() {
 
                   {entry.note && <Badge>{entry.note}</Badge>}
                 </div>
+
+                {entry.major && (
+                  <p className="mt-1 text-sm text-accent-soft-fg">
+                    {entry.major}
+                  </p>
+                )}
               </div>
             </TimelineItem>
           ))}

@@ -19,7 +19,11 @@ export const INTRO: string[] = [
 /** 요약 스트립 — 소속/학력/관심을 한눈에. */
 export const SUMMARY: { label: string; value: string; sub?: string }[] = [
   { label: "소속", value: "ConsumerInsight", sub: "2023.05 — 현재" },
-  { label: "학력", value: "Kwangwon University", sub: "2017.03 — 2023.08" },
+  {
+    label: "학력",
+    value: "광운대학교 소프트웨어학부",
+    sub: "2017.03 — 2023.08",
+  },
   { label: "관심", value: "Full Stack", sub: "Backend · Frontend · DevOps" },
 ];
 
@@ -56,13 +60,7 @@ export type CareerEntry = {
   /** 직무 또는 역할 */
   role: string;
   description?: string;
-  /**
-   * 한 줄씩 나열되는 주요 업무·성과.
-   *
-   * TODO: 실제로 맡은 일과 성과를 적을 자리다.
-   *       프로필 README 에 없던 내용이라 비워 두었다 —
-   *       채우면 아래 타임라인에 자동으로 붙는다.
-   */
+  /** 한 줄씩 나열되는 주요 업무·성과. */
   highlights?: string[];
   tags?: string[];
   /** 재직 중이면 true */
@@ -74,20 +72,32 @@ export const CAREER: CareerEntry[] = [
   {
     period: "2023.05 — 현재",
     org: "ConsumerInsight",
-    // TODO: 실제 직무명이 다르면 여기를 고친다.
-    //       프로필의 "Frontend + Backend + DevOps Engineer" 를 옮겨 적은 값이다.
     role: "Full Stack Engineer",
     description:
       "프론트엔드와 백엔드를 함께 맡고, 배포와 서버 운영까지 이어서 담당하고 있습니다.",
+    highlights: [
+      "설문 데이터 분석 툴 개발 — 설문 데이터를 분석 목적에 맞게 가공",
+      "여러 AI를 활용한 기능의 토대 구축",
+      "패널 이벤트용 웹 빙고 게임 개발",
+      "솔루션을 활용해 1,000여 개 설문 개발 및 실사 관리",
+      "특정 설문에 필요한 대시보드 개발",
+    ],
     current: true,
   },
 ];
 
 /** 학력. 최신순. */
-export const EDUCATION: { period: string; org: string; note?: string }[] = [
+export const EDUCATION: {
+  period: string;
+  org: string;
+  /** 전공 / 학부 */
+  major?: string;
+  note?: string;
+}[] = [
   {
     period: "2017.03 — 2023.08",
-    org: "Kwangwon University",
+    org: "광운대학교",
+    major: "소프트웨어학부",
     note: "졸업",
   },
 ];
