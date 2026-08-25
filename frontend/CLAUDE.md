@@ -29,6 +29,7 @@ src/app/
 │   ├── layout.tsx                               #   SiteShell (헤더 + 본문 + 푸터)
 │   ├── page.tsx                                 # /
 │   ├── about/page.tsx                           # /about
+│   ├── career/page.tsx                          # /career
 │   ├── project/page.tsx                         # /project
 │   └── pspost/
 │       ├── page.tsx                             # /pspost        (목록)

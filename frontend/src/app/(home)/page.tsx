@@ -8,8 +8,11 @@ type Destination = {
   href: string;
   title: string;
   description: string;
-  /** 아직 내용이 없는 항목 — 링크 대신 안내만 보여준다 */
-  pending?: boolean;
+  /**
+   * 페이지는 있고 내용만 채우는 중인 항목.
+   * 배지로 알리되 링크는 살린다 — 페이지가 "작성 중" 안내를 직접 보여준다.
+   */
+  preparing?: boolean;
 };
 
 /**
@@ -23,7 +26,13 @@ const DESTINATIONS: Destination[] = [
     href: "/about",
     title: "About",
     description: "소개와 기술 스택.",
-    pending: true,
+    preparing: true,
+  },
+  {
+    href: "/career",
+    title: "Career",
+    description: "어디에서 무엇을 맡아 왔는지 정리한 이력.",
+    preparing: true,
   },
   {
     href: "/pspost",
@@ -35,14 +44,6 @@ const DESTINATIONS: Destination[] = [
     title: "Project",
     description: "만들었거나 만들 예정인 토이 프로젝트 목록.",
   },
-  {
-    // 기존 홈에는 `<a href="/blog">` 가 있었지만 그 라우트는 없어서 404 로 떨어졌다.
-    // 페이지가 생길 때까지 링크를 걸지 않는다.
-    href: "/blog",
-    title: "Blog",
-    description: "정리해야 할 글들.",
-    pending: true,
-  },
 ];
 
 function DestinationCard({ item }: { item: Destination }) {
@@ -51,7 +52,7 @@ function DestinationCard({ item }: { item: Destination }) {
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-fg">{item.title}</h2>
 
-        {item.pending ? (
+        {item.preparing ? (
           <Badge tone="warning">준비 중</Badge>
         ) : (
           <span
@@ -68,12 +69,6 @@ function DestinationCard({ item }: { item: Destination }) {
       </p>
     </>
   );
-
-  if (item.pending) {
-    return (
-      <div className={cardClass({ className: "p-5 opacity-70" })}>{body}</div>
-    );
-  }
 
   return (
     <Link

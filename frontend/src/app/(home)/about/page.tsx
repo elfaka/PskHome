@@ -4,7 +4,6 @@ import Container from "@/components/ui/Container";
 import EmptyState from "@/components/ui/EmptyState";
 import PageHeader from "@/components/ui/PageHeader";
 import Badge from "@/components/ui/Badge";
-import Card from "@/components/ui/Card";
 
 export const metadata: Metadata = {
   title: "About",
@@ -13,7 +12,8 @@ export const metadata: Metadata = {
 
 /*
   ──────────────────────────────────────────────────────────────────────────
-  TODO: 아래 4개 배열을 채우면 해당 섹션이 자동으로 나타난다.
+  TODO: 아래 3개 배열을 채우면 해당 섹션이 자동으로 나타난다.
+        (경력 이력은 이 페이지가 아니라 `/career` 의 CAREER 배열에 쓴다)
         비어 있는 동안에는 "준비 중" 안내만 보인다.
 
         내용을 모르는 사람이 대신 쓸 수 없는 부분이라 구조만 세워 둔 상태다.
@@ -31,21 +31,13 @@ const SKILLS: { group: string; items: string[] }[] = [
   // TODO: 예) { group: "백엔드", items: ["Java", "Spring Boot", "Express"] }
 ];
 
-/** 경력·활동 타임라인. 최신순으로 둔다. */
-const TIMELINE: { period: string; title: string; description?: string }[] = [
-  // TODO: 예) { period: "2024 — 현재", title: "○○○", description: "..." }
-];
-
 /** 연락처·외부 링크. */
 const LINKS: { label: string; href: string }[] = [
   // TODO: 예) { label: "Email", href: "mailto:..." }
 ];
 
 const isEmpty =
-  INTRO.length === 0 &&
-  SKILLS.length === 0 &&
-  TIMELINE.length === 0 &&
-  LINKS.length === 0;
+  INTRO.length === 0 && SKILLS.length === 0 && LINKS.length === 0;
 
 export default function About() {
   return (
@@ -96,32 +88,6 @@ export default function About() {
               </div>
             ))}
           </div>
-        </section>
-      )}
-
-      {TIMELINE.length > 0 && (
-        <section className="mt-12">
-          <h2 className="text-lg font-semibold text-fg">타임라인</h2>
-
-          <ol className="mt-4 space-y-4">
-            {TIMELINE.map((entry) => (
-              <li key={`${entry.period}-${entry.title}`}>
-                <Card className="p-5">
-                  <p className="text-xs font-medium text-fg-subtle">
-                    {entry.period}
-                  </p>
-
-                  <p className="mt-1 font-medium text-fg">{entry.title}</p>
-
-                  {entry.description && (
-                    <p className="mt-2 text-sm leading-relaxed text-fg-muted">
-                      {entry.description}
-                    </p>
-                  )}
-                </Card>
-              </li>
-            ))}
-          </ol>
         </section>
       )}
 
