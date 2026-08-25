@@ -7,6 +7,7 @@ import { jsonPrettierRouter } from "./modules/jsonprettier/jsonPrettier.router.j
 import { pingRouter } from "./modules/ping/ping.router.js";
 import { psPostRouter } from "./modules/pspost/psPost.router.js";
 import { createAuthRouter } from "./modules/survey/auth.router.js";
+import { formsRouter } from "./modules/survey/forms.router.js";
 
 /**
  * Express 앱 조립.
@@ -42,6 +43,9 @@ export function createApp(): express.Express {
   api.use(jsonPrettierRouter);
   api.use(psPostRouter);
   api.use(createAuthRouter(googleLoginEnabled));
+
+  // --- 인증 필요 ---
+  api.use(formsRouter);
 
   app.use("/api", api);
 
