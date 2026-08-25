@@ -1,5 +1,7 @@
 "use client";
 
+import { cardClass } from "@/components/ui/Card";
+
 import ChoiceRenderer from "./renderers/ChoiceRenderer";
 import ScaleRenderer from "./renderers/ScaleRenderer";
 import TextRenderer from "./renderers/TextRenderer";
@@ -76,16 +78,16 @@ export default function QuestionCard({ q }: { q: Summary }) {
   const t = normalizeType(q.type);
 
   return (
-    <div className="rounded-3xl border border-zinc-200/70 bg-white/80 shadow-sm backdrop-blur">
+    <div className={cardClass()}>
       {/* ======================================================
          카드 헤더: 문항 제목 + 타입 라벨
       ====================================================== */}
-      <div className="border-b border-zinc-200/50 px-5 py-4">
-        <div className="text-base font-black text-zinc-900 leading-snug">
+      <div className="border-b border-line px-5 py-4">
+        <div className="text-base leading-snug font-semibold text-fg">
           {q.questionTitle}
         </div>
         {/* type은 디버깅/분류 확인을 위해 원본 그대로 표시 */}
-        <div className="mt-1 text-xs font-semibold text-zinc-500">{q.type}</div>
+        <div className="mt-1 font-mono text-xs text-fg-subtle">{q.type}</div>
       </div>
 
       {/* ======================================================
@@ -94,7 +96,7 @@ export default function QuestionCard({ q }: { q: Summary }) {
          - SCALE: 척도 렌더러 (UNKNOWN 포함)
          - 그 외: 객관식 렌더러
       ====================================================== */}
-      <div className="max-h-[460px] overflow-auto px-5 py-5">
+      <div className="max-h-[29rem] overflow-auto px-5 py-5">
         {t === "TEXT" ? (
           <TextRenderer text={q.text} />
         ) : t === "SCALE" ? (

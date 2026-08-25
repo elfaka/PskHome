@@ -3,6 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import Button from "@/components/ui/Button";
+import { cardClass } from "@/components/ui/Card";
+
 import { useGoogleFormAuth } from "./GoogleFormShell";
 
 /**
@@ -40,18 +43,22 @@ export default function Login() {
   }, [authed, router]);
 
   return (
-    <div className="mx-auto max-w-xl">
-      <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-extrabold text-zinc-900">
+    <div className="mx-auto max-w-md">
+      <div className={cardClass({ className: "p-6 sm:p-8" })}>
+        <h2 className="text-xl font-semibold tracking-tight text-fg">
           Google 로그인
         </h2>
 
-        <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+        <p className="mt-2 text-sm leading-relaxed text-fg-muted">
           Google Forms 설문과 응답을 불러와 분석합니다.
         </p>
 
         {/* OAuth2 로그인 시작 버튼 */}
-        <button
+        <Button
+          variant="primary"
+          size="lg"
+          full
+          className="mt-6"
           onClick={() => {
             // OAuth2 는 브라우저 리다이렉트 기반 플로우다.
             // 여기서 이동하는 곳은 Next 페이지가 아니라 백엔드 엔드포인트이므로
@@ -59,12 +66,11 @@ export default function Login() {
             // eslint-disable-next-line @next/next/no-location-assign-relative-destination
             window.location.href = "/api/oauth2/authorization/google";
           }}
-          className="mt-5 w-full rounded-xl bg-zinc-900 px-4 py-3 text-sm font-extrabold text-white hover:bg-zinc-800 active:scale-[0.99]"
         >
           Sign in with Google
-        </button>
+        </Button>
 
-        <p className="mt-4 text-xs text-zinc-500">
+        <p className="mt-4 text-xs text-fg-subtle">
           로그인 완료 후 설문 목록으로 이동합니다.
         </p>
       </div>

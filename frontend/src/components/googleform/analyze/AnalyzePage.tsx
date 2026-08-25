@@ -5,7 +5,16 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "@/api/client";
+import Alert from "@/components/ui/Alert";
+import Badge, { BadgeTone } from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
+import PageHeader from "@/components/ui/PageHeader";
+import Skeleton from "@/components/ui/Skeleton";
+import { Input, Select } from "@/components/ui/Field";
+import { cardClass } from "@/components/ui/Card";
 import { errorMessage } from "@/lib/errorMessage";
+
 import QuestionCard from "./QuestionCard";
 
 /**
@@ -71,19 +80,22 @@ function normalizeType(t: string) {
  * typeBadge
  *
  * [역할]
- * - 문항 타입에 따른 UI 배지(라벨/색상 클래스)를 반환
+ * - 문항 타입에 따른 UI 배지(라벨 + Badge tone)를 반환
  * - 사이드바/카드 상단에서 동일하게 재사용
+ *
+ * tone 은 서로 구분되는 세 색을 고른다.
+ * (success 는 accent 와 같은 초록이라 SCALE/TEXT 가 같은 색으로 보이게 된다)
  */
-function typeBadge(nt: string) {
+function typeBadge(nt: string): { label: string; tone: BadgeTone } {
   switch (nt) {
     case "CHOICE":
-      return { label: "객관식", cls: "bg-sky-100 text-sky-700 ring-sky-200" };
+      return { label: "객관식", tone: "info" };
     case "SCALE":
-      return { label: "척도", cls: "bg-violet-100 text-violet-700 ring-violet-200" };
+      return { label: "척도", tone: "accent" };
     case "TEXT":
-      return { label: "주관식", cls: "bg-emerald-100 text-emerald-700 ring-emerald-200" };
+      return { label: "주관식", tone: "warning" };
     default:
-      return { label: nt, cls: "bg-zinc-100 text-zinc-700 ring-zinc-200" };
+      return { label: nt, tone: "neutral" };
   }
 }
 
@@ -237,106 +249,119 @@ export default function AnalyzePage() {
   }
 
   return (
-    <div className="min-h-screen">
-      {/* ✅ 최상단 앵커 */}
-      <div ref={topRef} />
+    <div>
+      {/* 최상단 앵커 — "맨 위로" 버튼이 여기로 스크롤한다 */}
+      <div ref={topRef} className="scroll-mt-24" />
 
-      {/* 전체 배경/톤: 파스텔 그라데이션 + 카드 반투명 느낌 */}
-      <div className="rounded-3xl bg-gradient-to-b from-[#f6f7ff] to-[#ffffef] p-4 sm:p-6">
-        {/* 상단: 페이지 타이틀 / 필터 / reload */}
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-extrabold text-zinc-900">분석 결과</h2>
-            <Link
-              href="/googleform/forms"
-              className="mt-1 inline-block text-sm font-semibold text-zinc-600 hover:text-zinc-900"
-            >
-              ← 목록
-            </Link>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {/* 질문 검색 */}
-            <input
+      {/* 상단: 페이지 타이틀 / 필터 / reload */}
+      <PageHeader
+        eyebrow="Analyze"
+        title="분석 결과"
+        description={data?.meta.title}
+        actions={
+          <>
+            <Input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="질문 검색..."
-              className="w-60 rounded-2xl border border-zinc-200 bg-white/80 px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
+              aria-label="질문 검색"
+              className="sm:w-52"
             />
 
-            {/* 타입 필터 */}
-            <select
+            <Select
               value={typeFilter}
-              onChange={(e) =>
-                setTypeFilter(e.target.value as typeof typeFilter)
-              }
-              className="rounded-2xl border border-zinc-200 bg-white/80 px-3 py-3 text-sm text-zinc-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
+              onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
+              aria-label="문항 타입 필터"
+              className="sm:w-28"
             >
               <option value="ALL">전체</option>
               <option value="CHOICE">객관식</option>
               <option value="SCALE">척도</option>
               <option value="TEXT">주관식</option>
-            </select>
+            </Select>
 
-            {/* limit 조절 */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-zinc-500">limit</span>
-              <input
-                type="number"
-                value={limit}
-                min={1}
-                max={2000}
-                onChange={(e) => setLimit(Number(e.target.value))}
-                className="w-28 rounded-2xl border border-zinc-200 bg-white/80 px-3 py-3 text-sm text-zinc-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
-              />
-            </div>
+            {/* limit: 분석에 사용할 응답 수 상한 */}
+            <Input
+              type="number"
+              value={limit}
+              min={1}
+              max={2000}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              aria-label="분석할 응답 수 상한"
+              className="sm:w-24"
+            />
 
-            {/* 재조회 */}
-            <button
-              onClick={load}
-              disabled={loading}
-              className="rounded-2xl bg-zinc-900 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-zinc-800 disabled:opacity-60"
-            >
+            <Button variant="primary" onClick={load} disabled={loading}>
               {loading ? "Loading..." : "Reload"}
-            </button>
+            </Button>
+          </>
+        }
+      />
+
+      <Link
+        href="/googleform/forms"
+        className="mt-4 inline-block text-sm text-fg-muted underline-offset-4 transition hover:text-fg hover:underline"
+      >
+        ← 목록
+      </Link>
+
+      {/* 메타: 문항 수 / 응답 수 */}
+      {data && (
+        <div
+          className={cardClass({
+            className:
+              "mt-6 flex flex-wrap items-center justify-between gap-3 px-4 py-3",
+          })}
+        >
+          <div className="text-sm font-medium text-fg">{data.meta.title}</div>
+
+          <div className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
+            <span className="rounded-control bg-surface-2 px-3 py-1.5">
+              문항{" "}
+              <span className="font-semibold text-fg">{questionCountShown}</span>
+              <span className="text-fg-subtle">/{questionCountAll}</span>
+            </span>
+
+            <span className="rounded-control bg-surface-2 px-3 py-1.5">
+              응답{" "}
+              <span className="font-semibold text-fg">{analyzedResponses}</span>
+            </span>
           </div>
         </div>
+      )}
 
-        {/* 메타: 설문 제목 / 문항 수 / 응답 수 */}
-        {data && (
-          <div className="mb-5 rounded-3xl border border-zinc-200/70 bg-white/70 p-4 shadow-sm backdrop-blur">
-            <div className="flex flex-wrap items-end justify-between gap-2">
-              <div className="text-lg font-black text-zinc-900">{data.meta.title}</div>
+      {err && <Alert className="mt-6">{err}</Alert>}
 
-              <div className="flex items-center gap-2 text-sm text-zinc-700">
-                <span className="rounded-xl bg-white/70 px-3 py-1.5 ring-1 ring-zinc-200">
-                  문항 <span className="font-extrabold text-zinc-900">{questionCountShown}</span>
-                  <span className="text-zinc-500">/{questionCountAll}</span>
-                </span>
-                <span className="rounded-xl bg-white/70 px-3 py-1.5 ring-1 ring-zinc-200">
-                  응답 <span className="font-extrabold text-zinc-900">{analyzedResponses}</span>
-                </span>
-              </div>
-            </div>
+      {/* 첫 로딩 — 사이드바/카드 자리를 미리 잡아 화면이 튀지 않게 한다 */}
+      {loading && !data && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-[20rem_1fr]">
+          <Skeleton className="h-96 rounded-card" />
+
+          <div className="space-y-4">
+            <Skeleton className="h-56 rounded-card" />
+            <Skeleton className="h-56 rounded-card" />
           </div>
-        )}
+        </div>
+      )}
 
-        {/* 에러 */}
-        {err && (
-          <div className="mb-5 rounded-3xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700 shadow-sm">
-            {err}
-          </div>
-        )}
-
-        {/* 본문 레이아웃: 좌측 네비게이션 + 우측 카드 */}
-        <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-          {/* 왼쪽: 문항 요약 네비게이션(스크롤 가능한 sticky) */}
-          <aside className="sticky top-4 h-[calc(100vh-140px)] overflow-auto rounded-3xl border border-zinc-200/70 bg-white/70 p-3 shadow-sm backdrop-blur">
-            <div className="mb-2 px-2 text-xs font-extrabold uppercase tracking-wider text-zinc-500">
+      {/* 본문 레이아웃: 좌측 네비게이션 + 우측 카드 */}
+      {data && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-[20rem_1fr]">
+          {/*
+            좌측 문항 네비게이션.
+            sticky 오프셋은 공통 헤더 높이(3.5rem) + 여백만큼 띄운다.
+          */}
+          <aside
+            className={cardClass({
+              className:
+                "top-[4.5rem] max-h-[calc(100dvh-7rem)] overflow-auto p-3 lg:sticky",
+            })}
+          >
+            <div className="mb-2 px-2 text-xs font-semibold tracking-wider text-fg-subtle uppercase">
               Questions
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {filteredSummaries.map((q, idx) => {
                 const nt = normalizeType(q.type);
                 const badge = typeBadge(nt);
@@ -344,41 +369,38 @@ export default function AnalyzePage() {
                 return (
                   <button
                     key={q.questionId}
+                    type="button"
                     onClick={() => scrollToQuestion(q.questionId)}
-                    className="group w-full rounded-2xl border border-transparent bg-white/60 p-3 text-left shadow-sm hover:border-violet-200 hover:bg-white"
+                    className="group w-full rounded-control border border-transparent p-3 text-left transition hover:border-line hover:bg-surface-hover"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-extrabold text-zinc-900">
+                        <div className="truncate text-sm font-medium text-fg">
                           {idx + 1}. {q.questionTitle}
                         </div>
-                        <div className="mt-1 line-clamp-2 text-xs font-medium text-zinc-600">
+
+                        <div className="mt-1 line-clamp-2 text-xs text-fg-muted">
                           {getMiniDesc(q)}
                         </div>
                       </div>
 
-                      <span className={`shrink-0 rounded-xl px-2 py-1 text-xs font-extrabold ring-1 ${badge.cls}`}>
-                        {badge.label}
-                      </span>
-                    </div>
-
-                    <div className="mt-2 text-xs font-semibold text-violet-700 opacity-0 transition group-hover:opacity-100">
-                      클릭해서 이동 →
+                      <Badge tone={badge.tone}>{badge.label}</Badge>
                     </div>
                   </button>
                 );
               })}
 
               {!filteredSummaries.length && (
-                <div className="rounded-2xl bg-white/70 p-4 text-sm text-zinc-600 ring-1 ring-zinc-200">
-                  표시할 문항이 없습니다.
-                </div>
+                <EmptyState
+                  title="표시할 문항이 없습니다"
+                  description="검색어나 타입 필터를 바꿔보세요."
+                />
               )}
             </div>
           </aside>
 
-          {/* 오른쪽: 문항 카드 1열 */}
-          <main className="space-y-4">
+          {/* 우측: 문항 카드 1열 */}
+          <div className="space-y-4">
             {filteredSummaries.map((q, idx) => {
               const nt = normalizeType(q.type);
               const badge = typeBadge(nt);
@@ -390,24 +412,21 @@ export default function AnalyzePage() {
                   ref={(el) => {
                     cardRefs.current[q.questionId] = el;
                   }}
-                  // anchor 이동 시 헤더 높이만큼 여백 확보
+                  // anchor 이동 시 sticky 헤더에 가리지 않도록 여백 확보
                   className="scroll-mt-24"
                 >
-                  {/* 카드 상단: 번호/배지/맨 위로 */}
+                  {/* 카드 상단: 번호 / 배지 / 맨 위로 */}
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="text-sm font-extrabold text-zinc-700">Q{idx + 1}</div>
+                    <div className="font-mono text-sm text-fg-muted">
+                      Q{idx + 1}
+                    </div>
 
                     <div className="flex items-center gap-2">
-                      <span className={`rounded-xl px-2 py-1 text-xs font-extrabold ring-1 ${badge.cls}`}>
-                        {badge.label}
-                      </span>
+                      <Badge tone={badge.tone}>{badge.label}</Badge>
 
-                      <button
-                        onClick={scrollToTop}
-                        className="rounded-xl border border-zinc-200 bg-white/70 px-3 py-1.5 text-xs font-extrabold text-zinc-800 shadow-sm hover:bg-white"
-                      >
+                      <Button size="sm" onClick={scrollToTop}>
                         맨 위로 ↑
-                      </button>
+                      </Button>
                     </div>
                   </div>
 
@@ -416,9 +435,9 @@ export default function AnalyzePage() {
                 </div>
               );
             })}
-          </main>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

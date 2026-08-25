@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from "react";
 
+import { buttonClass } from "@/components/ui/Button";
+
+import OptionRow from "./OptionRow";
+
 /**
  * 설문 정의 기준 보기 메타
  * - label: 보기 라벨
@@ -113,38 +117,20 @@ export default function ChoiceRenderer({
   const hasMore = merged.length > initialShow;
 
   // 표시할 데이터가 없을 때(예: 응답/보기 모두 없는 경우)
-  if (!merged.length) return <div className="text-sm text-zinc-500">집계 결과 없음</div>;
+  if (!merged.length)
+    return <div className="text-sm text-fg-subtle">집계 결과 없음</div>;
 
   return (
     <div className="space-y-3">
       {/* 보기 리스트 */}
       <ul className="space-y-2">
         {visible.map((o) => (
-          <li
+          <OptionRow
             key={o.label}
-            className="rounded-2xl border border-zinc-200/70 bg-white/70 p-3 shadow-sm"
-          >
-            <div className="flex items-center justify-between gap-3">
-              {/* 왼쪽: 라벨 + 막대 */}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-extrabold text-zinc-900">{o.label}</div>
-
-                {/* 비율 막대: 0~100 범위로 clamp */}
-                <div className="mt-2 h-2 w-full rounded-full bg-zinc-100">
-                  <div
-                    className="h-2 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500"
-                    style={{ width: `${Math.min(100, Math.max(0, o.rate))}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* 오른쪽: 수치 */}
-              <div className="shrink-0 text-right text-xs text-zinc-600">
-                <div className="font-extrabold text-zinc-900">{o.rate}%</div>
-                <div>{o.count}명</div>
-              </div>
-            </div>
-          </li>
+            label={o.label}
+            rate={o.rate}
+            count={o.count}
+          />
         ))}
       </ul>
 
@@ -152,7 +138,7 @@ export default function ChoiceRenderer({
       {hasMore && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="w-full rounded-2xl border border-zinc-200 bg-white/70 px-3 py-2 text-xs font-extrabold text-zinc-800 shadow-sm hover:bg-white"
+          className={buttonClass({ size: "sm", full: true })}
         >
           {expanded ? "접기" : `더보기 (${merged.length - initialShow}개)`}
         </button>

@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 
+import { buttonClass } from "@/components/ui/Button";
+
 /**
  * TextRenderer
  *
@@ -75,21 +77,21 @@ export default function TextRenderer({
   }
 
   // 응답이 없으면 안내만 표시
-  if (!count) return <div className="text-sm text-zinc-500">응답 없음</div>;
+  if (!count) return <div className="text-sm text-fg-subtle">응답 없음</div>;
 
   return (
     <div className="space-y-3">
       {/* 상단: 응답 수 + 액션 버튼(전체복사/펼치기) */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm text-zinc-700">
-          응답 수: <span className="font-extrabold text-zinc-900">{count}</span>
+        <div className="text-sm text-fg-muted">
+          응답 수: <span className="font-semibold text-fg">{count}</span>
         </div>
 
         <div className="flex items-center gap-2">
           {/* 전체 복사(엑셀) */}
           <button
             onClick={copyAllExcel}
-            className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-2 text-xs font-extrabold text-zinc-800 shadow-sm hover:bg-white"
+            className={buttonClass({ size: "sm" })}
             title="엑셀에 붙여넣기 하면 한 줄이 한 셀(세로)로 들어갑니다."
           >
             전체 복사(엑셀)
@@ -98,7 +100,7 @@ export default function TextRenderer({
           {/* 펼치기/접기 */}
           <button
             onClick={() => setOpen((v) => !v)}
-            className="rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-3 py-2 text-xs font-extrabold text-white shadow-sm hover:opacity-95"
+            className={buttonClass({ variant: "primary", size: "sm" })}
           >
             {open ? "접기" : "펼치기"}
           </button>
@@ -111,10 +113,12 @@ export default function TextRenderer({
           {samples.slice(0, maxShow).map((s, idx) => (
             <li
               key={idx}
-              className="rounded-2xl border border-zinc-200/70 bg-white/70 p-3 shadow-sm"
+              className="rounded-control border border-line bg-surface p-3"
             >
-              <div className="text-xs font-semibold text-zinc-500">샘플 {idx + 1}</div>
-              <div className="mt-1 whitespace-pre-wrap break-words text-sm text-zinc-800">
+              <div className="text-xs font-medium text-fg-subtle">
+                샘플 {idx + 1}
+              </div>
+              <div className="mt-1 text-sm break-words whitespace-pre-wrap text-fg">
                 {s}
               </div>
             </li>
@@ -122,7 +126,7 @@ export default function TextRenderer({
 
           {/* 샘플이 maxShow를 넘으면 안내 문구 */}
           {samples.length > maxShow && (
-            <li className="text-xs font-semibold text-zinc-500">
+            <li className="text-xs text-fg-subtle">
               (샘플이 많아 상위 {maxShow}개만 표시 중)
             </li>
           )}

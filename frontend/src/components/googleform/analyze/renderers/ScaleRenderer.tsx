@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from "react";
 
+import { buttonClass } from "@/components/ui/Button";
+
+import OptionRow from "./OptionRow";
+
 /**
  * 설문 정의 보기 메타
  * - order/score를 활용하면 척도 정렬과 통계가 안정적
@@ -167,46 +171,44 @@ export default function ScaleRenderer({
     return { n: total, mean, std };
   }, [merged]);
 
-  if (!merged.length) return <div className="text-sm text-zinc-500">집계 결과 없음</div>;
+  if (!merged.length)
+    return <div className="text-sm text-fg-subtle">집계 결과 없음</div>;
 
   return (
     <div className="space-y-3">
       {/* 통계 요약 영역 */}
       {stats && (
-        <div className="rounded-2xl border border-zinc-200 bg-white/70 px-3 py-2 text-xs font-semibold text-zinc-700 shadow-sm">
-          <span className="font-extrabold text-zinc-900">척도 통계</span>
-          <span className="mx-2 text-zinc-300">|</span>
-          <span>n={stats.n}</span>
-          <span className="mx-2 text-zinc-300">|</span>
-          <span>평균 {stats.mean.toFixed(2)}</span>
-          <span className="mx-2 text-zinc-300">|</span>
-          <span>표준편차 {stats.std.toFixed(2)}</span>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-control border border-line bg-surface px-3 py-2 text-xs text-fg-muted">
+          <span className="font-semibold text-fg">척도 통계</span>
+          <span aria-hidden className="text-line-strong">
+            |
+          </span>
+          <span className="font-mono">n={stats.n}</span>
+          <span aria-hidden className="text-line-strong">
+            |
+          </span>
+          <span>
+            평균 <span className="font-mono text-fg">{stats.mean.toFixed(2)}</span>
+          </span>
+          <span aria-hidden className="text-line-strong">
+            |
+          </span>
+          <span>
+            표준편차{" "}
+            <span className="font-mono text-fg">{stats.std.toFixed(2)}</span>
+          </span>
         </div>
       )}
 
       {/* 보기 리스트 */}
       <ul className="space-y-2">
         {visible.map((o) => (
-          <li key={o.label} className="rounded-2xl border border-zinc-200/70 bg-white/70 p-3 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-extrabold text-zinc-900">{o.label}</div>
-
-                {/* 비율 막대: 0~100 범위로 clamp */}
-                <div className="mt-2 h-2 w-full rounded-full bg-zinc-100">
-                  <div
-                    className="h-2 rounded-full bg-gradient-to-r from-violet-500 to-indigo-500"
-                    style={{ width: `${Math.min(100, Math.max(0, o.rate))}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="shrink-0 text-right text-xs text-zinc-600">
-                <div className="font-extrabold text-zinc-900">{o.rate}%</div>
-                <div>{o.count}명</div>
-              </div>
-            </div>
-          </li>
+          <OptionRow
+            key={o.label}
+            label={o.label}
+            rate={o.rate}
+            count={o.count}
+          />
         ))}
       </ul>
 
@@ -214,7 +216,7 @@ export default function ScaleRenderer({
       {hasMore && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="w-full rounded-2xl border border-zinc-200 bg-white/70 px-3 py-2 text-xs font-extrabold text-zinc-800 shadow-sm hover:bg-white"
+          className={buttonClass({ size: "sm", full: true })}
         >
           {expanded ? "접기" : `더보기 (${merged.length - initialShow}개)`}
         </button>

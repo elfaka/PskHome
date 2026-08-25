@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "@/api/client";
+import Alert from "@/components/ui/Alert";
+import EmptyState from "@/components/ui/EmptyState";
+import PageHeader from "@/components/ui/PageHeader";
+import { Input } from "@/components/ui/Field";
+import { cardClass } from "@/components/ui/Card";
 import { errorMessage } from "@/lib/errorMessage";
 
 /**
@@ -77,57 +82,72 @@ export default function FormsList() {
   return (
     <div>
       {/* 상단 타이틀 + 검색창 */}
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-extrabold text-zinc-900">내 설문 목록</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            설문을 선택하면 분석 페이지로 이동합니다.
-          </p>
-        </div>
-
-        <div className="w-full max-w-sm">
-          <input
+      <PageHeader
+        eyebrow="Google Forms"
+        title="내 설문 목록"
+        description="설문을 선택하면 분석 페이지로 이동합니다."
+        actions={
+          <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="검색..."
-            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-300"
+            placeholder="설문 제목 검색..."
+            aria-label="설문 검색"
+            className="sm:w-64"
           />
-        </div>
-      </div>
+        }
+      />
 
       {/* 에러 표시 */}
-      {err && (
-        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
-          {err}
-        </div>
-      )}
+      {err && <Alert className="mt-6">{err}</Alert>}
 
       {/* 설문 카드 리스트 */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((f) => (
           <Link
             key={f.formId}
             // 설문 선택 시 분석 페이지로 이동
             href={`/googleform/forms/${f.formId}/analyze`}
-            className="group rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-[1px] hover:border-zinc-300 hover:shadow"
+            className={cardClass({
+              interactive: true,
+              className: "group block p-4",
+            })}
           >
             {/* 설문 제목 */}
-            <div className="text-base font-extrabold text-zinc-900">
+            <div className="font-medium text-fg transition group-hover:text-accent-soft-fg">
               {f.name}
             </div>
 
             {/* 수정 시각 */}
-            <div className="mt-2 text-xs text-zinc-500">
+            <div className="mt-2 font-mono text-xs text-fg-subtle">
               modified: {f.modifiedTime ?? "-"}
             </div>
 
             {/* CTA */}
-            <div className="mt-4 text-sm font-semibold text-zinc-800">
-              분석 보기 <span className="opacity-70">→</span>
+            <div className="mt-4 text-sm text-fg-muted">
+              분석 보기{" "}
+              <span
+                aria-hidden
+                className="inline-block transition group-hover:translate-x-0.5"
+              >
+                →
+              </span>
             </div>
           </Link>
         ))}
       </div>
+
+      {/* 목록이 비었을 때 — 검색 때문인지 설문이 없는 건지 구분해 안내한다 */}
+      {!err && filtered.length === 0 && (
+        <EmptyState
+          className="mt-8"
+          title={items.length === 0 ? "설문이 없습니다" : "검색 결과가 없습니다"}
+          description={
+            items.length === 0
+              ? "이 계정의 Google Drive 에서 Forms 를 찾지 못했습니다."
+              : `"${q}" 와 맞는 설문을 찾지 못했습니다.`
+          }
+        />
+      )}
     </div>
   );
 }
