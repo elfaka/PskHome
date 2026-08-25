@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createContext,
@@ -11,6 +10,10 @@ import {
 } from "react";
 
 import { api } from "@/api/client";
+import Container from "@/components/ui/Container";
+import SiteShell from "@/components/layout/SiteShell";
+import Skeleton from "@/components/ui/Skeleton";
+import { buttonClass } from "@/components/ui/Button";
 
 /**
  * `/api/auth/me` 응답
@@ -38,11 +41,14 @@ export function useGoogleFormAuth(): GoogleFormAuth {
 }
 
 /**
- * `/googleform/*` 영역의 공통 껍데기 — 기존 `pages/googleform/googleform.tsx`.
+ * `/googleform/*` 영역의 공통 껍데기.
  *
  * [역할]
  * - 로그인 상태를 한 번만 확인해 하위 화면에 제공한다 (각 페이지에서 중복 체크하지 않는다)
- * - 공통 헤더(홈 링크 / 로그인·로그아웃) 제공
+ * - 로그인 상태 표시/로그아웃 버튼을 공통 헤더 슬롯에 끼운다
+ *
+ * 이 영역만 쓰던 별도 헤더(← Home + GoogleForm Analyzer)는 없앴다.
+ * 사이트 전역 헤더와 역할이 겹쳐서 영역을 넘나들 때 상단이 통째로 바뀌어 보였다.
  *
  * 라우팅 분기는 App Router 의 파일 라우팅이 담당하고,
  * 인증 게이트는 `RequireGoogleFormAuth` 가 담당한다.
@@ -95,79 +101,46 @@ export default function GoogleFormShell({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#ffffef]">
-        <div className="mx-auto max-w-6xl px-4 py-8">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700 shadow-sm">
-            Loading...
-          </div>
-        </div>
-      </div>
+      <SiteShell>
+        <Container size="wide" className="py-10">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="mt-3 h-5 w-72" />
+          <Skeleton className="mt-8 h-40 w-full rounded-card" />
+        </Container>
+      </SiteShell>
     );
   }
 
+  const headerActions = authed ? (
+    <>
+      {/* 로그인 사용자 표시 — 좁은 화면에서는 이름을 감춘다 */}
+      <span className="hidden max-w-32 truncate text-sm text-fg-muted sm:inline">
+        {me?.name}
+      </span>
+
+      <button
+        onClick={logout}
+        className={buttonClass({ variant: "secondary", size: "sm" })}
+      >
+        Logout
+      </button>
+    </>
+  ) : null;
+
   return (
-    <AuthContext.Provider value={{ authed, name: me?.name, logout }}>
-      <div className="min-h-screen bg-[#ffffef]">
-        <div className="mx-auto max-w-6xl px-4 py-6">
-          {/* ======================================================
-             공통 헤더 영역
-             - GoogleForm Analyzer 홈 링크
-             - 로그인 상태에 따른 Login/Logout 버튼
-          ====================================================== */}
-          <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              {/* 메인 홈으로 복귀 */}
-              <Link
-                href="/"
-                className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
-              >
-                ← Home
-              </Link>
-
-              {/* 구글폼 루트(authed 여부에 따라 forms 또는 login 으로 유도) */}
-              <Link
-                href={authed ? "/googleform/forms" : "/googleform/login"}
-                className="text-lg font-black tracking-tight text-zinc-900"
-              >
-                GoogleForm Analyzer
-              </Link>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {authed ? (
-                <>
-                  {/* 로그인 사용자 표시 */}
-                  <span className="text-sm text-zinc-600">{me?.name}</span>
-
-                  {/* 로그아웃 */}
-                  <button
-                    onClick={logout}
-                    className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50 active:scale-[0.99]"
-                  >
-                    Logout
-                  </button>
-                </>
-              ) : (
-                <Link
-                  href="/googleform/login"
-                  className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 shadow-sm hover:bg-zinc-50"
-                >
-                  Login
-                </Link>
-              )}
-            </div>
-          </header>
-
+    <AuthContext value={{ authed, name: me?.name, logout }}>
+      <SiteShell headerActions={headerActions}>
+        <Container size="wide" className="py-8 sm:py-10">
           {children}
-        </div>
-      </div>
-    </AuthContext.Provider>
+        </Container>
+      </SiteShell>
+    </AuthContext>
   );
 }
 
 /**
  * 인증이 필요한 화면을 감싸는 게이트.
- * 기존 `<Route element={authed ? <FormsList/> : <Navigate to="/googleform/login" replace />} />` 대응.
+ * 미인증이면 로그인 페이지로 돌려보낸다.
  */
 export function RequireGoogleFormAuth({
   children,
