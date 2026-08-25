@@ -1,0 +1,34 @@
+// PskHome backend — Prisma schema
+//
+// [중요] 이 스키마는 **기존 MySQL 테이블을 그대로 매핑만** 한다.
+// 운영 DB 는 기존에 Hibernate `ddl-auto: validate` 로 운영되었고 테이블이 이미 존재하므로,
+// 여기서 마이그레이션을 새로 만들어 적용하지 않는다.
+// 실제 DB 와 어긋나는지 확인하려면 `npm run prisma:pull` 로 introspect 결과를 비교할 것.
+//
+// 컬럼명은 기존 JPA(PsPost.java) 의 네이밍을 그대로 따른다:
+//   problemNumber -> problem_number / contentMd -> content_md
+//   isSolved -> is_solved / createdAt -> created_at
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model PsPost {
+  id            BigInt    @id @default(autoincrement())
+  title         String?   @db.VarChar(255)
+  site          String?   @db.VarChar(255)
+  problemNumber String?   @map("problem_number") @db.VarChar(255)
+  link          String?   @db.Text
+  level         String?   @db.VarChar(255)
+  language      String?   @db.VarChar(255)
+  solution      String?   @db.VarChar(255)
+  contentMd     String?   @map("content_md") @db.LongText
+  isSolved      Boolean?  @map("is_solved")
+  createdAt     DateTime? @map("created_at") @db.DateTime(6)
+
+  @@map("ps_post")
+}
