@@ -1,9 +1,12 @@
 import express from "express";
 
+import { configurePassport, passport } from "./config/passport.js";
+import { createSessionMiddleware } from "./config/session.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { jsonPrettierRouter } from "./modules/jsonprettier/jsonPrettier.router.js";
 import { pingRouter } from "./modules/ping/ping.router.js";
 import { psPostRouter } from "./modules/pspost/psPost.router.js";
+import { createAuthRouter } from "./modules/survey/auth.router.js";
 
 /**
  * Express 앱 조립.
@@ -26,12 +29,19 @@ export function createApp(): express.Express {
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+  const googleLoginEnabled = configurePassport();
+
+  app.use(createSessionMiddleware());
+  app.use(passport.initialize());
+  app.use(passport.session());
+
   const api = express.Router();
 
   // --- 공개 (인증 불필요) ---
   api.use(pingRouter);
   api.use(jsonPrettierRouter);
   api.use(psPostRouter);
+  api.use(createAuthRouter(googleLoginEnabled));
 
   app.use("/api", api);
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import request from "supertest";
 
 import { createApp } from "./app.js";
+import { isTest } from "./config/env.js";
 
 /**
  * 기존 `BackendApplicationTests.contextLoads()` 대응 smoke test.
@@ -12,6 +13,14 @@ describe("app", () => {
 
   it("creates the express app without external dependencies", () => {
     expect(app).toBeDefined();
+  });
+
+  /**
+   * 테스트가 Redis 를 붙잡지 않도록 NODE_ENV 가 확실히 test 여야 한다.
+   * (.env 의 NODE_ENV=development 가 새어들어오면 세션 저장소가 Redis 로 붙는다)
+   */
+  it("runs with NODE_ENV=test so no external session store is used", () => {
+    expect(isTest).toBe(true);
   });
 
   it("GET /api/ping returns 200 with ok:true", async () => {
