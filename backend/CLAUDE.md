@@ -137,6 +137,7 @@ cd backend && npm run prisma:generate
 
 ```bash
 # 전체 (외부 의존 없음 — MySQL/Redis/Google 불필요)
+# pretest 훅이 prisma generate 를 먼저 돌리므로 클린 체크아웃에서도 바로 동작한다.
 cd backend && npm test
 
 # 모듈별 빠른 테스트
@@ -193,7 +194,16 @@ const { createPost } = await import("./psPost.service.js");
 - `POST/PUT /api/posts` 는 **raw number** 를 반환한다 (객체로 감싸지 말 것)
 - `GET /api/auth/me` 는 비로그인 시에도 200 + `{ authenticated: false }`
 
-### 6. Express 5 와일드카드 문법
+### 6. Prisma Client 미생성 상태에서 테스트 실행
+
+`lib/prisma.ts` 는 `@prisma/client` 를 import 하고, 이 패키지는 `prisma generate` 로 만들어지는
+`.prisma/client` 를 재export한다. 생성 전에는 `Cannot find module '.prisma/client/default'` 로
+**`createApp()` 을 import 하는 테스트 파일 전체가 죽는다.**
+
+`npm test` 는 `pretest` 훅이 알아서 생성하지만,
+`npx vitest run <파일>` 로 바로 실행할 때는 한 번은 `npm run prisma:generate` 가 필요하다.
+
+### 7. Express 5 와일드카드 문법
 
 Express 5(path-to-regexp v8)에서는 `/api/*` 가 유효하지 않다.
 필요하면 `/api/*splat` 또는 `{*splat}` 형태를 쓴다.

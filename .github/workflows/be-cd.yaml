@@ -10,9 +10,12 @@ on:
       - server/docker-compose-be.yaml
       - server/docker-compose-db.yaml
 
+# be-cd 와 fe-cd 는 같은 서버에서 docker 이미지를 빌드한다.
+# 동시에 돌면 서로의 빌드/이미지를 건드리므로 하나의 그룹으로 묶어 직렬화한다.
+# (진행 중인 배포를 취소하면 서버가 어중간한 상태로 남을 수 있어 cancel 하지 않는다)
 concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -112,7 +115,7 @@ jobs:
             docker compose -f docker-compose-db.yaml up -d
             docker compose -f docker-compose-be.yaml up -d --build
 
-            docker image prune -af
+            docker image prune -f
 
             STATUS=$(docker inspect -f '{{.State.Status}}' pskhome-be-1)
 
