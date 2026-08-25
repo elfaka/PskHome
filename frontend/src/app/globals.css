@@ -37,7 +37,7 @@
   /* 텍스트 */
   --fg: #18181b;
   --fg-muted: #56565d;
-  --fg-subtle: #83838c;
+  --fg-subtle: #6d6d76;
 
   /* 강조 — 단일 accent. 흰 글씨와 4.5:1 이상을 유지하는 톤을 골랐다. */
   --accent: #0b7a56;
@@ -83,7 +83,7 @@
 
   --fg: #f4f4f5;
   --fg-muted: #a3a3ac;
-  --fg-subtle: #76767f;
+  --fg-subtle: #878791;
 
   /* 어두운 배경에서는 accent 를 밝히고 글씨를 어둡게 뒤집는다 */
   --accent: #34d399;

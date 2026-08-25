@@ -11,6 +11,7 @@ Next.js (App Router) + TypeScript 프론트엔드 개발 가이드.
 | React 19 | UI |
 | TypeScript | 언어 |
 | Tailwind CSS 4 (`@tailwindcss/postcss`) | 스타일링 |
+| `@tailwindcss/typography` | 마크다운(prose) 본문 스타일 |
 | axios | HTTP 클라이언트 |
 | react-markdown | PS 게시글 본문 렌더링 |
 | Vitest + MSW + Testing Library | 테스트 |
@@ -25,7 +26,7 @@ Next.js (App Router) + TypeScript 프론트엔드 개발 가이드.
 src/app/
 ├── layout.tsx                                   # 루트 레이아웃 (html/body, globals.css)
 ├── (home)/                                      # 라우트 그룹 — URL 에는 나타나지 않음
-│   ├── layout.tsx                               #   Homeheader 고정 + 본문 스크롤
+│   ├── layout.tsx                               #   SiteShell (헤더 + 본문 + 푸터)
 │   ├── page.tsx                                 # /
 │   ├── about/page.tsx                           # /about
 │   ├── project/page.tsx                         # /project
@@ -58,14 +59,52 @@ src/
 ├── app/          # 라우트 (파일 라우팅)
 ├── api/          # 백엔드 호출 함수 + 응답 타입
 ├── components/   # 화면 구현체
-│   ├── layout/Homeheader/
+│   ├── ui/       # 디자인 프리미티브 (Button, Card, Field, Badge ...)
+│   ├── theme/    # 라이트/다크 테마 (ThemeScript, themeStore, ThemeToggle)
+│   ├── layout/   # SiteShell, SiteHeader, SiteFooter, Wordmark, nav.ts
 │   ├── pspost/PostForm.tsx
 │   └── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
-├── lib/          # 공용 유틸 (errorMessage 등)
+├── lib/          # 공용 유틸 (errorMessage, cn 등)
 └── test/         # Vitest 셋업 + MSW 목
 ```
 
 경로 별칭은 `@/*` → `src/*` 이다. (`import { api } from "@/api/client"`)
+
+## 디자인 시스템
+
+**화면에서 Tailwind 원색(`zinc-200`, `gray-50`)이나 hex 를 직접 쓰지 않는다.**
+`src/app/globals.css` 가 시맨틱 토큰을 정의하고, 화면은 그 유틸리티만 쓴다.
+
+| 종류 | 유틸리티 |
+|------|----------|
+| 표면 | `bg-bg`, `bg-surface`, `bg-surface-2`, `bg-surface-hover` |
+| 경계 | `border-line`, `border-line-strong`, 구분선은 `bg-line` |
+| 텍스트 | `text-fg`, `text-fg-muted`, `text-fg-subtle` |
+| 강조 | `bg-accent`, `text-accent-fg`, `bg-accent-soft`, `text-accent-soft-fg` |
+| 상태 | `success` / `warning` / `danger` / `info` (+ `-soft`, `-soft-fg`) |
+| 라운드 | `rounded-control`(버튼·인풋), `rounded-card`, `rounded-panel` |
+| 그림자 | `shadow-card`, `shadow-raised`, `shadow-overlay` |
+
+모든 조합은 라이트/다크 양쪽에서 WCAG AA(4.5:1)를 넘도록 값을 골라 두었다.
+토큰 색을 바꿀 때는 명암비를 함께 확인할 것.
+
+**다크모드**는 `[data-theme]` 속성 기반이다 (`@custom-variant dark`).
+`ThemeScript` 가 첫 페인트 전에 동기적으로 속성을 심어 플래시를 막고,
+상태는 `themeStore` + `useSyncExternalStore` 로 구독한다.
+`prefers-color-scheme` 만 쓰면 사용자 토글을 표현할 수 없어서 이 구조다.
+
+**프리미티브**(`components/ui/`)를 먼저 찾아보고 없을 때만 새로 만든다.
+버튼·카드는 `next/link` 에도 붙일 수 있도록 클래스 함수도 함께 노출한다.
+
+```tsx
+import Button, { buttonClass } from "@/components/ui/Button";
+
+<Button variant="primary" onClick={save}>저장</Button>
+<Link href="/pspost/new" className={buttonClass({ variant: "primary" })}>새 글</Link>
+```
+
+마크다운 본문에는 `prose prose-app` 을 쓴다.
+`prose-app` 이 typography 플러그인 색을 테마 토큰으로 덮는다.
 
 ## API 클라이언트 패턴
 
@@ -185,6 +224,6 @@ cd frontend && npm run build
 
 ## 알려진 경고 (lint)
 
-`react-hooks/set-state-in-effect` 경고가 5곳 있다.
+`react-hooks/set-state-in-effect` 경고가 6곳 있다.
 "마운트 시 fetch → setState" 패턴을 쓰는 기존 화면들이며,
 데이터 로딩 구조를 손볼 때 정리한다. (`eslint.config.mjs` 에서 warn 으로 낮춰 둠)

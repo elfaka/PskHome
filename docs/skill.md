@@ -100,10 +100,14 @@ frontend/src/
 │   ├── pspost.ts                    # PS Post API 함수
 │   └── jsonPrettierApi.ts           # JSON Prettier API 함수
 ├── components/
-│   ├── layout/Homeheader/
+│   ├── ui/                          # 디자인 프리미티브 (Button, Card, Field ...)
+│   ├── theme/                       # 라이트/다크 테마
+│   ├── layout/                      # SiteShell, SiteHeader, SiteFooter
 │   ├── pspost/PostForm.tsx          # 작성/수정 공용 폼
 │   └── googleform/                  # GoogleFormShell, FormsList, Login, analyze/*
-├── lib/errorMessage.ts              # 공용 에러 메시지 추출
+├── lib/
+│   ├── errorMessage.ts              # 공용 에러 메시지 추출
+│   └── cn.ts                        # 조건부 클래스 합성
 └── test/
     ├── setup.ts                     # Vitest 전역 설정
     └── mocks/                       # MSW 서버 + 핸들러
