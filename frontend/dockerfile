@@ -1,23 +1,41 @@
-# 1. Node.js 공식 이미지를 기반으로 사용
-FROM node:22
+# PskHome 프론트엔드 (Next.js App Router)
+#
+# 기존에는 `nginx:alpine` 에 Vite 정적 빌드(dist/)를 볼륨으로 물려 서빙했다.
+# Next 는 Node 런타임이 필요하므로 standalone 출력을 담은 이미지를 직접 빌드한다.
 
-# 2. 작업 디렉토리 생성
+FROM node:22-alpine AS deps
+
 WORKDIR /app
 
-# 3. package.json과 package-lock.json을 컨테이너에 복사
-COPY package*.json .
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# 4. 의존성 설치 (npm install로 모든 의존성 설치)
-RUN npm install
 
-# 5. 나머지 애플리케이션 파일 복사
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# 6. 애플리케이션 빌드 (npm run build 실행)
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# 7. 애플리케이션 실행 (필요한 경우)
-#CMD ["npm", "run", "start"]
 
-# 8. (선택 사항) 특정 포트 열기
-#EXPOSE 3000
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+COPY --from=builder /app/public ./public
+
+# standalone 출력은 실행에 필요한 node_modules 를 이미 포함한다.
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]

@@ -7,22 +7,33 @@ networks:
 
 services:
   be:
-    image: openjdk:21-jdk-slim
+    # Node 앱은 실행에 node_modules 가 필요해 JAR 처럼 산출물만 볼륨으로 물릴 수 없다.
+    # 레지스트리 없이 서버에서 직접 빌드한다: `docker compose -f docker-compose-be.yaml up -d --build`
+    build:
+      context: ../backend
+      dockerfile: dockerfile
+    image: pskhome-be
     container_name: pskhome-be-1
     restart: unless-stopped
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-      JASYPT_ENCRYPTOR_PASSWORD: ${JASYPT_ENCRYPTOR_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      NODE_ENV: production
+      PORT: 8080
+
+      # MySQL (기존 docker-compose-db.yaml 의 pskhome-db-1)
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@pskhome-db-1:3306/page
+
+      # Redis 세션 저장소 (기존 docker-compose-db.yaml 의 pskhome-mem-1)
+      REDIS_HOST: pskhome-mem-1
+      REDIS_PORT: 6379
+
+      SESSION_SECRET: ${SESSION_SECRET}
+
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: https://elfaka.kr/api/login/oauth2/code/google
+      APP_LOGIN_SUCCESS_REDIRECT: http://elfaka.kr/googleform/forms
+
+      LOSTARK_API_BASE_URL: https://developer-lostark.game.onstove.com
+      LOSTARK_API_KEY: ${LOSTARK_API_KEY}
     ports:
       - 8080:8080
-    volumes:
-      - ../backend/build/libs:/opt
-    working_dir: /opt
-    entrypoint:
-      - sh
-      - -euc
-      - |
-        java -jar *.jar

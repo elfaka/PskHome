@@ -22,34 +22,59 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-        # 2. Node.js 22 설치
+      # 2. Node.js 22 설치 (+ npm 캐시)
       - name: Set up Node.js 22
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      # 3. npm install
-      - name: Install modules
+      # 3. 의존성 설치
+      - name: Install dependencies
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
-        # 4. npm run build
+      # 4~6. 배포 게이트 — 하나라도 실패하면 배포하지 않는다
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Test
+        working-directory: frontend
+        run: npm test
+
       - name: Build
         working-directory: frontend
         run: npm run build
 
-        # 5. Copy dist
-      - name: Copy dist
+      # 7. 전송할 소스 정리 (이미지는 서버에서 빌드한다)
+      - name: Clean workspace before upload
+        run: rm -rf frontend/node_modules frontend/.next
+
+      # 8. 서버의 이전 소스 제거 (삭제된 파일이 라우트로 되살아나지 않도록)
+      - name: Clear previous frontend source
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST_NAME }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            rm -rf ~/${{ github.event.repository.name }}/frontend
+
+      # 9. 소스 업로드
+      - name: Copy source
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST_NAME }}
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: frontend/dist/, server/
+          source: frontend/, server/
           target: ~/${{ github.event.repository.name }}
 
-        # 6. run docker
+      # 10. 이미지 빌드 + 기동
       - name: Update fe
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -59,6 +84,15 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd ~/${{ github.event.repository.name }}/server
-            docker compose -f docker-compose-fe.yaml pull
+
             docker compose -f docker-compose-fe.yaml down
-            docker compose -f docker-compose-fe.yaml up -d
+            docker compose -f docker-compose-fe.yaml up -d --build
+
+            docker image prune -af
+
+            STATUS=$(docker inspect -f '{{.State.Status}}' pskhome-fe-1)
+
+            if [[ ${STATUS} != "running" ]]; then
+              docker logs --tail 100 pskhome-fe-1
+              exit 1
+            fi
