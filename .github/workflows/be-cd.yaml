@@ -87,12 +87,18 @@ jobs:
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          script_stop: true
           script: |
             cd ~/${{ github.event.repository.name }}/server
-            echo "MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }}" > .env
-            echo "SESSION_SECRET=${{ secrets.SESSION_SECRET }}" >> .env
-            echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
-            echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
+
+            # 값에 공백이나 특수문자가 들어가도 안전하도록 작은따옴표로 감싼다.
+            # docker compose 는 프로젝트 디렉터리의 .env 를 알아서 읽어 ${VAR} 를 치환한다.
+            {
+              echo "MYSQL_ROOT_PASSWORD='${{ secrets.MYSQL_ROOT_PASSWORD }}'"
+              echo "SESSION_SECRET='${{ secrets.SESSION_SECRET }}'"
+              echo "GOOGLE_CLIENT_ID='${{ secrets.GOOGLE_CLIENT_ID }}'"
+              echo "GOOGLE_CLIENT_SECRET='${{ secrets.GOOGLE_CLIENT_SECRET }}'"
+            } > .env
 
       # 10. 이미지 빌드 + 기동
       - name: Update be and db
@@ -102,24 +108,35 @@ jobs:
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          # 서버에서 이미지를 직접 빌드하므로 기본 10분으로는 부족하다.
+          command_timeout: 30m
+          script_stop: true
           script: |
             cd ~/${{ github.event.repository.name }}/server
 
-            docker compose -f docker-compose-db.yaml pull
-
-            docker compose -f docker-compose-be.yaml down
-            docker compose -f docker-compose-db.yaml down
-
-            export $(cat .env)
-
+            # DB/Redis 는 백엔드와 생명주기가 다르다.
+            # 매 배포마다 pull + down 하면 DB 가 불필요하게 내려가고,
+            # 이미지가 캐시에 없을 때 재다운로드에만 수 분이 들어 SSH 세션이 타임아웃된다.
+            # 이미 떠 있으면 그대로 두고, 없을 때만 기동한다.
             docker compose -f docker-compose-db.yaml up -d
+
+            # --build 는 이미지가 바뀌면 컨테이너를 알아서 재생성한다.
+            # 먼저 down 하지 않으므로 빌드가 실패해도 기존 컨테이너는 계속 떠 있는다.
             docker compose -f docker-compose-be.yaml up -d --build
 
             docker image prune -f
 
-            STATUS=$(docker inspect -f '{{.State.Status}}' pskhome-be-1)
+            # 기동 직후에는 아직 starting 일 수 있으므로 잠시 기다린다.
+            for i in $(seq 1 30); do
+              STATUS=$(docker inspect -f '{{.State.Status}}' pskhome-be-1 2>/dev/null || echo missing)
+              if [ "$STATUS" = "running" ]; then break; fi
+              sleep 2
+            done
 
-            if [[ ${STATUS} != "running" ]]; then
-              docker logs --tail 100 pskhome-be-1
+            if [ "$STATUS" != "running" ]; then
+              echo "backend container is '$STATUS'"
+              docker logs --tail 200 pskhome-be-1 || true
               exit 1
             fi
+
+            echo "backend is running"
