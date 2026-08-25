@@ -3,6 +3,7 @@ import express from "express";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { jsonPrettierRouter } from "./modules/jsonprettier/jsonPrettier.router.js";
 import { pingRouter } from "./modules/ping/ping.router.js";
+import { psPostRouter } from "./modules/pspost/psPost.router.js";
 
 /**
  * Express 앱 조립.
@@ -30,6 +31,7 @@ export function createApp(): express.Express {
   // --- 공개 (인증 불필요) ---
   api.use(pingRouter);
   api.use(jsonPrettierRouter);
+  api.use(psPostRouter);
 
   app.use("/api", api);
 
