@@ -40,8 +40,10 @@
 ### 인프라 (`server/`)
 - **MySQL** — PS Post 데이터 저장 (`ps_post` 테이블)
 - **Docker Compose** — 3개 파일로 DB/백엔드/프론트엔드 분리 운영
-  (백엔드/프론트엔드는 각 폴더의 `dockerfile` 로 서버에서 직접 빌드)
-- **GitHub Actions** — CI/CD (`be-cd.yaml`, `fe-cd.yaml`) — lint/test/build 게이트 후 배포
+  (백엔드/프론트엔드 이미지는 GHCR 에서 받아 기동. 서버에서 빌드하지 않는다)
+- **GHCR** — `ghcr.io/elfaka/pskhome-{be,fe}` — Actions 가 빌드해 푸시
+- **GitHub Actions** — CI/CD (`be-cd.yaml`, `fe-cd.yaml`) — lint/test 게이트 후
+  이미지 빌드·푸시, 서버는 pull 만 수행
 
 ## 로컬 개발 빠른 시작
 
