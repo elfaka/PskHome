@@ -126,7 +126,8 @@ cd frontend && npm run test:watch
 ### 인프라 (Docker Compose)
 ```bash
 # DB 시작 (MySQL:3306)
-# 이 compose 파일은 Redis(pskhome-mem-1)도 함께 띄우지만, 현재 쓰는 곳이 없다.
+# 예전에는 Redis(pskhome-mem-1)도 함께 띄웠지만 쓰는 곳이 없어 내렸다.
+# 서버에 남아 있던 컨테이너는 배포 스크립트의 --remove-orphans 가 정리한다.
 cd server && docker compose -f docker-compose-db.yaml up -d
 
 # 백엔드 시작 (이미지 빌드 포함, :8080)

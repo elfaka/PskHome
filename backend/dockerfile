@@ -8,6 +8,16 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
+# 이 이미지는 배포 서버(VPS)에서 직접 빌드된다. MySQL·프론트엔드·traefik 이
+# 같이 떠 있는 상태라 tsc 가 힙을 크게 잡으면 커널 OOM killer 가 빌드가 아니라
+# sshd 를 죽여 배포가 "exited without exit status" 로 끊긴다.
+#
+# 상한을 걸어두면 그 상황이 컨테이너 안의 명확한 실패
+# ("JavaScript heap out of memory")로 바뀌어 원인을 바로 알 수 있다.
+# skipLibCheck 를 켠 이 규모의 프로젝트에는 512MB 면 넉넉하다.
+# 소스가 커져서 이 한도에 걸리면 값을 올린다.
+ENV NODE_OPTIONS=--max-old-space-size=512
+
 COPY package.json package-lock.json ./
 RUN npm ci
 

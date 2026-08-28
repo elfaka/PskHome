@@ -114,17 +114,56 @@ jobs:
           script: |
             cd ~/${{ github.event.repository.name }}/server
 
-            # DB/Redis 는 백엔드와 생명주기가 다르다.
+            # 빌드 전 자원 상태를 남긴다.
+            # 서버가 OOM 으로 SSH 세션째 끊기면 이 아래 로그는 남지 않으므로,
+            # 끊기기 전에 찍어둔 이 값이 원인 판단의 단서가 된다.
+            echo "----- preflight -----"
+            free -h || true
+            df -h / || true
+            docker system df || true
+            echo "---------------------"
+
+            # DB 는 백엔드와 생명주기가 다르다.
             # 매 배포마다 pull + down 하면 DB 가 불필요하게 내려가고,
             # 이미지가 캐시에 없을 때 재다운로드에만 수 분이 들어 SSH 세션이 타임아웃된다.
             # 이미 떠 있으면 그대로 두고, 없을 때만 기동한다.
-            docker compose -f docker-compose-db.yaml up -d
+            #
+            # --remove-orphans: compose 파일에서 뺀 redis(pskhome-mem-1)를 정리한다.
+            # 서비스를 지워도 이미 떠 있는 컨테이너는 알아서 사라지지 않는다.
+            docker compose -f docker-compose-db.yaml up -d --remove-orphans
 
             # --build 는 이미지가 바뀌면 컨테이너를 알아서 재생성한다.
             # 먼저 down 하지 않으므로 빌드가 실패해도 기존 컨테이너는 계속 떠 있는다.
-            docker compose -f docker-compose-be.yaml up -d --build
+            #
+            # 빌드 로그를 파일에도 남긴다. OOM 으로 SSH 가 끊기면 Actions 로그는
+            # 중간에서 잘리지만 서버의 이 파일에는 끝까지 남는다.
+            #
+            # [주의] tee 를 거치면 파이프라인의 종료코드가 tee 의 것(늘 0)이 되어
+            # 빌드 실패를 삼킨다. 그대로 두면 빌드가 깨져도 예전 컨테이너가 떠 있는 한
+            # 아래 running 체크를 통과해 배포가 성공으로 보고된다.
+            #
+            # pipefail 은 dash 에 없어 셸을 가릴 수 없다. 그래서 결과를 파일로 넘기는데,
+            # 이때 `cmd; echo $? > f` 형태는 쓸 수 없다 — script_stop(set -e) 이 걸려 있어
+            # 빌드가 실패하는 순간 서브셸이 즉시 끝나 echo 까지 가지 못한다.
+            # &&/|| 리스트 안의 명령은 errexit 대상에서 빠지므로 이 형태를 쓴다.
+            rm -f ~/.deploy-be.status
+
+            { docker compose -f docker-compose-be.yaml up -d --build 2>&1 \
+                && echo ok > ~/.deploy-be.status \
+                || echo fail > ~/.deploy-be.status; } | tee ~/deploy-be.log
+
+            if [ "$(cat ~/.deploy-be.status 2>/dev/null)" != "ok" ]; then
+              echo "image build failed — 서버의 ~/deploy-be.log 에 전체 로그가 있다"
+              free -h || true
+              dmesg -T 2>/dev/null | grep -iE 'out of memory|killed process' | tail -20 || true
+              exit 1
+            fi
 
             docker image prune -f
+
+            # BuildKit 캐시는 정리하지 않으면 계속 쌓여 디스크를 채운다.
+            # 일주일치는 남겨 다음 빌드 속도를 지킨다.
+            docker builder prune -f --filter until=168h
 
             # 기동 직후에는 아직 starting 일 수 있으므로 잠시 기다린다.
             for i in $(seq 1 30); do
@@ -136,6 +175,12 @@ jobs:
             if [ "$STATUS" != "running" ]; then
               echo "backend container is '$STATUS'"
               docker logs --tail 200 pskhome-be-1 || true
+
+              # 컨테이너가 메모리 때문에 죽었는지 바로 구분할 수 있게 함께 남긴다.
+              # dmesg 는 커널 설정에 따라 비특권 사용자에게 막혀 있을 수 있다.
+              free -h || true
+              dmesg -T 2>/dev/null | grep -iE 'out of memory|killed process' | tail -20 || true
+
               exit 1
             fi
 
