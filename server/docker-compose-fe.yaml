@@ -8,11 +8,11 @@ networks:
 services:
   fe:
     # Next 는 Node 런타임이 필요하므로 nginx 정적 서빙에서 Node 컨테이너로 바뀌었다.
-    # 서버에서 직접 빌드한다: `docker compose -f docker-compose-fe.yaml up -d --build`
-    build:
-      context: ../frontend
-      dockerfile: dockerfile
-    image: pskhome-fe
+    # 이미지는 GitHub Actions 에서 빌드해 GHCR 에 올린다. 서버는 pull 만 한다.
+    #
+    # FE_TAG 는 배포 스크립트가 커밋 SHA 태그로 넘긴다.
+    # 서버에서 수동으로 띄울 때는 지정하지 않아도 latest 로 떨어진다.
+    image: ghcr.io/elfaka/pskhome-fe:${FE_TAG:-latest}
     container_name: pskhome-fe-1
     restart: unless-stopped
     environment:

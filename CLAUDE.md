@@ -126,20 +126,44 @@ cd frontend && npm run test:watch
 ### 인프라 (Docker Compose)
 ```bash
 # DB 시작 (MySQL:3306)
-# 이 compose 파일은 Redis(pskhome-mem-1)도 함께 띄우지만, 현재 쓰는 곳이 없다.
+# 예전에는 Redis(pskhome-mem-1)도 함께 띄웠지만 쓰는 곳이 없어 내렸다.
+# 서버에 남아 있던 컨테이너는 배포 스크립트의 --remove-orphans 가 정리한다.
 cd server && docker compose -f docker-compose-db.yaml up -d
 
-# 백엔드 시작 (이미지 빌드 포함, :8080)
-cd server && docker compose -f docker-compose-be.yaml up -d --build
+# 백엔드 시작 (GHCR 에서 이미지를 받아 기동, :8080)
+cd server && docker compose -f docker-compose-be.yaml pull
+cd server && docker compose -f docker-compose-be.yaml up -d
 
-# 프론트엔드 시작 (이미지 빌드 포함, :5173)
-cd server && docker compose -f docker-compose-fe.yaml up -d --build
+# 프론트엔드 시작 (GHCR 에서 이미지를 받아 기동, :5173)
+cd server && docker compose -f docker-compose-fe.yaml pull
+cd server && docker compose -f docker-compose-fe.yaml up -d
 ```
 세 compose 파일 모두 `traefik`이라는 Docker 네트워크를 공유합니다.
 
+### 이미지는 어디서 만들어지나
+
 백엔드/프론트엔드는 stock 이미지에 산출물을 볼륨으로 물리는 방식이 아니라
 **각자 dockerfile 로 이미지를 빌드**합니다 (Node 앱은 실행에 `node_modules` 가 필요).
-레지스트리는 쓰지 않고 배포 서버에서 직접 빌드합니다.
+
+빌드는 **GitHub Actions 에서 하고 GHCR(`ghcr.io/elfaka/pskhome-{be,fe}`) 로 푸시**합니다.
+배포 서버는 `pull` 만 합니다.
+
+> 예전에는 서버에서 직접 빌드했습니다. 그런데 MySQL·백엔드·프론트엔드가 한 대에
+> 같이 떠 있는 상태에서 `tsc`/`next build` 가 메모리를 밀어내면 커널 OOM killer 가
+> 빌드가 아니라 sshd 를 죽여, 배포가
+> `wait: remote command exited without exit status or exit signal` 로 끊겼습니다.
+> 빌드를 러너로 옮겨 서버의 빌드 부하를 없앴습니다.
+
+이미지 태그는 `latest` 와 `sha-<커밋SHA>` 두 개가 올라갑니다.
+배포는 SHA 태그로 고정해(`BE_TAG`/`FE_TAG`) 어떤 커밋이 떠 있는지 분명히 하고,
+서버에서 수동으로 띄울 때는 `latest` 로 떨어집니다.
+
+로컬에서 이미지를 확인하려면:
+
+```bash
+docker build -f backend/dockerfile -t pskhome-be backend
+docker build -f frontend/dockerfile -t pskhome-fe frontend
+```
 
 ---
 
