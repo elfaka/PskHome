@@ -116,9 +116,10 @@ jobs:
             # docker compose 는 프로젝트 디렉터리의 .env 를 알아서 읽어 ${VAR} 를 치환한다.
             {
               echo "MYSQL_ROOT_PASSWORD='${{ secrets.MYSQL_ROOT_PASSWORD }}'"
-              echo "SESSION_SECRET='${{ secrets.SESSION_SECRET }}'"
               echo "GOOGLE_CLIENT_ID='${{ secrets.GOOGLE_CLIENT_ID }}'"
               echo "GOOGLE_CLIENT_SECRET='${{ secrets.GOOGLE_CLIENT_SECRET }}'"
+              echo "TOSS_CLIENT_ID='${{ secrets.TOSS_CLIENT_ID }}'"
+              echo "TOSS_CLIENT_SECRET='${{ secrets.TOSS_CLIENT_SECRET }}'"
             } > .env
 
       # 8. 이미지 내려받고 기동
