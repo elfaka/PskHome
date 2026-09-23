@@ -336,6 +336,15 @@ body:has(.wedding-root) {
   outline-offset: 3px;
 }
 
+/*
+  봉투가 열린 뒤 카드 제목, RSVP 제출 뒤 감사 문구처럼 스크립트가 포커스를 옮기는 곳(tabindex="-1")은
+  스크린리더 위치를 알려주려는 것이라 링이 필요 없다. 그대로 두면 이름 둘레에 네모 칸이 그려진다.
+  탭으로 도달하는 버튼·입력칸의 링은 위 규칙 그대로다.
+*/
+.wedding-root [tabindex="-1"]:focus {
+  outline: none;
+}
+
 /* svh / cqi 를 모르는 구형 WebView(카카오톡 인앱 등) 폴백 — 앞줄이 폴백, 뒷줄이 의도한 값 */
 .wd-screen {
   min-height: 100vh;
@@ -422,18 +431,4 @@ body:has(.wedding-root) {
 /* 33⅓ rpm ≈ 1.8초에 한 바퀴. 재생 여부는 animation-play-state 로 멈추고 푼다 */
 .wd-spin {
   animation: wd-spin 1.8s linear infinite;
-}
-
-@keyframes wd-hint {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-.wd-hint {
-  animation: wd-hint 2.4s ease-in-out infinite;
 }

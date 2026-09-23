@@ -16,6 +16,13 @@ export type Box = { x: number; y: number; w: number };
 export const ENV: Box = { x: 4, y: 70, w: 92 };
 export const ENV_BOTTOM = ENV.y + ENV.w / ENV_RATIO;
 
+/**
+ * 봉투 중앙 스티커 — 덮개 끝(봉투 윗변 + 덮개 높이 61% ≈ 38.7)과 앞주머니 V 끝(≈104) 사이에 걸친다.
+ * 중심 y 와 지름(장면 폭 %)
+ */
+export const STICKER_Y = ENV.y + 35;
+export const STICKER_W = 19;
+
 /** 카드(2:3) — 열린 뒤 쉬는 자리. 아랫부분은 앞주머니 뒤에 꽂혀 있다 */
 export const CARD: Box = { x: 26, y: 22, w: 58 };
 export const CARD_H = CARD.w * 1.5;

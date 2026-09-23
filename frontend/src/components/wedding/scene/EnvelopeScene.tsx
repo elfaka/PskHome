@@ -10,7 +10,18 @@ import type { IntroPhase } from "../introMachine";
 import PhotoFrame from "../ui/PhotoFrame";
 import { BouquetBack, BouquetFront, BouquetMid } from "./Bouquet";
 import { Calla, FloraDefs, floraIds } from "./flora";
-import { CARD, CARD_CLIP, CARD_TUCK_PCT, ENV, LP, PHOTOS, place } from "./geometry";
+import {
+  CARD,
+  CARD_CLIP,
+  CARD_TUCK_PCT,
+  ENV,
+  LP,
+  PHOTOS,
+  place,
+  STAGE_H,
+  STICKER_W,
+  STICKER_Y,
+} from "./geometry";
 import SceneCard from "./SceneCard";
 import SceneLp from "./SceneLp";
 
@@ -43,6 +54,30 @@ function FeltDefs({ id }: { id: string }) {
         </filter>
       </defs>
     </svg>
+  );
+}
+
+/** 봉투 가운데 붙은 흰 원형 스티커 — 종이 결, 안쪽 괘선, 모노그램, 살짝 도는 광택 */
+function SealSticker({ monogram }: { monogram: string }) {
+  return (
+    <div className="wd-paper-texture relative aspect-square w-full rounded-full bg-wd-paper shadow-[0_1px_1px_rgb(59_47_34/0.18),0_3px_6px_-1px_rgb(59_47_34/0.28)] ring-1 ring-wd-line/70">
+      <svg viewBox="0 0 100 100" aria-hidden="true" className="absolute inset-0 h-full w-full">
+        <circle cx="50" cy="50" r="41" fill="none" className="stroke-wd-sage-light" strokeWidth="1.2" />
+        <circle cx="50" cy="50" r="37.5" fill="none" className="stroke-wd-line" strokeWidth="0.6" />
+        <text
+          x="50"
+          y="60"
+          textAnchor="middle"
+          fontSize="30"
+          className="fill-wd-sage-deep"
+          style={{ fontFamily: "var(--wd-font-script), cursive" }}
+        >
+          {monogram}
+        </text>
+      </svg>
+      {/* 코팅된 스티커의 광택 */}
+      <span className="pointer-events-none absolute inset-[6%] rounded-full bg-[radial-gradient(circle_at_32%_26%,rgb(255_255_255/0.75),transparent_42%)]" />
+    </div>
   );
 }
 
@@ -137,17 +172,22 @@ export default function EnvelopeScene({
             <svg viewBox="0 0 100 42" preserveAspectRatio="none" aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible">
               <path d="M0.8 0.8 H99.2 L55 38 Q50 41.8 45 38 Z" className="fill-wd-sage" style={feltFill} />
             </svg>
-            <motion.span
-              lang="en"
-              className="absolute top-[52%] left-1/2 -translate-x-1/2 font-wd-script text-[clamp(1.3rem,8cqw,2.6rem)] leading-none whitespace-nowrap text-wd-paper drop-shadow-[0_1px_1px_rgb(0_0_0/0.18)]"
-              initial={false}
-              animate={{ opacity: sealed ? 0.95 : 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              {data.monogram}
-            </motion.span>
           </motion.div>
         </div>
+
+        {/*
+          봉투 중앙의 흰 스티커 — 덮개 끝과 앞주머니에 걸쳐 붙어 있으므로 덮개와 함께 돌지 않는다.
+          열리기 시작하면 덮개가 넘어가기 전에(덮개는 0.3s 뒤 출발) 살짝 들리며 떨어진다.
+        */}
+        <motion.div
+          className="wd-sealed-only pointer-events-none absolute z-[31] -translate-x-1/2 -translate-y-1/2"
+          style={{ left: "50%", top: `${(STICKER_Y / STAGE_H) * 100}%`, width: `${STICKER_W}%` }}
+          initial={false}
+          animate={sealed ? { opacity: 1, scale: 1, rotate: 0, y: 0 } : { opacity: 0, scale: 1.08, rotate: -10, y: -10 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
+          <SealSticker monogram={data.monogram} />
+        </motion.div>
 
         {/* z3 폴라로이드 — 카드 뒤에서 왼쪽으로 빠져나온다 */}
         {PHOTOS.map((p, i) => (
@@ -228,21 +268,6 @@ export default function EnvelopeScene({
         >
           <SceneLp monogram={data.monogram} />
         </motion.div>
-
-        {/* 봉인 안내 — LP 문구 자리에 먼저 있다가 사라진다 */}
-        <motion.p
-          className="wd-sealed-only pointer-events-none absolute inset-x-0 top-[91%] text-center"
-          initial={false}
-          animate={{ opacity: sealed ? 1 : 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <span className="wd-hint block text-[clamp(0.75rem,3.6cqw,0.95rem)] tracking-[0.15em] text-wd-ink">
-            봉투를 눌러 열어 주세요
-          </span>
-          <span lang="en" className="mt-[1cqw] block font-wd-display text-[clamp(0.55rem,2.6cqw,0.72rem)] tracking-[0.3em] text-wd-ink-muted">
-            CLICK ENVELOPE TO OPEN
-          </span>
-        </motion.p>
       </div>
     </section>
   );

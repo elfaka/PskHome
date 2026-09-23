@@ -6,7 +6,7 @@ import { useEffect, useReducer, useRef } from "react";
 import type { WeddingData } from "@/data/wedding";
 import { ceremonyInstant } from "@/lib/wedding/ceremony";
 
-import { introReducer, PHASE_MAX_MS, SAFETY_MARGIN_MS } from "./introMachine";
+import { AUTO_OPEN_MS, introReducer, PHASE_MAX_MS, SAFETY_MARGIN_MS } from "./introMachine";
 import EnvelopeScene from "./scene/EnvelopeScene";
 import Closing from "./sections/Closing";
 import Countdown from "./sections/Countdown";
@@ -38,6 +38,24 @@ export default function WeddingInvitation({ data }: { data: WeddingData }) {
     );
     return () => window.clearTimeout(id);
   }, [phase]);
+
+  // 인트로 자동 재생: 페이지가 보이는 상태로 AUTO_OPEN_MS 가 지나면 봉투가 저절로 열린다.
+  // 그 전에 봉투를 누르면 바로 열리고, 늦게 온 자동 OPEN 은 reducer 가 sealed 가 아니라서 무시한다.
+  // 백그라운드 탭으로 열렸으면(카카오톡 링크 미리 열기 등) 보이게 될 때부터 센다.
+  useEffect(() => {
+    if (!hydrated || phase !== "sealed") return;
+    let timer: number | undefined;
+    const arm = () => {
+      if (document.visibilityState !== "visible" || timer !== undefined) return;
+      timer = window.setTimeout(() => dispatch({ type: "OPEN", reducedMotion }), AUTO_OPEN_MS);
+    };
+    arm();
+    document.addEventListener("visibilitychange", arm);
+    return () => {
+      document.removeEventListener("visibilitychange", arm);
+      window.clearTimeout(timer);
+    };
+  }, [hydrated, phase, reducedMotion]);
 
   // 봉투가 열릴 때까지 스크롤을 잠근다. 새로고침 때 브라우저가 복원한 스크롤도 맨 위로 되돌린다.
   // 단, 높이가 낮은 가로 화면에서 장면이 한 화면을 넘으면 봉투까지 내려갈 수 있어야 하므로 잠그지 않는다.
