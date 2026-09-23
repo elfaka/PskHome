@@ -148,12 +148,14 @@ export function BouquetFront({ show, className }: { show: boolean; className?: s
     <Layer className={className}>
       {(f) => (
         <>
-          <Bloom show={show} delay={0.7}>
-            <Amaranthus f={f} from={[15, 40]} ctrl={[1, 58]} to={[3, 98]} thick={2.6} seed={41} />
-          </Bloom>
-          <Bloom show={show} delay={0.75}>
-            <Amaranthus f={f} from={[90, 32]} ctrl={[101, 50]} to={[97, 88]} thick={2.5} seed={42} />
-          </Bloom>
+          {/* 양옆 아마란서스 — 오른쪽은 봉투 중심선(x=50) 기준 왼쪽의 거울상이라 모양·길이·알갱이까지 대칭이다 */}
+          {[false, true].map((mirror) => (
+            <g key={String(mirror)} transform={mirror ? "translate(100 0) scale(-1 1)" : undefined}>
+              <Bloom show={show} delay={0.7}>
+                <Amaranthus f={f} from={[14, 38]} ctrl={[1, 57]} to={[3, 96]} thick={2.6} seed={41} />
+              </Bloom>
+            </g>
+          ))}
           <Bloom show={show} delay={0.8}>
             <Leaf f={f} x={14} y={54} len={8} rot={150} />
             <Rose f={f} x={15} y={52} r={5} rot={-18} />
