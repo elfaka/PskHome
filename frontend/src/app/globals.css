@@ -239,3 +239,141 @@
   --tw-prose-th-borders: var(--border-strong);
   --tw-prose-td-borders: var(--border);
 }
+
+/* ==========================================================================
+   6. 청첩장 (/wedding) 전용
+   사이트 테마와 무관한 별도 팔레트다. 값은 `.wedding-root` 안에서만 정의되므로
+   `wd-*` 유틸리티는 다른 화면에서 쓰면 아무 효과가 없다.
+   명암비: ink/ink-muted/sage-deep/danger 는 ivory·paper 위에서 4.5:1 이상.
+   sage 는 흰 글씨와 3.8:1 이라 장식(봉투·선) 전용이다.
+   ========================================================================== */
+.wedding-root {
+  --wd-ivory: #f7f5ef;
+  --wd-paper: #fffefa;
+  --wd-backdrop: #e9ece1;
+  --wd-sage: #7c8863;
+  --wd-sage-inner: #6a7553;
+  --wd-sage-light: #a9b393;
+  --wd-sage-soft: #e6eadc;
+  --wd-sage-deep: #5f6b48;
+  --wd-ink: #3b2f22;
+  --wd-ink-muted: #6b5e4e;
+  --wd-line: #c9cfba;
+  --wd-danger: #a33a2c;
+  --wd-shadow-card: 0 1px 2px #3b2f220d, 0 10px 30px -12px #3b2f2233;
+  --wd-shadow-photo: 0 2px 4px #3b2f2214, 0 12px 24px -10px #3b2f2240;
+
+  color-scheme: light;
+  background-color: var(--wd-ivory);
+  color: var(--wd-ink);
+}
+
+@theme inline {
+  --color-wd-ivory: var(--wd-ivory);
+  --color-wd-paper: var(--wd-paper);
+  --color-wd-backdrop: var(--wd-backdrop);
+  --color-wd-sage: var(--wd-sage);
+  --color-wd-sage-inner: var(--wd-sage-inner);
+  --color-wd-sage-light: var(--wd-sage-light);
+  --color-wd-sage-soft: var(--wd-sage-soft);
+  --color-wd-sage-deep: var(--wd-sage-deep);
+  --color-wd-ink: var(--wd-ink);
+  --color-wd-ink-muted: var(--wd-ink-muted);
+  --color-wd-line: var(--wd-line);
+  --color-wd-danger: var(--wd-danger);
+
+  --shadow-wd-card: var(--wd-shadow-card);
+  --shadow-wd-photo: var(--wd-shadow-photo);
+
+  /* 한글 세리프는 layout 의 Google Fonts CSS, 영문 두 벌은 next/font 변수에서 온다 */
+  --font-wd-serif: "Noto Serif KR", "Nanum Myeongjo", AppleMyungjo, Batang,
+    serif;
+  --font-wd-script: var(--wd-font-script), "Snell Roundhand", cursive;
+  --font-wd-display: var(--wd-font-display), Georgia, "Times New Roman", serif;
+}
+
+/*
+  뷰포트 분기 — 픽셀 폭이 아니라 화면비로 나눈다.
+  일반 폰(세로 ~9:19.5, 폭/높이 ≈ 0.46)과 달리 폴더블은 접어도 넓다.
+    Galaxy Z Fold8 커버 10:16 (0.63) · 메인 4:3 (0.75 / 가로 1.33)
+    iPhone Duo     커버 14.5:10 (0.69) · 메인 14.2:10 (0.70 / 가로 1.42)
+  wd-cover / wd-unfolded 는 서로 겹치지 않는다.
+  wd-landscape 는 "가로로 넓고 높이가 낮은" 화면(폰 가로, 폴더블 메인 가로 ~540px)이다.
+  세로로 쌓으면 인트로가 넘치므로 문구와 봉투를 좌우로 놓는다. unfolded 와 겹칠 수 있고, 인트로 배치만 바꾼다.
+*/
+@custom-variant wd-cover (@media (max-width: 559.98px) and (min-aspect-ratio: 3/5) and (min-height: 500.02px));
+@custom-variant wd-unfolded (@media (min-width: 560px) and (min-aspect-ratio: 3/5) and (min-height: 500.02px));
+@custom-variant wd-landscape (@media (min-aspect-ratio: 6/5) and (max-height: 720px));
+
+/* 사이트 다크 테마가 청첩장 밖(오버스크롤·스크롤바)으로 새지 않게 덮는다.
+   ThemeScript 가 <html> 에 인라인으로 color-scheme 을 박기 때문에 !important 가 필요하다. */
+html:has(.wedding-root) {
+  color-scheme: light !important;
+  background-color: #e9ece1;
+}
+
+body:has(.wedding-root) {
+  background-color: #e9ece1;
+}
+
+.wedding-root ::selection {
+  background-color: var(--wd-sage-soft);
+  color: var(--wd-ink);
+}
+
+/* 전역 포커스 링은 사이트 accent(다크에선 형광 녹색)라 청첩장 톤으로 바꾼다 */
+.wedding-root :focus-visible {
+  outline: 2px solid var(--wd-sage-deep);
+  outline-offset: 3px;
+}
+
+/* svh / cqi 를 모르는 구형 WebView(카카오톡 인앱 등) 폴백 — 앞줄이 폴백, 뒷줄이 의도한 값 */
+.wd-screen {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+.wd-name {
+  font-size: 2.75rem;
+  font-size: clamp(2.5rem, 13cqi, 4.5rem);
+}
+
+.wd-title {
+  font-size: 2.5rem;
+  font-size: clamp(2.25rem, 11cqi, 3.75rem);
+}
+
+/* 봉투 폭: 폭·높이 중 빡빡한 쪽에 맞춘다. (100svh - 문구 영역) × 봉투 가로세로비 */
+.wd-envelope {
+  width: min(86vw, 26rem);
+  width: min(86vw, 26rem, calc((100svh - 19rem) * 1.45));
+}
+
+/* wd-landscape 와 같은 조건 — 좌우 배치일 때는 높이에서 문구 몫을 빼지 않는다 */
+@media (min-aspect-ratio: 6/5) and (max-height: 720px) {
+  .wd-envelope {
+    width: min(42vw, 24rem);
+    width: min(42vw, 24rem, calc((100svh - 5rem) * 1.45));
+  }
+}
+
+/* 종이 질감 — 이미지 없이 아주 옅은 얼룩만 깐다 */
+.wd-paper-texture {
+  background-image:
+    radial-gradient(circle at 20% 15%, #ffffff66 0, transparent 40%),
+    radial-gradient(circle at 80% 85%, #00000008 0, transparent 45%);
+}
+
+@keyframes wd-hint {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.wd-hint {
+  animation: wd-hint 2.4s ease-in-out infinite;
+}
