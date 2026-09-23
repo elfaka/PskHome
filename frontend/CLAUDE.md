@@ -130,14 +130,19 @@ src/
     층(뒤→앞): 봉투 뒤판 · 덮개 · 사진 · `BouquetBack` · 카드 · `BouquetMid` · 앞주머니 · `BouquetFront` · LP.
   - 장면 안 글자 크기는 `cqw`(장면 폭) 기준이라 그림 전체가 같은 비율로 줄고 늘어난다. 장면은 300px 밑으로 줄이지 않는다.
     높이가 낮은 가로 폰에서 장면이 한 화면을 넘으면 봉인 중에도 스크롤을 잠그지 않는다.
-  - 생화는 `scene/flora.tsx` 의 SVG 원형(장미·칼라·수국·아스틸베·아마란서스·안개꽃·잎)이다. 색은 `PALETTE` 한 곳에서 바꾼다.
+  - 생화는 `scene/flora.tsx` 에 있다.
+    - 장미·칼라는 실제 꽃 사진이다(`public/wedding/flowers/*.webp`, 위키미디어 공용 CC BY-SA 3.0 / CC BY 3.0 원본의 배경 제거·크기 조정본).
+      라이선스상 저작자 표시가 필요하므로 `PHOTO_CREDITS` 를 클로징에 표시한다. 사진을 바꾸거나 추가하면 여기도 함께 고친다.
+    - 수국·아스틸베·아마란서스·안개꽃·잎은 SVG 원형이고, 색은 `PALETTE` 에서 바꾼다.
+    - 칼라 꽃 머리가 장면 윗변 위로 솟기 때문에 `.wd-stage` 가 그만큼 위 여백을 둔다.
     작은 꽃이 모인 꽃은 시드 난수라 결정적이다(서버/클라이언트 동일).
   - 봉투는 SVG 필터(노이즈 변위 → 데클 가장자리, 확산 조명 → 펠트 결)로 수제 종이를 흉내 낸다.
   - JS 가 없으면 `.wd-sealed-only` 를 숨기고 `.wd-reveal` 의 초기 상태를 풀어 열린 장면을 보여준다(`app/wedding/layout.tsx`).
 - 종이 질감은 `.wd-paper-texture`(흰 종이), `.wd-colored-paper`(색지)다. 노이즈는 SVG feTurbulence data URI 라서 이미지 파일이 없다.
 - 배경음악: `lib/wedding/musicBox.ts` 가 Web Audio 로 오르골을 합성한다 (음원 파일 없음. 악보는 `musicLoop.ts`).
-  - 자동재생 정책 때문에 LP 탭 안에서만 AudioContext 를 만들고 resume 한다.
-  - Web Audio 를 못 쓰면 LP 만 돈다.
+  - 봉투를 터치할 때 같은 이벤트 안에서 `useMusicBox().start()` 를 불러 음악이 시작된다(`EnvelopeScene` 의 `handleOpen`).
+    브라우저 자동재생 정책상 AudioContext 생성·resume 은 사용자 터치 이벤트 안에서 동기적으로 시작돼야 한다. 진입만으로는 재생하지 않는다.
+  - LP 는 멈춤/재생 토글이다. Web Audio 를 못 쓰면 LP 만 돈다.
   - 실제 음원으로 바꿀 때는 `useMusicBox` 의 재생 엔진만 교체하면 된다.
 - PowerShell 로 한글이 든 소스를 고칠 때는 `[IO.File]::ReadAllText(path, [Text.Encoding]::UTF8)` 처럼 인코딩을 명시한다.
   `Get-Content -Raw` 는 CP949 로 읽어 주석이 깨진다.
