@@ -121,8 +121,20 @@ src/
   섹션 내부 2단은 뷰포트가 아니라 컨테이너 쿼리(`@container` + `@[34rem]:`)로 나눈다.
   2단 거터가 화면 중앙에 오므로 폴더블 메인 화면의 접힘선에 글자가 걸리지 않는다.
 - `@container` 요소는 fixed 자식의 기준이 된다. 토스트·인트로 같은 fixed 요소는 컨테이너 밖에 둔다.
-- motion(13.x) 컴포넌트의 `style` 로 넘긴 zIndex 가 재렌더 때 갱신되지 않는 것을 확인했다.
-  단계에 따라 바뀌는 값은 `className` 으로 준다.
+- motion(13.x) 에서 확인한 두 가지:
+  - `style` 로 넘긴 zIndex 는 재렌더 때 갱신되지 않는다. 단계에 따라 바뀌는 값은 `className` 으로 준다.
+  - `initial={false}` 인 요소의 `animate` 가 `undefined` 에서 값으로 바뀌면 첫 값이 적용되지 않는다.
+    측정값에 의존하는 요소는 측정이 끝난 뒤에 마운트한다.
+- 인트로(`sealed → opening → rising → presenting → done`):
+  - 봉투에서 꺼내는 카드는 첫 화면 카드(`InvitationCard`)의 사본이다. 같은 폭으로 그린 뒤 scale 로 봉투에 맞췄다가, 실측한 첫 화면 카드 자리로 옮겨 정확히 겹친다.
+    위치 계산은 `introLayout.ts` 의 순수 함수이고 테스트가 있다.
+  - 카드 안 치수에는 컨테이너 단위(cqi 등)를 쓰지 않는다. 사본은 컨테이너 밖에 있어서 크기가 달라진다. 미디어 쿼리(`wd-cover:` 등)는 괜찮다.
+- 종이 질감은 `.wd-paper-texture`(흰 종이), `.wd-colored-paper`(봉투 색지)다. 노이즈는 SVG feTurbulence data URI 라서 이미지 파일이 없다.
+- 배경음악: `lib/wedding/musicBox.ts` 가 Web Audio 로 오르골을 합성한다 (음원 파일 없음. 악보는 `musicLoop.ts`).
+  - 자동재생 정책 때문에 LP 탭 안에서만 AudioContext 를 만들고 resume 한다.
+  - Web Audio 를 못 쓰면 LP 만 돈다.
+  - 실제 음원으로 바꿀 때는 `useMusicBox` 의 재생 엔진만 교체하면 된다.
+- PowerShell 로 한글이 든 소스를 `Get-Content`/`WriteAllText` 로 고치지 말 것. CP949 로 읽혀 주석이 깨진다.
 
 **프리미티브**(`components/ui/`)를 먼저 찾아보고 없을 때만 새로 만든다.
 버튼·카드는 `next/link` 에도 붙일 수 있도록 클래스 함수도 함께 노출한다.
