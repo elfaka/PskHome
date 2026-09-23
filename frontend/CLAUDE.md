@@ -70,7 +70,7 @@ src/
 │   ├── layout/   # SiteShell, SiteHeader, SiteFooter, ProjectFlyout, nav.ts
 │   ├── pspost/PostForm.tsx
 │   ├── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
-│   └── wedding/     (WeddingInvitation, EnvelopeIntro, introMachine, sections/*, ui/*)
+│   └── wedding/     (WeddingInvitation, introMachine, scene/* 첫 화면, sections/*, ui/*)
 ├── data/         # 화면이 공유하는 정적 데이터 (projects.ts, profile.ts, wedding.ts)
 ├── lib/          # 공용 유틸 (errorMessage, cn 등) — lib/wedding/ 은 청첩장 전용 순수 로직
 └── test/         # Vitest 셋업 + MSW 목
@@ -116,7 +116,6 @@ src/
   |---|---|---|
   | `wd-cover` | 폭 < 560, 폭/높이 ≥ 0.6, 높이 > 500 | Galaxy Z Fold8 커버(10:16), iPhone Duo 커버(14.5:10) |
   | `wd-unfolded` | 폭 ≥ 560, 폭/높이 ≥ 0.6, 높이 > 500 | 폴더블 메인(4:3, 14.2:10), 태블릿, 데스크톱 |
-  | `wd-landscape` | 폭/높이 ≥ 1.2, 높이 ≤ 720 | 폰 가로, 폴더블 메인 가로 — 인트로를 좌우 배치 |
 
   섹션 내부 2단은 뷰포트가 아니라 컨테이너 쿼리(`@container` + `@[34rem]:`)로 나눈다.
   2단 거터가 화면 중앙에 오므로 폴더블 메인 화면의 접힘선에 글자가 걸리지 않는다.
@@ -125,16 +124,23 @@ src/
   - `style` 로 넘긴 zIndex 는 재렌더 때 갱신되지 않는다. 단계에 따라 바뀌는 값은 `className` 으로 준다.
   - `initial={false}` 인 요소의 `animate` 가 `undefined` 에서 값으로 바뀌면 첫 값이 적용되지 않는다.
     측정값에 의존하는 요소는 측정이 끝난 뒤에 마운트한다.
-- 인트로(`sealed → opening → rising → presenting → done`):
-  - 봉투에서 꺼내는 카드는 첫 화면 카드(`InvitationCard`)의 사본이다. 같은 폭으로 그린 뒤 scale 로 봉투에 맞췄다가, 실측한 첫 화면 카드 자리로 옮겨 정확히 겹친다.
-    위치 계산은 `introLayout.ts` 의 순수 함수이고 테스트가 있다.
-  - 카드 안 치수에는 컨테이너 단위(cqi 등)를 쓰지 않는다. 사본은 컨테이너 밖에 있어서 크기가 달라진다. 미디어 쿼리(`wd-cover:` 등)는 괜찮다.
-- 종이 질감은 `.wd-paper-texture`(흰 종이), `.wd-colored-paper`(봉투 색지)다. 노이즈는 SVG feTurbulence data URI 라서 이미지 파일이 없다.
+- 첫 화면 = 열린 봉투 한 장면(`components/wedding/scene/`, Studio Gwyn "Envelope 06" 구성).
+  - 단계: `sealed → opening → rising → blooming → done`. 봉투는 움직이지 않고, 봉인 문구 자리에 카드가 올라오고 부케가 핀다.
+  - 장면은 2:3 고정 비율(`.wd-stage`, `@container`)이고 좌표는 100 × 150 단위다(`scene/geometry.ts`). HTML 요소와 SVG 꽃이 같은 좌표를 쓴다.
+    층(뒤→앞): 봉투 뒤판 · 덮개 · 사진 · `BouquetBack` · 카드 · `BouquetMid` · 앞주머니 · `BouquetFront` · LP.
+  - 장면 안 글자 크기는 `cqw`(장면 폭) 기준이라 그림 전체가 같은 비율로 줄고 늘어난다. 장면은 300px 밑으로 줄이지 않는다.
+    높이가 낮은 가로 폰에서 장면이 한 화면을 넘으면 봉인 중에도 스크롤을 잠그지 않는다.
+  - 생화는 `scene/flora.tsx` 의 SVG 원형(장미·칼라·수국·아스틸베·아마란서스·안개꽃·잎)이다. 색은 `PALETTE` 한 곳에서 바꾼다.
+    작은 꽃이 모인 꽃은 시드 난수라 결정적이다(서버/클라이언트 동일).
+  - 봉투는 SVG 필터(노이즈 변위 → 데클 가장자리, 확산 조명 → 펠트 결)로 수제 종이를 흉내 낸다.
+  - JS 가 없으면 `.wd-sealed-only` 를 숨기고 `.wd-reveal` 의 초기 상태를 풀어 열린 장면을 보여준다(`app/wedding/layout.tsx`).
+- 종이 질감은 `.wd-paper-texture`(흰 종이), `.wd-colored-paper`(색지)다. 노이즈는 SVG feTurbulence data URI 라서 이미지 파일이 없다.
 - 배경음악: `lib/wedding/musicBox.ts` 가 Web Audio 로 오르골을 합성한다 (음원 파일 없음. 악보는 `musicLoop.ts`).
   - 자동재생 정책 때문에 LP 탭 안에서만 AudioContext 를 만들고 resume 한다.
   - Web Audio 를 못 쓰면 LP 만 돈다.
   - 실제 음원으로 바꿀 때는 `useMusicBox` 의 재생 엔진만 교체하면 된다.
-- PowerShell 로 한글이 든 소스를 `Get-Content`/`WriteAllText` 로 고치지 말 것. CP949 로 읽혀 주석이 깨진다.
+- PowerShell 로 한글이 든 소스를 고칠 때는 `[IO.File]::ReadAllText(path, [Text.Encoding]::UTF8)` 처럼 인코딩을 명시한다.
+  `Get-Content -Raw` 는 CP949 로 읽어 주석이 깨진다.
 
 **프리미티브**(`components/ui/`)를 먼저 찾아보고 없을 때만 새로 만든다.
 버튼·카드는 `next/link` 에도 붙일 수 있도록 클래스 함수도 함께 노출한다.
