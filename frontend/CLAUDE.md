@@ -14,6 +14,7 @@ Next.js (App Router) + TypeScript 프론트엔드 개발 가이드.
 | `@tailwindcss/typography` | 마크다운(prose) 본문 스타일 |
 | axios | HTTP 클라이언트 |
 | react-markdown | PS 게시글 본문 렌더링 |
+| motion (`motion/react`) | 청첩장 인트로·스크롤 애니메이션 (`/wedding` 에서만 import) |
 | Vitest + MSW + Testing Library | 테스트 |
 
 > 이 프로젝트는 **클라이언트 중심**이다. 데이터는 서버 컴포넌트가 아니라
@@ -44,10 +45,14 @@ src/app/
 │   ├── forms/page.tsx                           # /googleform/forms
 │   ├── forms/[formId]/analyze/page.tsx          # /googleform/forms/:formId/analyze
 │   └── [...slug]/page.tsx                       # 그 외 → /googleform 으로 리다이렉트
-└── jsonprettier/
-    ├── layout.tsx                               # metadata
-    ├── page.tsx                                 # /jsonprettier
-    └── [...slug]/page.tsx                       # 그 외 → /jsonprettier 로 리다이렉트
+├── jsonprettier/
+│   ├── layout.tsx                               # metadata
+│   ├── page.tsx                                 # /jsonprettier
+│   └── [...slug]/page.tsx                       # 그 외 → /jsonprettier 로 리다이렉트
+└── wedding/                                     # 모바일 청첩장 — SiteShell 없음, 사이트 테마와 분리
+    ├── layout.tsx                               # metadata(noindex), 폰트, .wedding-root
+    ├── page.tsx                                 # /wedding
+    └── [...slug]/page.tsx                       # 그 외 → /wedding 으로 리다이렉트
 ```
 
 **라우트 페이지는 얇게 유지한다.** 실제 화면 구현은 `src/components/` 에 두고
@@ -64,9 +69,10 @@ src/
 │   ├── theme/    # 라이트/다크 테마 (ThemeScript, themeStore, ThemeToggle)
 │   ├── layout/   # SiteShell, SiteHeader, SiteFooter, ProjectFlyout, nav.ts
 │   ├── pspost/PostForm.tsx
-│   └── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
-├── data/         # 화면이 공유하는 정적 데이터 (projects.ts, profile.ts)
-├── lib/          # 공용 유틸 (errorMessage, cn 등)
+│   ├── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
+│   └── wedding/     (WeddingInvitation, EnvelopeIntro, introMachine, sections/*, ui/*)
+├── data/         # 화면이 공유하는 정적 데이터 (projects.ts, profile.ts, wedding.ts)
+├── lib/          # 공용 유틸 (errorMessage, cn 등) — lib/wedding/ 은 청첩장 전용 순수 로직
 └── test/         # Vitest 셋업 + MSW 목
 ```
 
@@ -94,6 +100,29 @@ src/
 `ThemeScript` 가 첫 페인트 전에 동기적으로 속성을 심어 플래시를 막고,
 상태는 `themeStore` + `useSyncExternalStore` 로 구독한다.
 `prefers-color-scheme` 만 쓰면 사용자 토글을 표현할 수 없어서 이 구조다.
+
+### 예외: `/wedding` (모바일 청첩장)
+
+청첩장은 사이트 톤과 무관한 별도 팔레트(세이지·아이보리)를 쓰고 **다크 테마를 따르지 않는다.**
+
+- 토큰은 `globals.css` 6번 구획의 `wd-*` (`bg-wd-ivory`, `text-wd-ink`, `bg-wd-sage-deep` ...).
+  값은 `.wedding-root` 안에서만 정의되므로 다른 화면에서 쓰면 효과가 없다.
+- `wd-sage` 는 흰 글씨와 3.8:1 이라 **장식 전용**이다. 텍스트·버튼 배경은 `wd-sage-deep`.
+- 콘텐츠는 `src/data/wedding.ts` 한 곳에서 바꾼다. 옵셔널 필드가 비면 해당 요소는 렌더되지 않는다.
+  날짜·시각 형식이 틀리면 빌드(프리렌더)에서 에러로 멈춘다.
+- 뷰포트 분기는 픽셀 폭이 아니라 **화면비** 기준이다 (폴더블 대응).
+
+  | variant | 조건 | 대상 |
+  |---|---|---|
+  | `wd-cover` | 폭 < 560, 폭/높이 ≥ 0.6, 높이 > 500 | Galaxy Z Fold8 커버(10:16), iPhone Duo 커버(14.5:10) |
+  | `wd-unfolded` | 폭 ≥ 560, 폭/높이 ≥ 0.6, 높이 > 500 | 폴더블 메인(4:3, 14.2:10), 태블릿, 데스크톱 |
+  | `wd-landscape` | 폭/높이 ≥ 1.2, 높이 ≤ 720 | 폰 가로, 폴더블 메인 가로 — 인트로를 좌우 배치 |
+
+  섹션 내부 2단은 뷰포트가 아니라 컨테이너 쿼리(`@container` + `@[34rem]:`)로 나눈다.
+  2단 거터가 화면 중앙에 오므로 폴더블 메인 화면의 접힘선에 글자가 걸리지 않는다.
+- `@container` 요소는 fixed 자식의 기준이 된다. 토스트·인트로 같은 fixed 요소는 컨테이너 밖에 둔다.
+- motion(13.x) 컴포넌트의 `style` 로 넘긴 zIndex 가 재렌더 때 갱신되지 않는 것을 확인했다.
+  단계에 따라 바뀌는 값은 `className` 으로 준다.
 
 **프리미티브**(`components/ui/`)를 먼저 찾아보고 없을 때만 새로 만든다.
 버튼·카드는 `next/link` 에도 붙일 수 있도록 클래스 함수도 함께 노출한다.

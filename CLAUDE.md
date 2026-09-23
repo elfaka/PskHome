@@ -192,10 +192,11 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 
 ### 프론트엔드 (`frontend/src/`)
 
-Next.js App Router SPA. 최상위 라우트 3개:
+Next.js App Router SPA. 최상위 라우트 4개:
 - `/`, `/about`, `/project`, `/pspost/**` → `app/(home)/`
 - `/googleform/**` → `app/googleform/`
 - `/jsonprettier` → `app/jsonprettier/`
+- `/wedding` → `app/wedding/` (모바일 청첩장. 백엔드 호출 없음, 사이트 테마와 분리)
 
 라우트 페이지는 얇게 유지하고 화면 구현은 `src/components/` 에 둔다.
 
