@@ -31,9 +31,6 @@ export const PHASE_MAX_MS: Partial<Record<IntroPhase, number>> = {
 
 export const SAFETY_MARGIN_MS = 500;
 
-/** 페이지가 보이기 시작한 뒤 봉투가 저절로 열리기까지 — 봉인 장면과 이름을 잠시 보여준다 */
-export const AUTO_OPEN_MS = 1500;
-
 export function introReducer(phase: IntroPhase, event: IntroEvent): IntroPhase {
   switch (event.type) {
     case "OPEN":

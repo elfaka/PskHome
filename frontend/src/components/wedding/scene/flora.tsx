@@ -3,15 +3,14 @@
 import { motion } from "motion/react";
 
 /*
-  생화 원형(primitive) — 원본 에셋 없이 직접 그린 SVG.
-  모두 자기 원점(꽃의 밑동·중심)을 기준으로 그리고, 배치는 Bouquet 가 translate 로 한다.
-  작은 꽃이 모인 꽃(수국·아스틸베·아마란서스)은 시드 난수로 흩뿌린다 — 결정적이라 서버/클라이언트 렌더가 같다.
+  생화 원형(primitive).
+  - 장미·칼라: 실제 꽃 사진(위키미디어 공용, 배경 제거·크기 조정본 → public/wedding/flowers). 출처는 PHOTO_CREDITS.
+  - 수국·아스틸베·아마란서스·안개꽃·잎: 직접 그린 SVG. 작은 꽃이 모인 꽃은 시드 난수라 결정적이다(서버/클라이언트 렌더가 같다).
+  모두 자기 원점(꽃의 밑동·중심)을 기준으로 그리고, 배치는 Bouquet 가 한다.
 */
 
-/** 꽃 색 — 여기만 바꾸면 부케 전체 톤이 바뀐다 (예: 버건디 장미면 rose 를 붉은 계열로) */
+/** 그린·필러 꽃 색 — 여기만 바꾸면 부케의 잎·잔꽃 톤이 바뀐다 */
 export const PALETTE = {
-  rose: { light: "#fffdf8", mid: "#f2ece0", shade: "#d9ccb4", deep: "#b9a784", edge: "#d6cab5" },
-  calla: { tip: "#fffefa", mid: "#f5f4ec", base: "#c9d4a4", throat: "#dcdac2", spadixLight: "#efd97c", spadixDeep: "#c6a53c" },
   hydrangea: { light: "#fbfcf3", shade: "#d9e0bf", core: "#b4bf8a" },
   astilbe: ["#f4e0da", "#ebc9c1", "#dfb2a8", "#f8ece8"],
   amaranthus: { light: "#c7cf98", deep: "#7f8a55" },
@@ -21,33 +20,45 @@ export const PALETTE = {
   breath: { fill: "#fffefb", edge: "#d6cfbf", stem: "#8e9a78" },
 } as const;
 
+/** 실제 꽃 사진 — 파일의 가로세로비는 배치 계산에 쓴다 */
+const PHOTOS = {
+  rose: { src: "/wedding/flowers/white-rose.webp", ratio: 471 / 420 },
+  calla: { src: "/wedding/flowers/white-calla.webp", ratio: 900 / 479 },
+} as const;
+
+/** 사진 출처 — 라이선스(CC BY / CC BY-SA)상 저작자 표시가 필요해 클로징에 적는다 */
+export const PHOTO_CREDITS = [
+  {
+    what: "흰 장미",
+    author: "Bff",
+    license: "CC BY-SA 3.0",
+    licenseUrl: "https://creativecommons.org/licenses/by-sa/3.0/",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:Rose20090913_36.png",
+  },
+  {
+    what: "흰 칼라",
+    author: "Amada44",
+    license: "CC BY 3.0",
+    licenseUrl: "https://creativecommons.org/licenses/by/3.0/",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:Zantedeschia_aethiopica_002.png",
+  },
+] as const;
+
 export type FloraIds = {
-  rose: string;
-  roseIn: string;
-  calla: string;
-  throat: string;
-  spadix: string;
   hyd: string;
   ama: string;
   leaf: string;
   euc: string;
-  stem: string;
   shadow: string;
 };
 
 export function floraIds(uid: string): FloraIds {
   const p = uid.replace(/[^a-zA-Z0-9_-]/g, "");
   return {
-    rose: `${p}-rose`,
-    roseIn: `${p}-rose-in`,
-    calla: `${p}-calla`,
-    throat: `${p}-throat`,
-    spadix: `${p}-spadix`,
     hyd: `${p}-hyd`,
     ama: `${p}-ama`,
     leaf: `${p}-leaf`,
     euc: `${p}-euc`,
-    stem: `${p}-stem`,
     shadow: `${p}-shadow`,
   };
 }
@@ -69,30 +80,6 @@ function rng(seed: number) {
 export function FloraDefs({ f }: { f: FloraIds }) {
   return (
     <defs>
-      {/* 꽃잎: 끝은 밝고 밑동으로 갈수록 그늘 (각 꽃잎 bbox 기준) */}
-      <linearGradient id={f.rose} x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stopColor={P.rose.light} />
-        <stop offset="0.55" stopColor={P.rose.mid} />
-        <stop offset="1" stopColor={P.rose.shade} />
-      </linearGradient>
-      <radialGradient id={f.roseIn} cx="0.5" cy="0.45" r="0.6">
-        <stop offset="0" stopColor={P.rose.deep} />
-        <stop offset="1" stopColor={P.rose.mid} />
-      </radialGradient>
-      {/* 칼라: 밑동 연두 → 몸통 → 흰 끝 */}
-      <linearGradient id={f.calla} x1="0" y1="1" x2="0.2" y2="0">
-        <stop offset="0" stopColor={P.calla.base} />
-        <stop offset="0.4" stopColor={P.calla.mid} />
-        <stop offset="1" stopColor={P.calla.tip} />
-      </linearGradient>
-      <radialGradient id={f.throat} cx="0.45" cy="0.7" r="0.8">
-        <stop offset="0" stopColor={P.calla.throat} />
-        <stop offset="1" stopColor={P.calla.mid} stopOpacity="0" />
-      </radialGradient>
-      <linearGradient id={f.spadix} x1="0" y1="1" x2="0" y2="0">
-        <stop offset="0" stopColor={P.calla.spadixDeep} />
-        <stop offset="1" stopColor={P.calla.spadixLight} />
-      </linearGradient>
       <radialGradient id={f.hyd} cx="0.4" cy="0.35" r="0.8">
         <stop offset="0" stopColor={P.hydrangea.light} />
         <stop offset="1" stopColor={P.hydrangea.shade} />
@@ -109,11 +96,6 @@ export function FloraDefs({ f }: { f: FloraIds }) {
         <stop offset="0" stopColor={P.eucalyptus.light} />
         <stop offset="1" stopColor={P.eucalyptus.deep} />
       </radialGradient>
-      <linearGradient id={f.stem} x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0" stopColor={P.stem.deep} />
-        <stop offset="0.5" stopColor={P.stem.light} />
-        <stop offset="1" stopColor={P.stem.deep} />
-      </linearGradient>
       <filter id={f.shadow} x="-30%" y="-30%" width="160%" height="160%">
         <feDropShadow dx="0" dy="0.45" stdDeviation="0.55" floodColor="#3b2f22" floodOpacity="0.24" />
       </filter>
@@ -144,139 +126,59 @@ export function Bloom({
   );
 }
 
-/** 3/4 각도의 가든 로즈 — 뒤 꽃잎, 말려 들어간 속꽃잎, 앞 컵 꽃잎 */
-export function Rose({
+/**
+ * 사진 장미 — (x, y) 가 꽃 중심, size 는 꽃 폭(장면 단위).
+ * 같은 사진을 크기·각도·좌우 반전을 바꿔 여러 송이로 쓴다.
+ */
+export function PhotoRose({
   x,
   y,
-  r,
+  size,
   rot = 0,
-  tilt = 0.86,
+  flip = false,
   f,
 }: {
   x: number;
   y: number;
-  r: number;
+  size: number;
   rot?: number;
-  /** 세로 눌림 — 1 이면 정면, 작을수록 옆에서 본 모습 */
-  tilt?: number;
+  flip?: boolean;
   f: FloraIds;
 }) {
-  const lobe = `M0 0 C ${-0.8 * r} ${-0.18 * r} ${-0.93 * r} ${-0.98 * r} 0 ${-1.04 * r} C ${0.93 * r} ${-0.98 * r} ${0.8 * r} ${-0.18 * r} 0 0 Z`;
-  const crescent = (a: number, b: number) =>
-    `M ${-a} 0 C ${-a} ${-b} ${a} ${-b} ${a} 0 C ${a * 0.55} ${b * 0.32} ${-a * 0.55} ${b * 0.32} ${-a} 0 Z`;
-
+  const w = size;
+  const h = size * PHOTOS.rose.ratio;
   return (
-    <g transform={`translate(${x} ${y}) rotate(${rot}) scale(1 ${tilt})`} filter={u(f.shadow)}>
-      {[-162, -108, -54, 0, 54, 108, 162].map((a) => (
-        <path key={a} d={lobe} transform={`rotate(${a})`} fill={u(f.rose)} stroke={P.rose.edge} strokeWidth={0.14} />
-      ))}
-      {/* 두 번째 겹 — 첫 겹 사이사이에서 조금 작게 */}
-      {[-135, -81, -27, 27, 81, 135].map((a) => (
-        <path key={`b${a}`} d={lobe} transform={`rotate(${a}) scale(0.8)`} fill={u(f.rose)} stroke={P.rose.edge} strokeWidth={0.16} />
-      ))}
-      <ellipse rx={0.66 * r} ry={0.6 * r} fill={u(f.roseIn)} />
-      {[0, 1, 2, 3].map((i) => (
-        <path
-          key={i}
-          d={crescent(r * (0.6 - i * 0.12), r * (0.62 - i * 0.12))}
-          transform={`translate(${(i % 2 ? -1 : 1) * 0.05 * r} ${-0.02 * r - i * 0.07 * r}) rotate(${i % 2 ? -14 : 12})`}
-          fill={u(f.rose)}
-          stroke={P.rose.shade}
-          strokeWidth={0.14}
-        />
-      ))}
-      <path
-        d={`M ${-0.12 * r} ${-0.24 * r} q ${0.1 * r} ${-0.15 * r} ${0.23 * r} ${-0.02 * r}`}
-        fill="none"
-        stroke={P.rose.deep}
-        strokeWidth={0.2}
-        strokeLinecap="round"
-      />
-      {/* 앞으로 감싸는 컵 꽃잎 세 장 */}
-      <path
-        d={`M ${-0.9 * r} ${0.02 * r} C ${-0.86 * r} ${0.84 * r} ${0.86 * r} ${0.84 * r} ${0.9 * r} ${0.02 * r} C ${0.5 * r} ${0.36 * r} ${-0.5 * r} ${0.36 * r} ${-0.9 * r} ${0.02 * r} Z`}
-        fill={u(f.rose)}
-        stroke={P.rose.edge}
-        strokeWidth={0.14}
-      />
-      <path
-        d={`M ${-1 * r} ${-0.2 * r} C ${-1.04 * r} ${0.52 * r} ${-0.3 * r} ${0.9 * r} ${0.12 * r} ${0.78 * r} C ${-0.3 * r} ${0.56 * r} ${-0.64 * r} ${0.2 * r} ${-1 * r} ${-0.2 * r} Z`}
-        fill={u(f.rose)}
-        stroke={P.rose.edge}
-        strokeWidth={0.14}
-      />
-      <path
-        d={`M ${r} ${-0.2 * r} C ${1.04 * r} ${0.52 * r} ${0.3 * r} ${0.9 * r} ${-0.12 * r} ${0.78 * r} C ${0.3 * r} ${0.56 * r} ${0.64 * r} ${0.2 * r} ${r} ${-0.2 * r} Z`}
-        fill={u(f.rose)}
-        stroke={P.rose.edge}
-        strokeWidth={0.14}
-      />
-      {/* 꽃잎 끝에 맺힌 빛 */}
-      <path
-        d={`M ${-0.66 * r} ${0.34 * r} Q 0 ${0.64 * r} ${0.66 * r} ${0.34 * r}`}
-        fill="none"
-        stroke="#ffffff"
-        strokeOpacity={0.9}
-        strokeWidth={0.2}
-        strokeLinecap="round"
-      />
+    <g transform={`translate(${x} ${y}) rotate(${rot}) scale(${flip ? -1 : 1} 1)`} filter={u(f.shadow)}>
+      <image href={PHOTOS.rose.src} x={-w / 2} y={-h / 2} width={w} height={h} preserveAspectRatio="xMidYMid meet" />
     </g>
   );
 }
 
-/** 칼라 릴리 — 휘어진 줄기 + 나팔형 포엽 + 노란 꽃술. (x1,y1) 줄기 밑 → (x2,y2) 꽃 밑동 */
-export function Calla({
-  x1,
-  y1,
-  x2,
-  y2,
-  s,
+/**
+ * 사진 칼라 — (x, y) 가 줄기 밑동, height 는 줄기 끝부터 꽃 끝까지의 높이(장면 단위).
+ * rot 는 밑동을 축으로 기울이는 각도.
+ */
+export function PhotoCalla({
+  x,
+  y,
+  height,
   rot = 0,
-  bend = 0,
+  flip = false,
   f,
 }: {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  s: number;
+  x: number;
+  y: number;
+  height: number;
   rot?: number;
-  /** 줄기가 휘는 정도(좌우) */
-  bend?: number;
+  flip?: boolean;
   f: FloraIds;
 }) {
-  const cx = (x1 + x2) / 2 + bend;
-  const cy = (y1 + y2) / 2;
+  const h = height;
+  const w = h / PHOTOS.calla.ratio;
   return (
-    <g>
-      <path d={`M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`} stroke={u(f.stem)} strokeWidth={0.12 * s} fill="none" strokeLinecap="round" />
-      <g transform={`translate(${x2} ${y2}) rotate(${rot})`} filter={u(f.shadow)}>
-        <path
-          d={`M0 0 C ${-0.36 * s} ${-0.25 * s} ${-0.56 * s} ${-0.76 * s} ${-0.26 * s} ${-1.1 * s} C ${-0.05 * s} ${-1.36 * s} ${0.36 * s} ${-1.46 * s} ${0.62 * s} ${-1.72 * s} C ${0.46 * s} ${-1.26 * s} ${0.46 * s} ${-0.7 * s} ${0.2 * s} ${-0.3 * s} C ${0.12 * s} ${-0.15 * s} ${0.06 * s} ${-0.05 * s} 0 0 Z`}
-          fill={u(f.calla)}
-          stroke="#dedcc9"
-          strokeWidth={0.05 * s}
-        />
-        <path
-          d={`M ${-0.05 * s} ${-0.26 * s} C ${-0.31 * s} ${-0.56 * s} ${-0.3 * s} ${-0.96 * s} ${-0.1 * s} ${-1.1 * s} C ${0.1 * s} ${-1 * s} ${0.26 * s} ${-0.7 * s} ${0.15 * s} ${-0.36 * s} Z`}
-          fill={u(f.throat)}
-        />
-        <path
-          d={`M 0 ${-0.22 * s} Q ${0.06 * s} ${-0.6 * s} ${0.02 * s} ${-0.86 * s}`}
-          stroke={u(f.spadix)}
-          strokeWidth={0.13 * s}
-          strokeLinecap="round"
-          fill="none"
-        />
-        {/* 말려 나온 가장자리의 빛 */}
-        <path
-          d={`M ${-0.26 * s} ${-1.1 * s} C ${-0.05 * s} ${-1.2 * s} ${0.3 * s} ${-1.36 * s} ${0.62 * s} ${-1.72 * s}`}
-          stroke="#ffffff"
-          strokeWidth={0.07 * s}
-          strokeLinecap="round"
-          fill="none"
-        />
-      </g>
+    <g transform={`translate(${x} ${y}) rotate(${rot}) scale(${flip ? -1 : 1} 1)`} filter={u(f.shadow)}>
+      {/* 사진 속 줄기는 가로 가운데보다 약간 오른쪽(≈56%)에 있다 → 밑동이 원점에 오게 민다 */}
+      <image href={PHOTOS.calla.src} x={-w * 0.56} y={-h} width={w} height={h} preserveAspectRatio="xMidYMid meet" />
     </g>
   );
 }

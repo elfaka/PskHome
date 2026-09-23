@@ -9,7 +9,8 @@ import { cn } from "@/lib/cn";
 import type { IntroPhase } from "../introMachine";
 import PhotoFrame from "../ui/PhotoFrame";
 import { BouquetBack, BouquetFront, BouquetMid } from "./Bouquet";
-import { Calla, FloraDefs, floraIds } from "./flora";
+import { useMusicBox } from "../ui/useMusicBox";
+import { FloraDefs, floraIds, PhotoCalla } from "./flora";
 import {
   CARD,
   CARD_CLIP,
@@ -81,14 +82,14 @@ function SealSticker({ monogram }: { monogram: string }) {
   );
 }
 
-/** 봉인 상태에서 봉투 오른쪽에 놓인 칼라 두 송이 */
+/** 봉인 상태에서 봉투 오른쪽 모서리에 비스듬히 놓인 칼라 두 송이 (사진) */
 function SealedCallas() {
   const f = floraIds(useId());
   return (
     <svg viewBox="0 0 30 50" aria-hidden="true" className="h-auto w-full overflow-visible">
       <FloraDefs f={f} />
-      <Calla f={f} x1={2} y1={49} x2={22} y2={14} s={6.5} rot={30} bend={4} />
-      <Calla f={f} x1={6} y1={50} x2={21} y2={33} s={5.5} rot={62} bend={-2} />
+      <PhotoCalla f={f} x={3} y={50} height={44} rot={32} />
+      <PhotoCalla f={f} x={7} y={52} height={32} rot={58} />
     </svg>
   );
 }
@@ -109,6 +110,14 @@ export default function EnvelopeScene({
   headingRef: React.Ref<HTMLHeadingElement>;
 }) {
   const felt = `${useId().replace(/[^a-zA-Z0-9_-]/g, "")}-felt`;
+  const music = useMusicBox();
+
+  // 봉투 터치 = 사용자 동작이라 이 안에서 음악을 켜면 브라우저 자동재생 차단에 걸리지 않는다.
+  // AudioContext 생성·resume 은 동기적으로 시작돼야 하므로 열기보다 먼저 부른다.
+  const handleOpen = () => {
+    music.start();
+    onOpen();
+  };
   const sealed = phase === "sealed";
   const flapClosed = phase === "sealed" || phase === "opening";
   const cardOut = phase === "rising" || phase === "blooming" || phase === "done";
@@ -229,7 +238,7 @@ export default function EnvelopeScene({
         <div className="absolute z-[7] aspect-[1.45]" style={place(ENV)}>
           <button
             type="button"
-            onClick={onOpen}
+            onClick={handleOpen}
             disabled={!sealed}
             aria-label="청첩장 열기"
             className="group absolute inset-0 cursor-pointer rounded-[3px] disabled:cursor-default"
@@ -244,7 +253,7 @@ export default function EnvelopeScene({
         {/* 봉인 상태의 칼라 — 꽃이 피면 부케 쪽으로 사라진다 */}
         <motion.div
           className="wd-sealed-only pointer-events-none absolute z-[8]"
-          style={place({ x: 78, y: 96, w: 23 })}
+          style={place({ x: 73, y: 96, w: 23 })}
           initial={false}
           animate={{ opacity: bloom ? 0 : 1 }}
           transition={{ duration: 0.4 }}
@@ -266,8 +275,23 @@ export default function EnvelopeScene({
             if (phase === "blooming") onPhaseDone("blooming");
           }}
         >
-          <SceneLp monogram={data.monogram} />
+          <SceneLp monogram={data.monogram} playing={music.playing} onToggle={music.toggle} />
         </motion.div>
+
+        {/* 봉인 안내 — LP 문구 자리에 먼저 있다가 사라진다 */}
+        <motion.p
+          className="wd-sealed-only pointer-events-none absolute inset-x-0 top-[91%] text-center"
+          initial={false}
+          animate={{ opacity: sealed ? 1 : 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <span className="wd-hint block text-[clamp(0.75rem,3.6cqw,0.95rem)] tracking-[0.15em] text-wd-ink">
+            봉투를 눌러 열어 주세요
+          </span>
+          <span lang="en" className="mt-[1cqw] block font-wd-display text-[clamp(0.55rem,2.6cqw,0.72rem)] tracking-[0.3em] text-wd-ink-muted">
+            TOUCH TO OPEN
+          </span>
+        </motion.p>
       </div>
     </section>
   );

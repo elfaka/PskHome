@@ -3,23 +3,27 @@
 import { useId } from "react";
 
 import { Monogram } from "../ui/Ornaments";
-import { BGM_TOGGLE_ATTR, useMusicBox } from "../ui/useMusicBox";
 
 /**
- * 봉투 아랫변에 걸친 LP. 페이지에 들어오면 배경음악이 재생되고(막히면 첫 탭에서) LP 가 돈다. 누르면 멈춤/재생.
+ * 봉투 아랫변에 걸친 LP. 음악은 봉투를 터치할 때 함께 시작되고(EnvelopeScene), 여기서는 멈춤/재생만 한다.
  * 아래 곡선 문구는 봉투 밖 아이보리 바탕에 오도록 LP 위치(geometry.LP)를 잡았다 — 세이지 위 흰 글씨는 명암비 미달.
  */
-export default function SceneLp({ monogram }: { monogram: string }) {
-  // 페이지 진입 시 바로 재생을 시도하고, 브라우저가 막으면 첫 탭에서 재생한다
-  const { playing, toggle } = useMusicBox({ autoplay: true });
+export default function SceneLp({
+  monogram,
+  playing,
+  onToggle,
+}: {
+  monogram: string;
+  playing: boolean;
+  onToggle: () => void;
+}) {
   const arcId = `${useId().replace(/[^a-zA-Z0-9_-]/g, "")}-arc`;
 
   return (
     <div className="relative aspect-square w-full">
       <button
         type="button"
-        onClick={toggle}
-        {...{ [BGM_TOGGLE_ATTR]: "" }}
+        onClick={onToggle}
         aria-pressed={playing}
         aria-label={playing ? "배경음악 멈추기" : "배경음악 재생"}
         className="absolute inset-0 rounded-full shadow-wd-letter"
