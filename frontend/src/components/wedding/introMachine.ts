@@ -1,11 +1,11 @@
 /**
- * sealed     봉투 닫힘
- * opening    실링이 사라지고 덮개가 넘어간다
- * rising     카드를 봉투에서 반쯤 꺼낸다
- * presenting 봉투는 아래로 빠지고, 카드는 첫 화면의 카드 자리로 옮겨 가 그대로 겹친다
- * done       인트로 제거
+ * sealed   봉투 닫힘
+ * opening  문구·모노그램이 사라지고 덮개가 넘어간다
+ * rising   카드가 봉투에서 올라온다 (봉투에 꽂힌 채)
+ * blooming 카드 뒤로 부케가 피고 사진·LP 가 나온다
+ * done     스크롤 잠금 해제, LP 사용 가능
  */
-export type IntroPhase = "sealed" | "opening" | "rising" | "presenting" | "done";
+export type IntroPhase = "sealed" | "opening" | "rising" | "blooming" | "done";
 
 export type IntroEvent =
   | { type: "OPEN"; reducedMotion: boolean }
@@ -18,15 +18,15 @@ export type IntroEvent =
 
 const NEXT: Partial<Record<IntroPhase, IntroPhase>> = {
   opening: "rising",
-  rising: "presenting",
-  presenting: "done",
+  rising: "blooming",
+  blooming: "done",
 };
 
 /** 단계별 연출 최대 길이. 이 시간 + 여유가 지나도 완료 이벤트가 없으면 강제로 넘긴다. */
 export const PHASE_MAX_MS: Partial<Record<IntroPhase, number>> = {
   opening: 1100,
-  rising: 900,
-  presenting: 1100,
+  rising: 1000,
+  blooming: 1800,
 };
 
 export const SAFETY_MARGIN_MS = 500;

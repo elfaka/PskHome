@@ -6,15 +6,15 @@ const open = { type: "OPEN", reducedMotion: false } as const;
 const advance = (from: IntroPhase) => ({ type: "ADVANCE", from }) as const;
 
 describe("introReducer", () => {
-  it("sealed → opening → rising → presenting → done", () => {
+  it("sealed → opening → rising → blooming → done", () => {
     let p: IntroPhase = "sealed";
     p = introReducer(p, open);
     expect(p).toBe("opening");
     p = introReducer(p, advance("opening"));
     expect(p).toBe("rising");
     p = introReducer(p, advance("rising"));
-    expect(p).toBe("presenting");
-    p = introReducer(p, advance("presenting"));
+    expect(p).toBe("blooming");
+    p = introReducer(p, advance("blooming"));
     expect(p).toBe("done");
   });
 
@@ -38,7 +38,7 @@ describe("introReducer", () => {
   });
 
   it("지난 단계의 늦은 ADVANCE 는 무시", () => {
-    expect(introReducer("presenting", advance("opening"))).toBe("presenting");
+    expect(introReducer("blooming", advance("opening"))).toBe("blooming");
   });
 
   it("sealed / done 에서 ADVANCE 는 아무 일도 없다", () => {

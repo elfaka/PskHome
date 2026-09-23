@@ -41,11 +41,12 @@ export const viewport: Viewport = {
 };
 
 /*
-  JS 가 없거나 실패하면 봉투를 누를 수 없어 화면에 갇힌다.
-  그때는 인트로를 숨기고, 스크롤 진입 애니메이션의 초기 투명 상태도 풀어 본문을 바로 보여준다.
+  JS 가 없거나 실패하면 봉투를 누를 수 없다.
+  그때는 봉인 전용 요소(문구·안내·칼라)를 숨기고, 카드·꽃·사진·LP 와 스크롤 진입 요소의
+  초기 상태(투명·이동)를 풀어 열린 장면과 본문을 바로 보여준다.
 */
 const NOSCRIPT_STYLE =
-  "<style>.wd-intro{display:none!important}.wd-reveal{opacity:1!important;transform:none!important}</style>";
+  "<style>.wd-sealed-only{display:none!important}.wd-reveal{opacity:1!important;transform:none!important}</style>";
 
 export default function WeddingLayout({
   children,

@@ -309,12 +309,10 @@
     Galaxy Z Fold8 커버 10:16 (0.63) · 메인 4:3 (0.75 / 가로 1.33)
     iPhone Duo     커버 14.5:10 (0.69) · 메인 14.2:10 (0.70 / 가로 1.42)
   wd-cover / wd-unfolded 는 서로 겹치지 않는다.
-  wd-landscape 는 "가로로 넓고 높이가 낮은" 화면(폰 가로, 폴더블 메인 가로 ~540px)이다.
-  세로로 쌓으면 인트로가 넘치므로 문구와 봉투를 좌우로 놓는다. unfolded 와 겹칠 수 있고, 인트로 배치만 바꾼다.
+  첫 화면 장면은 이 분기 대신 고정 비율(.wd-stage)로 폭·높이 중 빡빡한 쪽에 맞춘다.
 */
 @custom-variant wd-cover (@media (max-width: 559.98px) and (min-aspect-ratio: 3/5) and (min-height: 500.02px));
 @custom-variant wd-unfolded (@media (min-width: 560px) and (min-aspect-ratio: 3/5) and (min-height: 500.02px));
-@custom-variant wd-landscape (@media (min-aspect-ratio: 6/5) and (max-height: 720px));
 
 /* 사이트 다크 테마가 청첩장 밖(오버스크롤·스크롤바)으로 새지 않게 덮는다.
    ThemeScript 가 <html> 에 인라인으로 color-scheme 을 박기 때문에 !important 가 필요하다. */
@@ -349,18 +347,14 @@ body:has(.wedding-root) {
   font-size: clamp(2.25rem, 11cqi, 3.75rem);
 }
 
-/* 봉투 폭: 폭·높이 중 빡빡한 쪽에 맞춘다. (100svh - 문구 영역) × 봉투 가로세로비 */
-.wd-envelope {
-  width: min(86vw, 26rem);
-  width: min(86vw, 26rem, calc((100svh - 19rem) * 1.45));
-}
-
-/* wd-landscape 와 같은 조건 — 좌우 배치일 때는 높이에서 문구 몫을 빼지 않는다 */
-@media (min-aspect-ratio: 6/5) and (max-height: 720px) {
-  .wd-envelope {
-    width: min(42vw, 24rem);
-    width: min(42vw, 24rem, calc((100svh - 5rem) * 1.45));
-  }
+/*
+  첫 화면 장면(2:3) 폭 — 폭·높이 중 빡빡한 쪽에 맞춘다. 카드 글자가 장면 비율(cqw)로 줄기 때문에
+  읽을 수 있도록 300px 밑으로는 줄이지 않는다(단 화면 폭은 넘지 않는다).
+  높이가 낮은 가로 폰에서는 그래서 한 화면을 넘을 수 있고, 그때는 봉인 중에도 스크롤을 잠그지 않는다(WeddingInvitation).
+*/
+.wd-stage {
+  width: min(94vw, 27rem);
+  width: min(94vw, max(18.75rem, min(27rem, calc((100svh - 1.5rem) / 1.5))));
 }
 
 /*

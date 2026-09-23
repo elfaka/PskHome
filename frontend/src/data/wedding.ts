@@ -62,6 +62,8 @@ export type WeddingData = {
     maps?: MapLinks;
   };
   greeting: string[];
+  /** 첫 화면 카드 뒤 폴라로이드 두 장. 비어 있으면 사진 자리 플레이스홀더 */
+  scenePhotos?: Photo[];
   story: StoryItem[];
   closing: string;
 };
