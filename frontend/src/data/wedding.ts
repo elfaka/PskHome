@@ -70,14 +70,14 @@ export type WeddingData = {
 
 export const wedding: WeddingData = {
   groom: {
-    name: "홍길동",
-    nameEn: "Gildong",
+    name: "박선규",
+    nameEn: "Sunkyu",
     relation: "아들",
     parents: { father: "홍판서", mother: "춘섬" },
   },
   bride: {
-    name: "성춘향",
-    nameEn: "Chunhyang",
+    name: "곽영미",
+    nameEn: "Youngmi",
     relation: "딸",
     parents: { father: "성참판", mother: "월매" },
   },
@@ -86,9 +86,9 @@ export const wedding: WeddingData = {
     date: "2027-05-15",
   },
   venue: {
-    name: "예식장 이름",
-    hall: "0층 000홀",
-    address: "예식장 주소가 정해지면 입력해 주세요",
+    name: "루이비스 컨벤션 강서",
+    hall: "8층 세인트그레이스홀",
+    address: "서울 강서구 양천로 476 8층",
     transport: [
       { label: "지하철", lines: ["0호선 00역 0번 출구 도보 5분"] },
       { label: "버스", lines: ["간선 000 · 지선 0000", "00정류장 하차"] },
