@@ -3,20 +3,15 @@
 import { motion } from "motion/react";
 
 import type { Person, WeddingData } from "@/data/wedding";
-import {
-  formatTimeKo,
-  pad2,
-  parseCeremonyDate,
-  WEEKDAYS_EN,
-} from "@/lib/wedding/ceremony";
 
+import InvitationCard from "../InvitationCard";
+import LpPlayer from "../ui/LpPlayer";
 import { CallaLily, Sprig } from "../ui/Ornaments";
-import PhotoFrame from "../ui/PhotoFrame";
 import Reveal from "../ui/Reveal";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
-/** 인트로가 끝난 뒤(revealed)부터 순서대로 떠오른다. */
+/** 인트로가 끝난 뒤(revealed)부터 떠오른다. */
 function Rise({
   revealed,
   delay,
@@ -33,87 +28,52 @@ function Rise({
       className={`wd-reveal ${className ?? ""}`}
       initial={{ opacity: 0, y: 18 }}
       animate={revealed ? { opacity: 1, y: 0 } : undefined}
-      transition={{ duration: 0.8, delay: 0.25 + delay, ease }}
+      transition={{ duration: 0.8, delay: 0.15 + delay, ease }}
     >
       {children}
     </motion.div>
   );
 }
 
+/**
+ * 첫 화면 — 봉투에서 꺼낸 카드 + LP.
+ * 카드는 처음부터 제자리에 그대로 있다(애니메이션 없음). 인트로의 사본 카드가 여기로 날아와 겹친 뒤 사라진다.
+ * 좁은 화면: 카드 아래 LP. 컨테이너 34rem 이상(펼친 폴더블·데스크톱): 카드 | LP 2단, 거터가 화면 중앙.
+ */
 export default function Hero({
   data,
   revealed,
+  cardRef,
   headingRef,
 }: {
   data: WeddingData;
   revealed: boolean;
+  cardRef: React.Ref<HTMLDivElement>;
   headingRef: React.Ref<HTMLHeadingElement>;
 }) {
-  const date = parseCeremonyDate(data.ceremony.date);
-  const { venue } = data;
-
   return (
     <section
       aria-labelledby="wd-hero-title"
       className="@container wd-screen relative flex flex-col items-center justify-center overflow-hidden px-6
-        pt-[max(4rem,env(safe-area-inset-top))] pb-16 text-center
-        wd-cover:pt-[max(2.5rem,env(safe-area-inset-top))] wd-cover:pb-10"
+        pt-[max(2.5rem,env(safe-area-inset-top))] pb-12
+        wd-cover:pt-[max(1.5rem,env(safe-area-inset-top))] wd-cover:pb-8"
     >
-      <Rise revealed={revealed} delay={0}>
-        <p lang="en" className="font-wd-display text-[0.8rem] font-medium tracking-[0.3em] text-wd-sage-deep">
-          JOIN US FOR THE WEDDING OF
-        </p>
-      </Rise>
-
-      <Rise revealed={revealed} delay={0.15} className="relative mt-6 w-full max-w-[21rem] @[34rem]:max-w-[25rem]">
-        {/* 아치형 카드 — 안쪽에 한 줄 더 그어 인쇄물 느낌을 낸다 */}
-        <div className="wd-paper-texture relative rounded-t-full rounded-b-[1.75rem] bg-wd-paper px-8 pt-[38%] pb-10 shadow-wd-card">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-2.5 rounded-t-full rounded-b-[1.4rem] border border-wd-line"
-          />
-
-          <h1 id="wd-hero-title" ref={headingRef} tabIndex={-1} className="relative outline-none">
-            <span lang="en" className="wd-name block font-wd-script leading-[1.05] text-wd-ink">
-              {data.groom.nameEn}
-            </span>
-            <span lang="en" className="block font-wd-script text-3xl leading-none text-wd-sage-deep">
-              &amp;
-            </span>
-            <span lang="en" className="wd-name block font-wd-script leading-[1.05] text-wd-ink">
-              {data.bride.nameEn}
-            </span>
-            <span className="mt-4 block text-base tracking-[0.2em] break-keep text-wd-ink">
-              {data.groom.name} <span className="text-wd-sage-deep">·</span> {data.bride.name}
-            </span>
-          </h1>
-
-          <Sprig className="relative mx-auto mt-5 w-20 text-wd-sage" />
-
-          <p className="relative mt-5 font-wd-display text-lg tracking-[0.18em] text-wd-ink">
-            {date.year}. {pad2(date.month)}. {pad2(date.day)}
-            <span lang="en" className="mt-1 block text-xs tracking-[0.35em] text-wd-ink-muted">
-              {WEEKDAYS_EN[date.weekday]}
-              {data.ceremony.time && ` · ${formatTimeKo(data.ceremony.time)}`}
-            </span>
-          </p>
-
-          <p className="relative mt-4 text-sm leading-relaxed break-keep text-wd-ink-muted">
-            {venue.name}
-            {venue.hall && <span className="block">{venue.hall}</span>}
-          </p>
+      <div className="grid w-full max-w-[44rem] justify-items-center gap-9 wd-cover:gap-5 @[34rem]:grid-cols-2 @[34rem]:items-center @[34rem]:gap-x-14">
+        <div className="relative z-10 w-full max-w-[19.5rem] @[34rem]:justify-self-end">
+          <InvitationCard variant="page" data={data} cardRef={cardRef} headingRef={headingRef} />
+          <Rise revealed={revealed} delay={0.2} className="pointer-events-none absolute -top-[5%] -right-[8%] w-[19%]">
+            <CallaLily className="w-full -rotate-[14deg]" />
+          </Rise>
         </div>
 
-        <CallaLily className="absolute -top-[4%] -right-[6%] w-[22%] -rotate-[14deg]" />
-      </Rise>
-
-      <Rise
-        revealed={revealed}
-        delay={0.35}
-        className="relative -mt-10 mr-auto ml-[4%] w-[42%] max-w-[10rem] @[34rem]:ml-[12%]"
-      >
-        <PhotoFrame photo={data.heroPhoto} tilt={-5} sizes="160px" />
-      </Rise>
+        <Rise
+          revealed={revealed}
+          delay={0.4}
+          className="w-[8.5rem] wd-cover:w-[6rem] @[34rem]:w-[12rem] @[34rem]:justify-self-start"
+        >
+          <LpPlayer data={data} />
+        </Rise>
+      </div>
     </section>
   );
 }

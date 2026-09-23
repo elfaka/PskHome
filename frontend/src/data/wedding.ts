@@ -62,7 +62,6 @@ export type WeddingData = {
     maps?: MapLinks;
   };
   greeting: string[];
-  heroPhoto?: Photo;
   story: StoryItem[];
   closing: string;
 };

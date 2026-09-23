@@ -22,6 +22,8 @@ export default function WeddingInvitation({ data }: { data: WeddingData }) {
   const reducedMotion = useReducedMotion() ?? false;
   const hydrated = useHydrated();
   const heroHeadingRef = useRef<HTMLHeadingElement>(null);
+  // 인트로에서 꺼낸 카드가 날아가 겹칠 첫 화면 카드
+  const heroCardRef = useRef<HTMLDivElement>(null);
   const { toast, notify } = useToast();
 
   const introActive = phase !== "done";
@@ -69,6 +71,7 @@ export default function WeddingInvitation({ data }: { data: WeddingData }) {
             key="intro"
             phase={phase}
             data={data}
+            targetRef={heroCardRef}
             onOpen={() => dispatch({ type: "OPEN", reducedMotion })}
             onPhaseDone={(from) => dispatch({ type: "ADVANCE", from })}
           />
@@ -80,7 +83,7 @@ export default function WeddingInvitation({ data }: { data: WeddingData }) {
         aria-hidden={lockContent || undefined}
         className="relative mx-auto w-full max-w-3xl overflow-x-clip bg-wd-ivory wd-unfolded:shadow-wd-card"
       >
-        <Hero data={data} revealed={phase === "done"} headingRef={heroHeadingRef} />
+        <Hero data={data} revealed={phase === "done"} cardRef={heroCardRef} headingRef={heroHeadingRef} />
         <Greeting data={data} />
         <OurStory items={data.story} />
         <Details data={data} onNotify={notify} />

@@ -262,6 +262,16 @@
   --wd-danger: #a33a2c;
   --wd-shadow-card: 0 1px 2px #3b2f220d, 0 10px 30px -12px #3b2f2233;
   --wd-shadow-photo: 0 2px 4px #3b2f2214, 0 12px 24px -10px #3b2f2240;
+  /* 종이 한 장이 살짝 들린 그림자 — 접지면은 진하고 짧게, 멀리는 넓고 옅게 */
+  --wd-shadow-letter: 0 1px 1px #3b2f2214, 0 3px 6px -2px #3b2f221f, 0 22px 40px -20px #3b2f2266;
+
+  /*
+    종이 질감용 노이즈 (SVG feTurbulence 를 data URI 로 — 이미지 파일·네트워크 요청 없음).
+    grain: 인쇄지의 짙은 입자 / fiber: 가로로 결이 난 섬유 / fleck: 색지 위의 흰 섬유 조각
+  */
+  --wd-noise-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.23 0 0 0 0 0.18 0 0 0 0 0.13 0 0 0 0.45 -0.17'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --wd-noise-fiber: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='480'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.02 0.22' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.3 0 0 0 0 0.25 0 0 0 0 0.18 0 0 0 0.26 -0.1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --wd-noise-fleck: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 0.97 0 0 0 0.8 -0.47'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 
   color-scheme: light;
   background-color: var(--wd-ivory);
@@ -284,6 +294,7 @@
 
   --shadow-wd-card: var(--wd-shadow-card);
   --shadow-wd-photo: var(--wd-shadow-photo);
+  --shadow-wd-letter: var(--wd-shadow-letter);
 
   /* 한글 세리프는 layout 의 Google Fonts CSS, 영문 두 벌은 next/font 변수에서 온다 */
   --font-wd-serif: "Noto Serif KR", "Nanum Myeongjo", AppleMyungjo, Batang,
@@ -333,11 +344,6 @@ body:has(.wedding-root) {
   min-height: 100svh;
 }
 
-.wd-name {
-  font-size: 2.75rem;
-  font-size: clamp(2.5rem, 13cqi, 4.5rem);
-}
-
 .wd-title {
   font-size: 2.5rem;
   font-size: clamp(2.25rem, 11cqi, 3.75rem);
@@ -357,11 +363,71 @@ body:has(.wedding-root) {
   }
 }
 
-/* 종이 질감 — 이미지 없이 아주 옅은 얼룩만 깐다 */
+/*
+  흰 종이 질감 — 배경색(bg-wd-paper 등)은 요소가 정하고 여기서는 무늬만 얹는다.
+  섬유 결 + 입자 + 왼쪽 위에서 드는 빛 + 가장자리로 갈수록 살짝 어두워지는 음영.
+*/
 .wd-paper-texture {
   background-image:
-    radial-gradient(circle at 20% 15%, #ffffff66 0, transparent 40%),
-    radial-gradient(circle at 80% 85%, #00000008 0, transparent 45%);
+    var(--wd-noise-fiber),
+    var(--wd-noise-grain),
+    linear-gradient(160deg, #ffffff66 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 45%, transparent 58%, #3b2f2214 100%);
+  background-size:
+    480px 480px,
+    200px 200px,
+    auto,
+    auto;
+}
+
+/* 색지(봉투) 위에 얹는 질감 레이어 — 흰 섬유 조각 + 짙은 입자 + 은은한 빛 */
+.wd-colored-paper {
+  background-image:
+    var(--wd-noise-fleck),
+    var(--wd-noise-fiber),
+    var(--wd-noise-grain),
+    linear-gradient(170deg, #ffffff1f 0%, transparent 50%, #0000000f 100%);
+  background-size:
+    180px 180px,
+    480px 480px,
+    200px 200px,
+    auto;
+}
+
+/* 레터프레스 — 눌려 찍힌 글자 아래로 빛이 맺힌다 */
+.wd-press {
+  text-shadow: 0 1px 0 #ffffffc0;
+}
+
+/* LP — 홈(그루브) + 테두리 + 라벨 주변 무음 구간. 반사광은 회전하지 않는 별도 레이어(.wd-vinyl-sheen) */
+.wd-vinyl {
+  background:
+    radial-gradient(circle, transparent 0 33%, #00000059 33.5% 35%, transparent 36%),
+    radial-gradient(circle, transparent 0 96.5%, #3d3934 97.5% 98.5%, #121110 99.2%),
+    repeating-radial-gradient(circle, #1a1816 0, #1a1816 1px, #26231f 1.5px, #1b1917 2.3px),
+    #1a1816;
+}
+
+.wd-vinyl-sheen {
+  background: conic-gradient(
+    from 25deg,
+    transparent 0 8%,
+    #ffffff26 13%,
+    transparent 21% 54%,
+    #ffffff1c 61%,
+    transparent 69%
+  );
+}
+
+@keyframes wd-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* 33⅓ rpm ≈ 1.8초에 한 바퀴. 재생 여부는 animation-play-state 로 멈추고 푼다 */
+.wd-spin {
+  animation: wd-spin 1.8s linear infinite;
 }
 
 @keyframes wd-hint {

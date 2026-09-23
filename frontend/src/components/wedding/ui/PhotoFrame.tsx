@@ -31,7 +31,7 @@ export default function PhotoFrame({
 
   return (
     <figure
-      className={cn("bg-wd-paper p-2.5 pb-3 shadow-wd-photo", className)}
+      className={cn("wd-paper-texture bg-wd-paper p-2.5 pb-3 shadow-wd-photo", className)}
       style={{ rotate: `${tilt}deg` }}
     >
       <div className="relative aspect-[4/5] overflow-hidden bg-wd-sage-soft">
