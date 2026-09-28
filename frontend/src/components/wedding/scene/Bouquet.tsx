@@ -17,9 +17,12 @@ import {
   PhotoCalla,
   PhotoRose,
 } from "./flora";
+import { BOUQUET_MID_DX, BOUQUET_TRANSFORM } from "./geometry";
 
 /*
-  장면 좌표(100 × 150) 그대로의 SVG 층. 카드 윗변 y=22, 카드 x 26‥84(가운데 55), 봉투 윗변 y=70.
+  장면 좌표(100 × 150) 그대로의 SVG 층. 봉투 윗변 y=70.
+  카드 뒤 꽃다발은 카드 {x:26, y:22, w:58}(윗변 가운데 55) 기준으로 그리고,
+  실제 카드 자리로는 BOUQUET_TRANSFORM 이 옮기고 키운다 (geometry.ts).
   층 순서(뒤 → 앞): 봉투 뒤판 · 덮개 · 사진 · [BouquetBack] · 카드 · [BouquetMid] · 앞주머니 · [BouquetFront] · LP
 
   꽃다발 구성: 카드 윗부분 가운데(x≈55)를 중심으로 사진 장미를 돔처럼 촘촘히 모으고,
@@ -59,7 +62,7 @@ export function BouquetBack({ show, className }: { show: boolean; className?: st
   return (
     <Layer className={className}>
       {(f) => (
-        <>
+        <g transform={BOUQUET_TRANSFORM}>
           {/* 그린 — 꽃다발을 감싸며 바깥으로 뻗는다 (좌우 대칭) */}
           <Bloom show={show} delay={0}>
             <Mirrored>
@@ -78,13 +81,13 @@ export function BouquetBack({ show, className }: { show: boolean; className?: st
           {/* 칼라 — 꽃다발 가운데에서 부채꼴로 솟는다. 줄기 아래는 장미·카드에 가려진다 */}
           {/* 꽃 머리가 장미 돔(윗면 y≈3) 위로 올라오도록 줄기를 길게 */}
           <Bloom show={show} delay={0.2}>
-            <PhotoCalla f={f} x={57} y={40} height={52} rot={-3} />
+            <PhotoCalla f={f} x={57} y={40} height={49} rot={-3} />
           </Bloom>
           <Bloom show={show} delay={0.25}>
-            <PhotoCalla f={f} x={52} y={40} height={46} rot={-27} flip />
+            <PhotoCalla f={f} x={52} y={40} height={43} rot={-27} flip />
           </Bloom>
           <Bloom show={show} delay={0.3}>
-            <PhotoCalla f={f} x={60} y={40} height={46} rot={25} />
+            <PhotoCalla f={f} x={60} y={40} height={43} rot={25} />
           </Bloom>
 
           {/* 수국 — 장미 사이 틈을 메운다 */}
@@ -123,7 +126,7 @@ export function BouquetBack({ show, className }: { show: boolean; className?: st
             <BabyBreath x={41} y={9} spread={1} />
             <BabyBreath x={69} y={9} spread={1} />
           </Bloom>
-        </>
+        </g>
       )}
     </Layer>
   );
@@ -134,7 +137,7 @@ export function BouquetMid({ show, className }: { show: boolean; className?: str
   return (
     <Layer className={className}>
       {(f) => (
-        <>
+        <g transform={`translate(${BOUQUET_MID_DX} 0)`}>
           <Bloom show={show} delay={0.5}>
             <Hydrangea f={f} x={37} y={99} R={6} seed={31} />
           </Bloom>
@@ -146,7 +149,7 @@ export function BouquetMid({ show, className }: { show: boolean; className?: str
             <BabyBreath x={48} y={100} spread={1.1} />
             <BabyBreath x={70} y={92} spread={1} />
           </Bloom>
-        </>
+        </g>
       )}
     </Layer>
   );

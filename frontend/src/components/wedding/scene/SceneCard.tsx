@@ -9,7 +9,8 @@ import {
 /*
   위가 장식적으로 솟고 양옆에 홈이 파인 액자형 카드 (viewBox 100 × 150 = 카드 2:3).
   종이 질감은 HTML 층에 깔고 이 윤곽으로 마스크한다. 괘선은 같은 윤곽을 안으로 줄인 선이다.
-  글자 크기는 장면 컨테이너 폭(cqw) 기준 — 장면 전체가 한 장의 그림처럼 같은 비율로 줄고 늘어난다.
+  카드 자체가 컨테이너라 글자 크기는 카드 폭(cqw) 기준이다 — 카드를 키우면 글자도 같은 비율로 커지고,
+  장면이 줄고 늘면 카드와 함께 같은 비율로 따라간다.
 */
 const OUTLINE =
   "M3 150 L3 58 C3 52 7 50 7 46 C7 42 3 40 3 34 C3 20 16 14 28 12 C38 10 44 6 50 2 C56 6 62 10 72 12 C84 14 97 20 97 34 C97 40 93 42 93 46 C93 50 97 52 97 58 L97 150 Z";
@@ -64,7 +65,7 @@ export default function SceneCard({
   const { venue } = data;
 
   return (
-    <div className="relative aspect-[2/3] w-full drop-shadow-[0_10px_16px_rgb(59_47_34/0.22)]">
+    <div className="@container relative aspect-[2/3] w-full drop-shadow-[0_10px_16px_rgb(59_47_34/0.22)]">
       {/* 종이 — 윤곽 마스크 */}
       <div
         className="wd-paper-texture absolute inset-0 bg-wd-paper"
@@ -80,32 +81,32 @@ export default function SceneCard({
       </div>
 
       <div className="absolute inset-x-[12%] top-[19%] flex flex-col items-center text-center">
-        <p lang="en" className="wd-press font-wd-display text-[2cqw] font-medium tracking-[0.2em] whitespace-nowrap text-wd-sage-deep">
+        <p lang="en" className="wd-press font-wd-display text-[3.45cqw] font-medium tracking-[0.2em] whitespace-nowrap text-wd-sage-deep">
           JOIN US FOR THE WEDDING OF
         </p>
-        <h1 id="wd-hero-title" ref={headingRef} tabIndex={-1} className="mt-[1.5cqw] outline-none">
-          <span lang="en" className="block font-wd-script text-[7.6cqw] leading-[1.05] text-wd-ink">
+        <h1 id="wd-hero-title" ref={headingRef} tabIndex={-1} className="mt-[2cqw] outline-none">
+          <span lang="en" className="block font-wd-script text-[13.1cqw] leading-[1.05] text-wd-ink">
             {data.groom.nameEn}
           </span>
-          <span lang="en" className="block font-wd-script text-[4.4cqw] leading-none text-wd-sage-deep">
+          <span lang="en" className="block font-wd-script text-[7.59cqw] leading-none text-wd-sage-deep">
             &amp;
           </span>
-          <span lang="en" className="block font-wd-script text-[7.6cqw] leading-[1.05] text-wd-ink">
+          <span lang="en" className="block font-wd-script text-[13.1cqw] leading-[1.05] text-wd-ink">
             {data.bride.nameEn}
           </span>
-          <span className="wd-press mt-[2cqw] block text-[3.5cqw] tracking-[0.18em] break-keep text-wd-ink">
+          <span className="wd-press mt-[2.6cqw] block text-[6.03cqw] tracking-[0.18em] break-keep text-wd-ink">
             {data.groom.name} <span className="text-wd-sage-deep">·</span> {data.bride.name}
           </span>
         </h1>
 
-        <p className="wd-press mt-[2.2cqw] font-wd-display text-[4.1cqw] tracking-[0.16em] text-wd-ink">
+        <p className="wd-press mt-[2.8cqw] font-wd-display text-[7.07cqw] tracking-[0.16em] text-wd-ink">
           {date.year}. {pad2(date.month)}. {pad2(date.day)}
-          <span lang="en" className="block text-[2.2cqw] tracking-[0.32em] text-wd-ink-muted">
+          <span lang="en" className="block text-[3.79cqw] tracking-[0.32em] text-wd-ink-muted">
             {WEEKDAYS_EN[date.weekday]}
             {data.ceremony.time && ` · ${formatTimeKo(data.ceremony.time)}`}
           </span>
         </p>
-        <p className="wd-press mt-[1.4cqw] text-[3cqw] leading-snug break-keep text-wd-ink-muted">
+        <p className="wd-press mt-[1.5cqw] text-[4.7cqw] leading-snug break-keep text-wd-ink-muted">
           {venue.name}
           {venue.hall && <span className="block">{venue.hall}</span>}
         </p>

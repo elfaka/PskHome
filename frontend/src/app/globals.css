@@ -256,6 +256,9 @@
   --wd-sage-light: #a9b393;
   --wd-sage-soft: #e6eadc;
   --wd-sage-deep: #5f6b48;
+  /* 벨벳 봉투 — 결 사이로 빛을 먹어 종이보다 한 톤 깊다. 광택·테두리 빛은 필터가 얹는다 */
+  --wd-velvet: #717f57;
+  --wd-velvet-inner: #58633f;
   --wd-ink: #3b2f22;
   --wd-ink-muted: #6b5e4e;
   --wd-line: #c9cfba;
@@ -287,6 +290,8 @@
   --color-wd-sage-light: var(--wd-sage-light);
   --color-wd-sage-soft: var(--wd-sage-soft);
   --color-wd-sage-deep: var(--wd-sage-deep);
+  --color-wd-velvet: var(--wd-velvet);
+  --color-wd-velvet-inner: var(--wd-velvet-inner);
   --color-wd-ink: var(--wd-ink);
   --color-wd-ink-muted: var(--wd-ink-muted);
   --color-wd-line: var(--wd-line);
@@ -362,16 +367,16 @@ body:has(.wedding-root) {
   높이가 낮은 가로 폰에서는 그래서 한 화면을 넘을 수 있고, 그때는 봉인 중에도 스크롤을 잠그지 않는다(WeddingInvitation).
 */
 .wd-stage {
-  /* 칼라 꽃 머리가 장면 윗변보다 12% 폭만큼 위로 솟는다 → 높이 계산에 넣고 그만큼 위 여백을 둔다 */
+  /* 칼라 꽃 머리가 장면 윗변보다 20% 폭만큼 위로 솟는다 → 높이 계산에 넣고 그만큼 위 여백을 둔다 */
   --wd-stage-w: min(94vw, 27rem);
   width: var(--wd-stage-w);
-  margin-top: calc(var(--wd-stage-w) * 0.12);
+  margin-top: calc(var(--wd-stage-w) * 0.2);
 }
 
 /* 커스텀 속성은 두 줄 폴백이 안 되므로(값이 무효면 속성 전체가 무효) 지원 여부로 나눈다 */
 @supports (height: 100svh) {
   .wd-stage {
-    --wd-stage-w: min(94vw, max(18.75rem, min(27rem, calc((100svh - 1.5rem) / 1.62))));
+    --wd-stage-w: min(94vw, max(18.75rem, min(27rem, calc((100svh - 1.5rem) / 1.7))));
   }
 }
 

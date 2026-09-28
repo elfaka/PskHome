@@ -38,21 +38,86 @@ const EASE_OUT = [0.22, 1, 0.36, 1] as const;
     blooming : 부케가 피고, 사진이 카드 뒤에서 나오고, LP 가 놓인다 (마지막 LP 1.5s ≤ 1.8s)
 */
 
-/** 펠트 같은 수제 봉투 종이 — 가장자리는 노이즈로 흔들어 손으로 뜯은 듯(데클), 면은 조명 필터로 도톰한 결 */
-function FeltDefs({ id }: { id: string }) {
+/*
+  봉투 조각 윤곽 (봉투 viewBox 100 × 69, 덮개는 100 × 42).
+  앞주머니는 한 장이 아니라 양옆 날개 위에 아랫날개가 겹친 세 면이라, 면마다 빛을 다르게 받아 입체로 보인다.
+*/
+const FLAP = "M0.3 0.3 H99.7 L55 38 Q50 41.8 45 38 Z";
+const POCKET = "M0.3 0.6 L46 37 Q50 40 54 37 L99.7 0.6 V68.7 H0.3 Z";
+const SIDE_L = "M0.3 0.6 L46 37 Q48 38.5 50 38.5 V62 L0.3 68.7 Z";
+const SIDE_R = "M99.7 0.6 L54 37 Q52 38.5 50 38.5 V62 L99.7 68.7 Z";
+const BOTTOM = "M0.3 68.7 L42.5 41.4 Q50 46.2 57.5 41.4 L99.7 68.7 Z";
+
+/**
+ * 벨벳 봉투 재질 — 필터 한 벌을 봉투 조각마다 따로 건다.
+ *   잔털: 아주 고운 노이즈로 명암을 조금씩 흔든다
+ *   광택: 낮은 주파수 노이즈를 높낮이 삼은 반사광 — 결이 눌린 벨벳의 은은한 얼룩 광택
+ *   테 빛: 가장자리 안쪽 띠가 밝다 — 결이 눕는 모서리에서 빛을 받는 벨벳의 특징.
+ *          조각마다 생기므로 날개가 겹친 접힘선도 도톰하게 빛난다.
+ * 면 음영(그라디언트)은 왼쪽 위에서 오는 빛 기준이다.
+ */
+function VelvetDefs({ id }: { id: string }) {
   return (
     <svg aria-hidden="true" className="absolute size-0 overflow-hidden">
       <defs>
-        <filter id={id} x="-4%" y="-4%" width="108%" height="108%" colorInterpolationFilters="sRGB">
-          <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="3" seed="4" result="edge" />
-          <feDisplacementMap in="SourceGraphic" in2="edge" scale="1.1" xChannelSelector="R" yChannelSelector="G" result="rough" />
-          <feTurbulence type="fractalNoise" baseFrequency="3.4" numOctaves="2" seed="11" result="fuzz" />
-          <feDiffuseLighting in="fuzz" surfaceScale="0.28" lightingColor="#ffffff" result="light">
-            <feDistantLight azimuth="225" elevation="68" />
-          </feDiffuseLighting>
-          <feComposite in="light" in2="rough" operator="arithmetic" k1="1.08" k2="0" k3="0" k4="0" result="felt" />
-          <feComposite in="felt" in2="rough" operator="in" />
+        <filter id={`${id}-velvet`} x="-2%" y="-2%" width="104%" height="104%" colorInterpolationFilters="sRGB">
+          <feTurbulence type="fractalNoise" baseFrequency="2.4" numOctaves="2" seed="5" result="pile" />
+          <feColorMatrix
+            in="pile"
+            type="matrix"
+            values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 0 1"
+            result="pileGray"
+          />
+          <feComposite in="SourceGraphic" in2="pileGray" operator="arithmetic" k1="0.34" k2="0.84" result="napped" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.04 0.06" numOctaves="2" seed="9" result="crush" />
+          <feGaussianBlur in="crush" stdDeviation="1.4" result="crushSoft" />
+          <feSpecularLighting in="crushSoft" surfaceScale="5" specularConstant="0.5" specularExponent="7" lightingColor="#ffffff" result="sheen">
+            <feDistantLight azimuth="235" elevation="40" />
+          </feSpecularLighting>
+          <feComposite in="sheen" in2="napped" operator="arithmetic" k2="0.28" k3="1" result="glossy" />
+          <feMorphology in="SourceAlpha" operator="erode" radius="0.8" result="core" />
+          <feGaussianBlur in="core" stdDeviation="1.2" result="coreSoft" />
+          <feComposite in="SourceAlpha" in2="coreSoft" operator="out" result="rimMask" />
+          <feFlood floodColor="#eef2e2" floodOpacity="0.3" />
+          <feComposite in2="rimMask" operator="in" result="rim" />
+          <feMerge result="lit">
+            <feMergeNode in="glossy" />
+            <feMergeNode in="rim" />
+          </feMerge>
+          <feComposite in="lit" in2="SourceAlpha" operator="in" />
         </filter>
+        {/* 아랫날개가 양옆 날개 위에 드리우는 접촉 그림자 */}
+        <filter id={`${id}-ao`} x="-10%" y="-10%" width="120%" height="120%">
+          <feGaussianBlur stdDeviation="1" />
+        </filter>
+        <clipPath id={`${id}-pocket`}>
+          <path d={POCKET} />
+        </clipPath>
+        {/* 왼쪽 날개: 빛을 마주 봐 밝다 */}
+        <linearGradient id={`${id}-side-l`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.13" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </linearGradient>
+        {/* 오른쪽 날개: 빛을 등져 어둡다 */}
+        <linearGradient id={`${id}-side-r`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#000000" stopOpacity="0.03" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.16" />
+        </linearGradient>
+        {/* 아랫날개: 윗변 접힘은 밝고 아래로 갈수록 가라앉는다 */}
+        <linearGradient id={`${id}-bottom`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.1" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.1" />
+        </linearGradient>
+        {/* 덮개: 경첩 쪽이 밝고 끝으로 갈수록 어둡다 */}
+        <linearGradient id={`${id}-flap`} x1="0" y1="0" x2="0.25" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.08" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.16" />
+        </linearGradient>
+        {/* 봉투 안쪽: 깊을수록 어둡다 */}
+        <linearGradient id={`${id}-inside`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#000000" stopOpacity="0.04" />
+          <stop offset="1" stopColor="#000000" stopOpacity="0.32" />
+        </linearGradient>
       </defs>
     </svg>
   );
@@ -109,7 +174,7 @@ export default function EnvelopeScene({
   onPhaseDone: (from: IntroPhase) => void;
   headingRef: React.Ref<HTMLHeadingElement>;
 }) {
-  const felt = `${useId().replace(/[^a-zA-Z0-9_-]/g, "")}-felt`;
+  const env = `wd-env-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const music = useMusicBox();
 
   // 봉투 터치 = 사용자 동작이라 이 안에서 음악을 켜면 브라우저 자동재생 차단에 걸리지 않는다.
@@ -123,7 +188,7 @@ export default function EnvelopeScene({
   const cardOut = phase === "rising" || phase === "blooming" || phase === "done";
   const bloom = phase === "blooming" || phase === "done";
   const done = phase === "done";
-  const feltFill = { filter: `url(#${felt})` };
+  const velvet = { filter: `url(#${env}-velvet)` };
 
   return (
     <section
@@ -132,7 +197,7 @@ export default function EnvelopeScene({
         pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
     >
       <div className="wd-stage @container relative aspect-[2/3]">
-        <FeltDefs id={felt} />
+        <VelvetDefs id={env} />
 
         {/* 봉인 상태 문구 — 열리면 이 자리에 카드와 부케가 올라온다 */}
         <motion.div
@@ -154,10 +219,16 @@ export default function EnvelopeScene({
           </p>
         </motion.div>
 
-        {/* z1 봉투 뒤판 */}
+        {/* z1 봉투 뒤판 — 바닥에 닿은 짙고 짧은 그림자 + 멀리 퍼지는 옅은 그림자로 봉투가 떠 보인다 */}
         <div className="pointer-events-none absolute z-[1] aspect-[1.45]" style={place(ENV)}>
-          <svg viewBox="0 0 100 69" preserveAspectRatio="none" aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible drop-shadow-[0_6px_10px_rgb(59_47_34/0.22)]">
-            <rect x="0.6" y="0.6" width="98.8" height="67.8" rx="1.4" className="fill-wd-sage-inner" style={feltFill} />
+          <svg
+            viewBox="0 0 100 69"
+            preserveAspectRatio="none"
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full overflow-visible [filter:drop-shadow(0_1.5px_1.5px_rgb(59_47_34/0.28))_drop-shadow(0_12px_14px_rgb(59_47_34/0.24))]"
+          >
+            <rect x="0.3" y="0.3" width="99.4" height="68.4" rx="1.2" className="fill-wd-velvet-inner" style={velvet} />
+            <rect x="0.3" y="0.3" width="99.4" height="68.4" rx="1.2" fill={`url(#${env}-inside)`} />
           </svg>
         </div>
 
@@ -167,7 +238,7 @@ export default function EnvelopeScene({
           style={place(ENV)}
         >
           <motion.div
-            className="absolute inset-x-0 top-0 h-[61%] drop-shadow-[0_2px_2px_rgb(0_0_0/0.16)]"
+            className="absolute inset-x-0 top-0 h-[61%] [filter:drop-shadow(0_1px_1px_rgb(0_0_0/0.22))_drop-shadow(0_4px_5px_rgb(0_0_0/0.14))]"
             style={{ transformOrigin: "50% 0%", transformPerspective: 900 }}
             initial={false}
             // 템플릿처럼 넘어간 덮개는 봉투 뒤로 접혀 들어간 듯 사라진다 (카드 옆에 삼각형이 남지 않게)
@@ -179,7 +250,8 @@ export default function EnvelopeScene({
             onAnimationComplete={() => onPhaseDone("opening")}
           >
             <svg viewBox="0 0 100 42" preserveAspectRatio="none" aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible">
-              <path d="M0.8 0.8 H99.2 L55 38 Q50 41.8 45 38 Z" className="fill-wd-sage" style={feltFill} />
+              <path d={FLAP} className="fill-wd-velvet" style={velvet} />
+              <path d={FLAP} fill={`url(#${env}-flap)`} />
             </svg>
           </motion.div>
         </div>
@@ -243,9 +315,22 @@ export default function EnvelopeScene({
             aria-label="청첩장 열기"
             className="group absolute inset-0 cursor-pointer rounded-[3px] disabled:cursor-default"
           >
-            <svg viewBox="0 0 100 69" preserveAspectRatio="none" aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible drop-shadow-[0_-1px_2px_rgb(0_0_0/0.1)]">
-              <path d="M0.6 0.8 L46 37 Q50 40 54 37 L99.4 0.8 V68.4 H0.6 Z" className="fill-wd-sage" style={feltFill} />
-              <path d="M0.6 68.4 L41 39 M99.4 68.4 L59 39" className="stroke-wd-sage-inner" strokeWidth="0.35" opacity="0.45" fill="none" vectorEffect="non-scaling-stroke" />
+            {/* 앞주머니 = 양옆 날개 위에 아랫날개. 주머니 윗변(V)이 안에 든 카드 위로 그림자를 드리운다 */}
+            <svg
+              viewBox="0 0 100 69"
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full overflow-visible [filter:drop-shadow(0_-1px_1.5px_rgb(0_0_0/0.16))_drop-shadow(0_-3px_5px_rgb(0_0_0/0.08))]"
+            >
+              <path d={SIDE_R} className="fill-wd-velvet" style={velvet} />
+              <path d={SIDE_R} fill={`url(#${env}-side-r)`} />
+              <path d={SIDE_L} className="fill-wd-velvet" style={velvet} />
+              <path d={SIDE_L} fill={`url(#${env}-side-l)`} />
+              <g clipPath={`url(#${env}-pocket)`}>
+                <path d={BOTTOM} fill="#000000" opacity="0.35" transform="translate(0 -0.6)" filter={`url(#${env}-ao)`} />
+              </g>
+              <path d={BOTTOM} className="fill-wd-velvet" style={velvet} />
+              <path d={BOTTOM} fill={`url(#${env}-bottom)`} />
             </svg>
           </button>
         </div>
