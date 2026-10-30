@@ -23,6 +23,12 @@ export const notFoundHandler: RequestHandler = (req, res) => {
  */
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
+    // 5xx 는 외부 연동(토스 등) 장애다. 응답만으로는 운영에서 원인을 볼 수 없으니
+    // `docker logs pskhome-be-1` 에 남긴다.
+    if (err.status >= 500 && !isTest) {
+      console.error(`[${err.code}] ${err.message}`);
+    }
+
     res.status(err.status).json({
       error: { code: err.code, message: err.message },
     });

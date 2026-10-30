@@ -232,3 +232,11 @@ const { createPost } = await import("./psPost.service.js");
 
 Express 5(path-to-regexp v8)에서는 `/api/*` 가 유효하지 않다.
 필요하면 `/api/*splat` 또는 `{*splat}` 형태를 쓴다.
+
+### 8. 5xx 상태코드로 502 / 504 를 쓰지 않는다
+
+운영(elfaka.kr)은 Cloudflare 뒤에 있다. Cloudflare 는 원본이 **502·504** 를 돌려주면 본문을 버리고
+자기 오류 페이지(`text/plain` `error code: 502`)로 바꾼다. `{ error: { code, message } }` 가 사라져
+프론트에는 axios 의 "Request failed with status code 502" 만 남는다.
+외부 연동 실패는 **503** 으로 내려 원인 메시지가 그대로 전달되게 한다 (`stocksim/toss/tossClient.ts` 의 `UPSTREAM_FAILURE`).
+5xx `HttpError` 는 `errorHandler` 가 콘솔에도 남기므로 `docker logs pskhome-be-1` 로 원인을 볼 수 있다.

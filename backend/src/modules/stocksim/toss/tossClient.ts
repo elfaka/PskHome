@@ -47,6 +47,16 @@ const TOKEN_REFRESH_MARGIN_MS = 60_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
 const TOKEN_REJECTED_CODES = new Set(["invalid-token", "expired-token"]);
 
+/**
+ * 토스 호출 실패(연결·인증·허용 IP·토스 쪽 오류)를 알리는 상태코드.
+ *
+ * 의미로는 502 Bad Gateway 가 맞지만 운영(elfaka.kr)은 Cloudflare 뒤에 있고,
+ * Cloudflare 는 원본이 502/504 를 주면 본문을 버리고 자기 오류 페이지(`error code: 502`)로 바꾼다.
+ * 그러면 `{ error: { code, message } }` 가 사라져 화면에는 "Request failed with status code 502" 만 남는다.
+ * 503 은 원본 응답을 그대로 통과시키므로 원인 메시지가 사용자에게 전달된다.
+ */
+const UPSTREAM_FAILURE = 503;
+
 interface CachedToken {
   value: string;
   expiresAt: number;
@@ -66,7 +76,7 @@ export function createTossClient(options: TossClientOptions): TossClient {
       return await doFetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
-      throw new HttpError(502, "TOSS_UNREACHABLE", `토스 API 에 연결하지 못했습니다: ${reason}`);
+      throw new HttpError(UPSTREAM_FAILURE, "TOSS_UNREACHABLE", `토스 API 에 연결하지 못했습니다: ${reason}`);
     }
   }
 
@@ -87,7 +97,7 @@ export function createTossClient(options: TossClientOptions): TossClient {
 
       if (res.status === 403) {
         throw new HttpError(
-          502,
+          UPSTREAM_FAILURE,
           "TOSS_IP_NOT_ALLOWED",
           `토스 API 가 이 서버 IP 를 허용하지 않습니다. WTS 설정 > Open API > 허용 IP 관리에 등록하세요. (${detail})`
         );
@@ -95,7 +105,7 @@ export function createTossClient(options: TossClientOptions): TossClient {
       if (res.status === 429) {
         throw new HttpError(503, "TOSS_RATE_LIMITED", "토스 API 요청 한도를 넘었습니다. 잠시 후 다시 시도하세요.");
       }
-      throw new HttpError(502, "TOSS_AUTH_FAILED", `토스 API 토큰 발급에 실패했습니다: ${detail}`);
+      throw new HttpError(UPSTREAM_FAILURE, "TOSS_AUTH_FAILED", `토스 API 토큰 발급에 실패했습니다: ${detail}`);
     }
 
     const token = (await res.json()) as TossTokenResponse;
@@ -169,7 +179,7 @@ function toHttpError(status: number, code: string, message: string): HttpError {
   }
   if (status === 403 && code === "ip-not-allowed") {
     return new HttpError(
-      502,
+      UPSTREAM_FAILURE,
       "TOSS_IP_NOT_ALLOWED",
       "토스 API 가 이 서버 IP 를 허용하지 않습니다. WTS 설정 > Open API > 허용 IP 관리에 등록하세요."
     );
@@ -178,7 +188,7 @@ function toHttpError(status: number, code: string, message: string): HttpError {
   if (status === 400 || status === 404) {
     return new HttpError(status, "TOSS_REQUEST_REJECTED", message);
   }
-  return new HttpError(502, "TOSS_API_ERROR", `토스 API 오류 (${status} ${code}): ${message}`);
+  return new HttpError(UPSTREAM_FAILURE, "TOSS_API_ERROR", `토스 API 오류 (${status} ${code}): ${message}`);
 }
 
 let singleton: TossClient | null = null;

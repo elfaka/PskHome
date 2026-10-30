@@ -131,7 +131,7 @@ describe("createTossClient", () => {
         : json(401, { error: { code: "invalid-token", message: "무효" } })
     );
 
-    await expect(t.client.getPrices(["005930"])).rejects.toMatchObject({ status: 502 });
+    await expect(t.client.getPrices(["005930"])).rejects.toMatchObject({ status: 503 });
     expect(t.tokenCalls()).toHaveLength(2);
   });
 
@@ -139,7 +139,7 @@ describe("createTossClient", () => {
     const t = setup(() => json(403, { error: "access_denied", error_description: "IP address not allowed" }));
 
     await expect(t.client.getPrices(["005930"])).rejects.toMatchObject({
-      status: 502,
+      status: 503,
       code: "TOSS_IP_NOT_ALLOWED",
     });
   });
