@@ -197,6 +197,17 @@ describe("market routes", () => {
     expect(res.body.fearGreed.factors.every((f: { score: number | null }) => f.score != null)).toBe(true);
   });
 
+  it("falls back to the last minute bar when Toss omits the index timestamp", async () => {
+    const getPrices = toss.getIndicatorPrices.bind(toss);
+    toss.getIndicatorPrices = async (symbols) => (await getPrices(symbols)).map((p) => ({ ...p, timestamp: null }));
+
+    const res = await request(app).get("/api/stocksim/market");
+
+    const [kospi] = res.body.indices;
+    // 마지막 1분봉(2026-10-30) 날짜의 일봉이 오늘 봉이므로 전일 종가는 그 전 봉(2799)
+    expect(kospi).toMatchObject({ prevClose: 2_799, change: 21, timestamp: "2026-10-30T06:30:00.000Z" });
+  });
+
   it("asks Toss only for index prices on a repeat call within the cache window", async () => {
     await request(app).get("/api/stocksim/market");
     const candleCalls = toss.calls.filter((c) => c.method === "getIndicatorCandles").length;

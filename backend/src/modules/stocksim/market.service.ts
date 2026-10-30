@@ -214,14 +214,17 @@ async function loadIndex(symbol: MarketIndexSymbol, price: TossIndicatorPrice): 
   ]);
 
   const value = Number(price.lastPrice);
-  const prevClose = previousClose(daily, price.timestamp);
+  // 토스가 지수 현재가 시각을 null 로 줄 때가 있다(실서버에서 확인). 그러면 마지막 1분봉 시각을 쓴다.
+  // 시각을 모르면 오늘 일봉을 전일로 착각해 등락이 0 이 된다.
+  const timestamp = price.timestamp ?? minutes[minutes.length - 1]?.time ?? null;
+  const prevClose = previousClose(daily, timestamp);
   const change = prevClose != null ? value - prevClose : null;
 
   return {
     symbol,
     name: INDEX_NAMES[symbol],
     value,
-    timestamp: price.timestamp,
+    timestamp,
     prevClose,
     change,
     changeRate: change != null && prevClose ? change / prevClose : null,
