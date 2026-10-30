@@ -139,6 +139,91 @@ export const handlers = [
     });
   }),
 
+  http.get("/api/stocksim/market", () =>
+    HttpResponse.json({
+      indices: [
+        {
+          symbol: "KOSPI",
+          name: "코스피",
+          value: 2812.45,
+          timestamp: "2026-10-30T06:30:00.000Z",
+          prevClose: 2798.1,
+          change: 14.35,
+          changeRate: 14.35 / 2798.1,
+          intraday: [
+            { time: "2026-10-30T00:00:00.000Z", value: 2800 },
+            { time: "2026-10-30T00:05:00.000Z", value: 2805 },
+            { time: "2026-10-30T00:10:00.000Z", value: 2812.45 },
+          ],
+        },
+        {
+          symbol: "KOSDAQ",
+          name: "코스닥",
+          value: 845.32,
+          timestamp: "2026-10-30T06:30:00.000Z",
+          prevClose: 850,
+          change: -4.68,
+          changeRate: -4.68 / 850,
+          intraday: [],
+        },
+      ],
+      fearGreed: {
+        score: 62,
+        level: "GREED",
+        label: "탐욕",
+        asOf: "2026-10-30",
+        factors: [
+          { key: "momentum", label: "모멘텀", score: 70, value: "125일선 대비 +4.0%", reason: "코스피가 125일 이동평균 위에 있어 상승 추세입니다." },
+          { key: "rsi", label: "과열도", score: 58, value: "RSI(14) 58.0", reason: "과열·과매도 어느 쪽도 아닙니다." },
+          { key: "volatility", label: "변동성", score: 55, value: "20일 14.0% (1년 평균의 0.95배)", reason: "변동성이 평소 수준입니다." },
+          { key: "riskAppetite", label: "위험 선호", score: 45, value: "20일 코스닥 +1.0% · 코스피 +1.5%", reason: "코스닥과 코스피의 흐름이 비슷합니다." },
+          { key: "safeHaven", label: "안전자산 선호", score: 60, value: "코스피 20일 +1.5% · 국고채 10년 +0.05%p", reason: "주식과 안전자산 선호가 균형을 이룹니다." },
+          { key: "flow", label: "수급", score: null, value: "-", reason: "시장 투자자별 매매대금을 받지 못했습니다." },
+        ],
+        history: [
+          { label: "1주 전", score: 48 },
+          { label: "1개월 전", score: 30 },
+        ],
+        disclaimer: "코스피·코스닥 지수, 국고채 금리, 투자자별 매매대금으로 직접 계산한 참고 지표이며 공식 공포·탐욕 지수가 아닙니다.",
+      },
+      fearGreedNote: null,
+    })
+  ),
+
+  http.get("/api/stocksim/market/:symbol/chart", ({ request, params }) => {
+    const timeframe = new URL(request.url).searchParams.get("timeframe") ?? "1d";
+    const candles = Array.from({ length: 30 }, (_, i) => ({
+      time: new Date(Date.UTC(2026, 9, 1 + i)).toISOString(),
+      open: 2_700,
+      high: 2_850,
+      low: 2_690,
+      close: 2_700 + i * 3.5,
+      volume: 500_000_000,
+    }));
+    const empty = candles.map(() => null);
+    return HttpResponse.json({
+      symbol: params.symbol,
+      timeframe,
+      candles,
+      indicators: {
+        ma5: empty,
+        ma20: empty,
+        ma60: empty,
+        ma120: empty,
+        bollinger: candles.map(() => ({ middle: null, upper: null, lower: null })),
+        rsi: empty,
+        macd: candles.map(() => ({ macd: null, signal: null, histogram: null })),
+      },
+    });
+  }),
+
+  http.get("/api/stocksim/market/:symbol/investors", () =>
+    HttpResponse.json([
+      { date: "2026-10-30", individual: -320e9, foreigner: 250e9, institution: 90e9, otherCorporation: -20e9, tradingValue: 11e12 },
+      { date: "2026-10-29", individual: 150e9, foreigner: -100e9, institution: -60e9, otherCorporation: 10e9, tradingValue: 10e12 },
+    ])
+  ),
+
   http.get("/api/stocksim/stocks/:symbol/overview", ({ params }) =>
     HttpResponse.json({
       symbol: params.symbol,

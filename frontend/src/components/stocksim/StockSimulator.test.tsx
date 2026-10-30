@@ -66,6 +66,58 @@ describe("StockSimulator", () => {
     expect(await screen.findByText(/외국인 5일 누적/)).toBeInTheDocument();
   });
 
+  it("shows KOSPI, KOSDAQ and the fear & greed index in the market strip", async () => {
+    render(<StockSimulator />);
+
+    const strip = await screen.findByRole("region", { name: "시장 지수" });
+    expect(await within(strip).findByText("2,812.45")).toBeInTheDocument();
+    expect(within(strip).getByText("▲14.35")).toBeInTheDocument();
+    expect(within(strip).getByText("+0.51%")).toBeInTheDocument();
+    expect(within(strip).getByText("845.32")).toBeInTheDocument();
+    expect(within(strip).getByText("▼4.68")).toBeInTheDocument();
+    expect(within(strip).getByRole("button", { name: "공포·탐욕 지수 62 탐욕" })).toBeInTheDocument();
+  });
+
+  it("opens the market tab with the index chart, fear & greed reasons and market flows", async () => {
+    const user = userEvent.setup();
+    render(<StockSimulator />);
+
+    const strip = await screen.findByRole("region", { name: "시장 지수" });
+    await user.click(await within(strip).findByRole("button", { name: /코스닥/ }));
+
+    expect(screen.getByRole("tab", { name: "시장" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "코스닥" })).toHaveAttribute("aria-selected", "true");
+
+    const indexChart = screen.getByRole("region", { name: "지수 차트" });
+    expect(await within(indexChart).findByTestId("candle-chart")).toHaveTextContent("1d:30");
+
+    const fg = screen.getByRole("region", { name: "공포·탐욕 지수" });
+    expect(within(fg).getByText("62")).toBeInTheDocument();
+    expect(within(fg).getByText(/125일 이동평균 위에 있어/)).toBeInTheDocument();
+    expect(within(fg).getByText("데이터 없음")).toBeInTheDocument();
+    expect(within(fg).getByText("30 공포")).toBeInTheDocument();
+    expect(within(fg).getByText(/공식 공포·탐욕 지수가 아닙니다/)).toBeInTheDocument();
+
+    const flows = screen.getByRole("region", { name: "코스닥 투자자별 순매수" });
+    // 2일 합계: 개인 -1,700억 · 기관 +300억
+    expect(await within(flows).findByText("-1,700억")).toBeInTheDocument();
+    expect(within(flows).getByText("+300억")).toBeInTheDocument();
+  });
+
+  it("explains when the indices cannot be loaded without breaking the page", async () => {
+    server.use(
+      http.get("/api/stocksim/market", () =>
+        HttpResponse.json({ error: { code: "TOSS_API_ERROR", message: "토스 API 오류" } }, { status: 503 })
+      )
+    );
+    render(<StockSimulator />);
+
+    expect(await screen.findByText("토스 API 오류")).toBeInTheDocument();
+    // 종목 시세는 그대로 보인다
+    const header = screen.getByRole("region", { name: "종목 시세" });
+    expect(await within(header).findByText("77,000")).toBeInTheDocument();
+  });
+
   it("renders the orderbook and switches the order to sell when a bid is clicked", async () => {
     const user = userEvent.setup();
     render(<StockSimulator />);

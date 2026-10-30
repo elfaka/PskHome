@@ -53,9 +53,6 @@ src/app/
 ├── stocksim/                                    # 주식 모의투자 (layout: metadata + SiteShell)
 │   ├── page.tsx                                 # /stocksim
 │   └── [...slug]/page.tsx                       # 그 외 → /stocksim 으로 리다이렉트
-├── stocksim/                                    # 주식 모의투자 (layout: metadata + SiteShell)
-│   ├── page.tsx                                 # /stocksim
-│   └── [...slug]/page.tsx                       # 그 외 → /stocksim 으로 리다이렉트
 └── wedding/                                     # 모바일 청첩장 — SiteShell 없음, 사이트 테마와 분리
     ├── layout.tsx                               # metadata(noindex), 폰트, .wedding-root
     ├── page.tsx                                 # /wedding
@@ -209,7 +206,7 @@ export async function fetchData(id: number) {
 **기존 API 파일:**
 - `src/api/pspost.ts` — PS 게시글 CRUD (`listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`)
 - `src/api/jsonPrettierApi.ts` — JSON 포맷 (`formatJson`)
-- `src/api/stockSim.ts` — 주식 모의투자 (검색·시세·차트·호가·체결·개요·분석·수급·포트폴리오·주문)
+- `src/api/stockSim.ts` — 주식 모의투자 (검색·시세·차트·호가·체결·개요·분석·수급·시장 지수·공포탐욕·포트폴리오·주문)
 
 **에러 메시지**는 `@/lib/errorMessage` 의 `errorMessage(e, fallback)` 로 뽑는다.
 백엔드 실패 응답 형태(`{ error: { code, message } }`)를 알고 있으므로 화면마다 파싱하지 않는다.

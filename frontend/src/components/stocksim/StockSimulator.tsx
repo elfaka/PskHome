@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import {
+  getMarket,
   getOverview,
   getPortfolio,
   getQuotesWithChange,
   resetPortfolio,
+  type MarketIndexSymbol,
   type OrderSide,
   type QuoteWithChange,
 } from "@/api/stockSim";
@@ -21,6 +23,8 @@ import { DEFAULT_WATCHLIST, useWatchlist } from "@/lib/stocksim/watchlist";
 import AnalysisPanel from "./AnalysisPanel";
 import ChartPanel from "./ChartPanel";
 import InvestorFlowPanel from "./InvestorFlowPanel";
+import MarketPanel from "./MarketPanel";
+import MarketStrip from "./MarketStrip";
 import OrderbookPanel from "./OrderbookPanel";
 import OrderPanel from "./OrderPanel";
 import { AccountDock, PortfolioSummary } from "./PortfolioSections";
@@ -35,12 +39,14 @@ type SelectedStock = { symbol: string; name: string };
 
 const PRICE_REFRESH_MS = 5_000;
 const PORTFOLIO_REFRESH_MS = 10_000;
+const MARKET_REFRESH_MS = 10_000;
 
-type InsightTab = "analysis" | "valuation" | "investors";
+type InsightTab = "analysis" | "valuation" | "investors" | "market";
 const INSIGHT_TABS: { value: InsightTab; label: string }[] = [
   { value: "analysis", label: "매매 신호" },
   { value: "valuation", label: "투자 지표" },
   { value: "investors", label: "투자자 동향" },
+  { value: "market", label: "시장" },
 ];
 
 /** 좁은 화면에서는 패널을 탭으로 나눠 하나씩 보여준다. */
@@ -58,6 +64,7 @@ const panel = "overflow-hidden rounded-card border border-line bg-surface";
  * 주식 모의투자 — 증권사 WTS 형태의 화면.
  *
  * ```
+ *   코스피 · 코스닥 · 공포탐욕 (지수 띠, 누르면 "시장" 탭)
  * ┌ 관심/보유 ┬ 종목 시세 · 차트 · 분석 탭 ┬ 호가 · 주문 · 체결 ┐   (xl 이상 3열)
  * └──────────┴───────── 계좌(보유종목·거래내역) ──────────────┘
  * ```
@@ -70,7 +77,11 @@ export default function StockSimulator() {
   const [insightTab, setInsightTab] = useState<InsightTab>("analysis");
   const [mobileTab, setMobileTab] = useState<MobileTab>("chart");
   const [resetError, setResetError] = useState<string | null>(null);
+  const [marketIndex, setMarketIndex] = useState<MarketIndexSymbol>("KOSPI");
+  const insightRef = useRef<HTMLDivElement | null>(null);
   const watchlist = useWatchlist();
+
+  const market = usePolling("market", getMarket, MARKET_REFRESH_MS, "지수를 불러오지 못했습니다.");
 
   const portfolio = usePolling("portfolio", getPortfolio, PORTFOLIO_REFRESH_MS, "포트폴리오를 불러오지 못했습니다.");
   const overview = usePolling(selected.symbol, () => getOverview(selected.symbol), PRICE_REFRESH_MS, "시세를 불러오지 못했습니다.");
@@ -98,6 +109,15 @@ export default function StockSimulator() {
   const select = (stock: SelectedStock) => {
     setSelected({ symbol: stock.symbol, name: stock.name });
     setMobileTab("chart");
+  };
+
+  /** 지수 띠를 누르면 분석 영역의 시장 탭으로 */
+  const openMarket = (target: MarketIndexSymbol | "fearGreed") => {
+    if (target !== "fearGreed") setMarketIndex(target);
+    setInsightTab("market");
+    setMobileTab("insight");
+    // 좁은 화면에서는 분석 패널이 아직 숨겨져 있으니, 탭이 바뀌어 그려진 뒤에 스크롤한다.
+    requestAnimationFrame(() => insightRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" }));
   };
 
   const pickSide = (next: OrderSide) => {
@@ -131,6 +151,15 @@ export default function StockSimulator() {
           <Badge>재무 OpenDART</Badge>
         </div>
         {portfolio.data && <PortfolioSummary portfolio={portfolio.data} />}
+      </div>
+
+      <div className="mb-2">
+        <MarketStrip
+          indices={market.data?.indices ?? null}
+          fearGreed={market.data?.fearGreed ?? null}
+          error={market.error}
+          onOpen={openMarket}
+        />
       </div>
 
       {(portfolio.error || resetError) && (
@@ -211,8 +240,8 @@ export default function StockSimulator() {
             <ChartPanel symbol={selected.symbol} livePrice={o?.price ?? null} liveTime={o?.priceTime ?? null} />
           </div>
 
-          <div className={cn(panel, mobileOnly("insight"))}>
-            <div role="tablist" aria-label="분석" className="flex border-b border-line px-1">
+          <div ref={insightRef} className={cn(panel, "scroll-mt-20", mobileOnly("insight"))}>
+            <div role="tablist" aria-label="분석" className="flex overflow-x-auto border-b border-line px-1">
               {INSIGHT_TABS.map((t) => (
                 <button
                   key={t.value}
@@ -221,7 +250,7 @@ export default function StockSimulator() {
                   aria-selected={insightTab === t.value}
                   onClick={() => setInsightTab(t.value)}
                   className={cn(
-                    "border-b-2 px-3 py-2.5 text-sm font-medium transition",
+                    "shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium transition",
                     insightTab === t.value ? "border-fg text-fg" : "border-transparent text-fg-muted hover:text-fg"
                   )}
                 >
@@ -232,6 +261,9 @@ export default function StockSimulator() {
             {insightTab === "analysis" && <AnalysisPanel symbol={selected.symbol} />}
             {insightTab === "valuation" && <ValuationPanel overview={o} />}
             {insightTab === "investors" && <InvestorFlowPanel symbol={selected.symbol} />}
+            {insightTab === "market" && (
+              <MarketPanel market={market.data} error={market.error} index={marketIndex} onIndexChange={setMarketIndex} />
+            )}
           </div>
         </div>
 

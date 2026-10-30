@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 
-import { getChart, type ChartData, type Timeframe } from "@/api/stockSim";
+import { getChart, getIndexChart, type ChartData, type Timeframe } from "@/api/stockSim";
 import { useTheme } from "@/components/theme/useTheme";
 import Skeleton from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
@@ -45,7 +45,7 @@ const MA_LEGEND = [
   { key: "ma120", label: "120", className: "text-fg-subtle" },
 ] as const;
 
-function Legend({ data, index, toggles }: { data: ChartData; index: number; toggles: ChartToggles }) {
+function Legend({ data, index, toggles, digits }: { data: ChartData; index: number; toggles: ChartToggles; digits: number }) {
   const bar = data.candles[index];
   const prev = data.candles[index - 1];
   if (!bar) return null;
@@ -56,11 +56,11 @@ function Legend({ data, index, toggles }: { data: ChartData; index: number; togg
 
   return (
     <div className="pointer-events-none absolute top-2 left-2 z-10 flex max-w-[calc(100%-5rem)] flex-wrap gap-x-3 gap-y-0.5 rounded-control bg-surface/80 px-2 py-1 text-[11px] tabular-nums text-fg-muted backdrop-blur-sm">
-      <span>시 <b className="font-medium text-fg">{formatNumber(bar.open)}</b></span>
-      <span>고 <b className="font-medium text-danger-soft-fg">{formatNumber(bar.high)}</b></span>
-      <span>저 <b className="font-medium text-info-soft-fg">{formatNumber(bar.low)}</b></span>
+      <span>시 <b className="font-medium text-fg">{formatNumber(bar.open, digits)}</b></span>
+      <span>고 <b className="font-medium text-danger-soft-fg">{formatNumber(bar.high, digits)}</b></span>
+      <span>저 <b className="font-medium text-info-soft-fg">{formatNumber(bar.low, digits)}</b></span>
       <span>
-        종 <b className={cn("font-medium", tone)}>{formatNumber(bar.close)}</b>
+        종 <b className={cn("font-medium", tone)}>{formatNumber(bar.close, digits)}</b>
         {change != null && prev && <span className={cn("ml-1", tone)}>({formatRate(change / prev.close)})</span>}
       </span>
       <span>거래량 <b className="font-medium text-fg">{formatShares(bar.volume)}</b></span>
@@ -70,7 +70,7 @@ function Legend({ data, index, toggles }: { data: ChartData; index: number; togg
           return v == null ? null : (
             // 좁은 화면에서는 범례가 차트를 가리지 않게 이동평균 값을 숨긴다.
             <span key={m.key} className={cn("max-sm:hidden", m.className)}>
-              MA{m.label} {formatNumber(v)}
+              MA{m.label} {formatNumber(v, digits)}
             </span>
           );
         })}
@@ -79,27 +79,36 @@ function Legend({ data, index, toggles }: { data: ChartData; index: number; togg
   );
 }
 
+/** `kind="index"` 면 코스피·코스닥 지수 차트 (소수 둘째 자리까지) */
 export default function ChartPanel({
   symbol,
   livePrice,
   liveTime,
+  kind = "stock",
 }: {
   symbol: string;
   livePrice: number | null;
   liveTime: string | null;
+  kind?: "stock" | "index";
 }) {
   const [timeframe, setTimeframe] = useState<Timeframe>("1d");
   const [toggles, setToggles] = useState<ChartToggles>({ ma: true, bollinger: false, volume: true, rsi: true, macd: false });
   const [hover, setHover] = useState<HoverBar | null>(null);
   const { resolved } = useTheme();
 
-  const chart = usePolling(`${symbol}:${timeframe}`, () => getChart(symbol, timeframe), REFRESH_MS[timeframe], "차트를 불러오지 못했습니다.");
+  const chart = usePolling(
+    `${kind}:${symbol}:${timeframe}`,
+    () => (kind === "index" ? getIndexChart(symbol, timeframe) : getChart(symbol, timeframe)),
+    REFRESH_MS[timeframe],
+    "차트를 불러오지 못했습니다."
+  );
+  const digits = kind === "index" ? 2 : 0;
   const data = chart.data;
   const legendIndex = hover?.index ?? (data ? data.candles.length - 1 : -1);
   const subPanes = Number(toggles.rsi) + Number(toggles.macd);
 
   return (
-    <section aria-label="차트" className="flex min-w-0 flex-col">
+    <section aria-label={kind === "index" ? "지수 차트" : "차트"} className="flex min-w-0 flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2">
         <div role="tablist" aria-label="봉 단위" className="flex items-center gap-0.5 rounded-control bg-surface-2 p-0.5">
           {TIMEFRAMES.map((t) => (
@@ -150,7 +159,7 @@ export default function ChartPanel({
           </div>
         ) : data && data.candles.length > 0 ? (
           <>
-            <Legend data={data} index={legendIndex} toggles={toggles} />
+            <Legend data={data} index={legendIndex} toggles={toggles} digits={digits} />
             <CandleChart
               className="h-full w-full"
               data={data}
@@ -159,6 +168,7 @@ export default function ChartPanel({
               livePrice={livePrice}
               liveTime={liveTime}
               onHover={setHover}
+              digits={digits}
             />
           </>
         ) : data ? (

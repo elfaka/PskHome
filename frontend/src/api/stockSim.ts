@@ -222,7 +222,77 @@ export type OrderResult = {
   portfolio: Portfolio;
 };
 
+// --- 시장 (지수·공포탐욕) ---------------------------------------------------
+
+export type MarketIndexSymbol = "KOSPI" | "KOSDAQ";
+
+export type MarketIndex = {
+  symbol: MarketIndexSymbol;
+  name: string;
+  value: number;
+  timestamp: string | null;
+  prevClose: number | null;
+  change: number | null;
+  changeRate: number | null;
+  /** 당일 추이 (5분 간격 종가, 오래된 것부터) */
+  intraday: { time: string; value: number }[];
+};
+
+export type FearGreedLevel = "EXTREME_FEAR" | "FEAR" | "NEUTRAL" | "GREED" | "EXTREME_GREED";
+
+export type FearGreedFactor = {
+  key: "momentum" | "rsi" | "volatility" | "riskAppetite" | "safeHaven" | "flow";
+  label: string;
+  /** 0(공포) ~ 100(탐욕). 데이터가 없으면 null */
+  score: number | null;
+  value: string;
+  reason: string;
+};
+
+export type FearGreed = {
+  /** 0 ~ 100 */
+  score: number;
+  level: FearGreedLevel;
+  label: string;
+  asOf: string;
+  factors: FearGreedFactor[];
+  history: { label: string; score: number | null }[];
+  disclaimer: string;
+};
+
+export type MarketOverview = {
+  indices: MarketIndex[];
+  fearGreed: FearGreed | null;
+  fearGreedNote: string | null;
+};
+
+/** 시장 전체 투자자별 순매수 대금 (원) */
+export type MarketInvestorDay = {
+  date: string;
+  individual: number;
+  foreigner: number;
+  institution: number;
+  otherCorporation: number;
+  tradingValue: number;
+};
+
 const path = (symbol: string) => encodeURIComponent(symbol);
+
+/** 코스피·코스닥 지수 + 공포·탐욕 지수 */
+export async function getMarket() {
+  const { data } = await api.get<MarketOverview>("/api/stocksim/market");
+  return data;
+}
+
+export async function getIndexChart(symbol: string, timeframe: Timeframe) {
+  const { data } = await api.get<ChartData>(`/api/stocksim/market/${path(symbol)}/chart`, { params: { timeframe } });
+  return data;
+}
+
+export async function getMarketInvestors(symbol: string) {
+  const { data } = await api.get<MarketInvestorDay[]>(`/api/stocksim/market/${path(symbol)}/investors`);
+  return data;
+}
 
 export async function searchStocks(q: string) {
   const { data } = await api.get<StockSearchItem[]>("/api/stocksim/search", { params: { q } });

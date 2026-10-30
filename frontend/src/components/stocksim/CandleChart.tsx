@@ -93,6 +93,7 @@ export default function CandleChart({
   liveTime,
   onHover,
   className,
+  digits = 0,
 }: {
   data: ChartData;
   toggles: ChartToggles;
@@ -102,6 +103,8 @@ export default function CandleChart({
   liveTime: string | null;
   onHover: (bar: HoverBar | null) => void;
   className?: string;
+  /** 가격 축 소수 자릿수 (주가 0, 지수 2) */
+  digits?: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -149,7 +152,7 @@ export default function CandleChart({
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: c.grid },
       timeScale: { borderColor: c.grid, timeVisible: intraday, secondsVisible: false, rightOffset: 4 },
-      localization: { locale: "ko-KR", priceFormatter: (p: number) => formatNumber(p) },
+      localization: { locale: "ko-KR", priceFormatter: (p: number) => formatNumber(p, digits) },
     });
 
     const line = (color: string, paneIndex = 0, style = LineStyle.Solid) =>
@@ -231,7 +234,7 @@ export default function CandleChart({
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [theme, timeframe, toggles.ma, toggles.bollinger, toggles.volume, toggles.rsi, toggles.macd]);
+  }, [theme, timeframe, digits, toggles.ma, toggles.bollinger, toggles.volume, toggles.rsi, toggles.macd]);
 
   // --- 데이터 반영 (폴링마다) --------------------------------------------------------
   useEffect(() => {
