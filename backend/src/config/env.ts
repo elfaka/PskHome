@@ -39,6 +39,12 @@ const envSchema = z.object({
   APP_LOGIN_SUCCESS_REDIRECT: z
     .string()
     .default("http://localhost:5173/googleform/forms"),
+
+  // --- 토스증권 Open API (모의투자 시세) ---
+  // WTS 설정 > Open API 에서 발급. 호출하는 서버 IP 를 허용 IP 로 등록해야 한다.
+  TOSS_CLIENT_ID: z.string().optional(),
+  TOSS_CLIENT_SECRET: z.string().optional(),
+  TOSS_API_BASE_URL: z.string().default("https://openapi.tossinvest.com"),
 });
 
 export type Env = z.infer<typeof envSchema>;

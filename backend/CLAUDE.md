@@ -42,6 +42,7 @@ src/
     ├── ping/                   # GET /api/ping
     ├── jsonprettier/           # /api/json/**       (공개)
     ├── pspost/                 # /api/posts/**      (공개)
+    ├── stocksim/               # /api/stocksim/**   (공개, 토스증권 시세 + 세션 포트폴리오)
     └── survey/                 # /api/auth/**, /api/oauth2/**, /api/forms/**
 ```
 
@@ -78,6 +79,7 @@ api.use(newModuleRouter);   // 라우터 안에서 router.use("/newmodule", requ
 - `POST /api/auth/logout`
 - `/api/json/**`
 - `/api/posts/**`
+- `/api/stocksim/**` (포트폴리오는 브라우저 세션 단위)
 - `/api/oauth2/**`, `/api/login/oauth2/**` (OAuth2 플로우)
 
 **인증 필요 (`requireAuth`)**
@@ -110,6 +112,8 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (없음) | 없으면 로그인 경로만 503 |
 | `GOOGLE_CALLBACK_URL` | `http://localhost:8080/api/login/oauth2/code/google` | Console 등록값과 일치해야 함 |
 | `APP_LOGIN_SUCCESS_REDIRECT` | `http://localhost:5173/googleform/forms` | |
+| `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` | (없음) | 토스증권 Open API. 없으면 `/api/stocksim` 시세 요청만 503 |
+| `TOSS_API_BASE_URL` | `https://openapi.tossinvest.com` | |
 
 **시크릿은 전부 optional 이다.** 하나가 없다고 프로세스 부팅을 막지 않고,
 해당 시크릿을 쓰는 엔드포인트만 런타임에 실패한다.
@@ -174,6 +178,8 @@ cd backend && npm run test:watch
 **테스트는 반드시 외부 의존 없이 돌아야 한다.**
 - DB: `vi.mock("../../lib/prisma.js")` + `src/testing/fakePrisma.ts` (기존 H2 역할)
 - Google: `vi.mock("./google/googleClientFactory.js")`
+- 토스: `vi.mock("./toss/tossClient.js")` + `src/testing/fakeTossClient.ts`
+  (`backend/.env` 에 실제 키가 있어도 테스트가 토스를 부르지 않도록 반드시 mock 한다)
 - 세션: 저장소가 프로세스 메모리라 별도 준비가 필요 없다
 
 ## 공통 실수 패턴
