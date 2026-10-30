@@ -3,13 +3,18 @@ import { HttpError } from "../../../lib/httpError.js";
 import type {
   TossCandlePage,
   TossErrorBody,
+  TossInvestorTradingPage,
   TossListedStock,
   TossMarket,
   TossOAuthErrorBody,
+  TossOrderbook,
   TossPrice,
+  TossPriceLimits,
   TossResponse,
+  TossShortSellingPage,
   TossStock,
   TossTokenResponse,
+  TossTrade,
 } from "./toss.types.js";
 
 /**
@@ -28,9 +33,17 @@ import type {
  */
 export interface TossClient {
   getPrices(symbols: string[]): Promise<TossPrice[]>;
-  getCandles(symbol: string, interval: "1m" | "1d", count: number): Promise<TossCandlePage>;
+  /** `before` 는 이전 응답의 `nextBefore` (이 시각과 같거나 이전 봉부터) */
+  getCandles(symbol: string, interval: "1m" | "1d", count: number, before?: string): Promise<TossCandlePage>;
   getStocks(symbols: string[]): Promise<TossStock[]>;
   getAllStocks(market: TossMarket): Promise<TossListedStock[]>;
+  getOrderbook(symbol: string): Promise<TossOrderbook>;
+  getTrades(symbol: string, count: number): Promise<TossTrade[]>;
+  getPriceLimits(symbol: string): Promise<TossPriceLimits>;
+  /** 국내 종목만. 최신순 */
+  getInvestorTrading(symbol: string, count: number): Promise<TossInvestorTradingPage>;
+  /** 국내 종목만. 최신순 */
+  getShortSelling(symbol: string, count: number): Promise<TossShortSellingPage>;
 }
 
 export interface TossClientOptions {
@@ -130,7 +143,8 @@ export function createTossClient(options: TossClientOptions): TossClient {
   }
 
   async function get<T>(path: string, query: Record<string, string>): Promise<T> {
-    const url = `${baseUrl}${path}?${new URLSearchParams(query)}`;
+    const qs = new URLSearchParams(query).toString();
+    const url = qs ? `${baseUrl}${path}?${qs}` : `${baseUrl}${path}`;
 
     for (let attempt = 0; ; attempt++) {
       const token = await getToken();
@@ -158,10 +172,26 @@ export function createTossClient(options: TossClientOptions): TossClient {
 
   return {
     getPrices: (symbols) => get<TossPrice[]>("/api/v1/prices", { symbols: symbols.join(",") }),
-    getCandles: (symbol, interval, count) =>
-      get<TossCandlePage>("/api/v1/candles", { symbol, interval, count: String(count) }),
+    getCandles: (symbol, interval, count, before) =>
+      get<TossCandlePage>("/api/v1/candles", {
+        symbol,
+        interval,
+        count: String(count),
+        ...(before ? { before } : {}),
+      }),
     getStocks: (symbols) => get<TossStock[]>("/api/v1/stocks", { symbols: symbols.join(",") }),
     getAllStocks: (market) => get<TossListedStock[]>("/api/v1/stocks/all", { market }),
+    getOrderbook: (symbol) => get<TossOrderbook>("/api/v1/orderbook", { symbol }),
+    getTrades: (symbol, count) => get<TossTrade[]>("/api/v1/trades", { symbol, count: String(count) }),
+    getPriceLimits: (symbol) => get<TossPriceLimits>("/api/v1/price-limits", { symbol }),
+    getInvestorTrading: (symbol, count) =>
+      get<TossInvestorTradingPage>(`/api/v1/stocks/${encodeURIComponent(symbol)}/investor-trading`, {
+        count: String(count),
+      }),
+    getShortSelling: (symbol, count) =>
+      get<TossShortSellingPage>(`/api/v1/stocks/${encodeURIComponent(symbol)}/short-selling`, {
+        count: String(count),
+      }),
   };
 }
 

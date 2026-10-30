@@ -120,6 +120,7 @@ jobs:
               echo "GOOGLE_CLIENT_SECRET='${{ secrets.GOOGLE_CLIENT_SECRET }}'"
               echo "TOSS_CLIENT_ID='${{ secrets.TOSS_CLIENT_ID }}'"
               echo "TOSS_CLIENT_SECRET='${{ secrets.TOSS_CLIENT_SECRET }}'"
+              echo "DART_API_KEY='${{ secrets.DART_API_KEY }}'"
             } > .env
 
       # 8. 이미지 내려받고 기동

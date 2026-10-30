@@ -73,6 +73,8 @@ export interface TossStock {
   securityType: string;
   status: "SCHEDULED" | "ACTIVE" | "DELISTED";
   currency: TossCurrency;
+  /** 발행주식수 (decimal 문자열) */
+  sharesOutstanding: string;
   koreanMarketDetail: {
     liquidationTrading: boolean;
     nxtSupported: boolean;
@@ -88,4 +90,68 @@ export interface TossListedStock {
   securityType: string;
   isCommonShare: boolean;
   isinCode: string;
+}
+
+/** GET /api/v1/orderbook */
+export interface TossOrderbook {
+  timestamp: string | null;
+  currency: TossCurrency;
+  /** 매도호가 (낮은 가격순) */
+  asks: { price: string; volume: string }[];
+  /** 매수호가 (높은 가격순) */
+  bids: { price: string; volume: string }[];
+}
+
+/** GET /api/v1/trades */
+export interface TossTrade {
+  price: string;
+  volume: string;
+  timestamp: string;
+  currency: TossCurrency;
+}
+
+/** GET /api/v1/price-limits */
+export interface TossPriceLimits {
+  timestamp: string;
+  upperLimitPrice: string | null;
+  lowerLimitPrice: string | null;
+  currency: TossCurrency;
+}
+
+export interface TossInvestorVolume {
+  buyVolume: string;
+  sellVolume: string;
+  netBuyVolume: string;
+}
+
+/** GET /api/v1/stocks/{symbol}/investor-trading 의 일별 기록 */
+export interface TossInvestorTradingRecord {
+  date: string;
+  /** 당일 잠정 기록에서는 null */
+  individual: TossInvestorVolume | null;
+  foreigner: TossInvestorVolume;
+  institution: TossInvestorVolume;
+  otherCorporation: TossInvestorVolume | null;
+  foreignerHolding: { holdingQuantity: string; limitQuantity: string; holdingRate: string } | null;
+}
+
+export interface TossInvestorTradingPage {
+  /** 최신순 */
+  records: TossInvestorTradingRecord[];
+  nextUntil: string | null;
+}
+
+/** GET /api/v1/stocks/{symbol}/short-selling 의 일별 기록 */
+export interface TossShortSellingRecord {
+  date: string;
+  shortSellingVolume: string;
+  shortSellingAmount: string;
+  shortSellingVolumeRate: string | null;
+  shortSellingAmountRate: string | null;
+}
+
+export interface TossShortSellingPage {
+  /** 최신순 */
+  records: TossShortSellingRecord[];
+  nextUntil: string | null;
 }

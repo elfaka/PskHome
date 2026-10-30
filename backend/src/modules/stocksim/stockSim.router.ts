@@ -2,9 +2,11 @@ import { Router, type Request } from "express";
 import { z } from "zod";
 
 import { HttpError } from "../../lib/httpError.js";
+import { getAnalysis } from "./analysis.service.js";
 import * as marketData from "./marketData.service.js";
+import { getOverview } from "./overview.service.js";
 import * as stockSimService from "./stockSim.service.js";
-import type { PortfolioState } from "./stockSim.types.js";
+import type { PortfolioState, Timeframe } from "./stockSim.types.js";
 
 /**
  * 주식 모의투자 — `/api/stocksim/**` (공개)
@@ -25,15 +27,13 @@ function portfolioOf(req: Request): PortfolioState {
   return req.session.stocksim ?? stockSimService.createPortfolio();
 }
 
-function parseCount(raw: unknown): number {
-  if (raw == null) return 60;
+const TIMEFRAMES: readonly Timeframe[] = ["1m", "5m", "15m", "1d", "1w", "1M"];
 
-  const count = Number(raw);
-  if (!Number.isInteger(count) || count < 1 || count > 200) {
-    throw HttpError.badRequest("count 는 1~200 사이의 정수여야 합니다.", "INVALID_PARAM");
-  }
+function parseTimeframe(raw: unknown): Timeframe {
+  if (raw == null) return "1d";
+  if (typeof raw === "string" && (TIMEFRAMES as readonly string[]).includes(raw)) return raw as Timeframe;
 
-  return count;
+  throw HttpError.badRequest(`timeframe 은 ${TIMEFRAMES.join(", ")} 중 하나여야 합니다.`, "INVALID_PARAM");
 }
 
 // 종목 검색 (이름 또는 코드)
@@ -48,9 +48,34 @@ stockSimRouter.get("/stocksim/quotes", async (req, res) => {
   res.json(await marketData.getQuotes(raw.split(",")));
 });
 
-// 일봉 (오래된 것부터)
-stockSimRouter.get("/stocksim/candles/:symbol", async (req, res) => {
-  res.json(await marketData.getDailyCandles(req.params.symbol, parseCount(req.query.count)));
+// 차트 — 봉(오래된 것부터) + 같은 길이의 지표 배열 (이동평균·볼린저·RSI·MACD)
+stockSimRouter.get("/stocksim/chart/:symbol", async (req, res) => {
+  res.json(await marketData.getChart(req.params.symbol, parseTimeframe(req.query.timeframe)));
+});
+
+// 종목 개요 — 현재가·시고저·52주·상하한가·시가총액·재무 지표
+stockSimRouter.get("/stocksim/stocks/:symbol/overview", async (req, res) => {
+  res.json(await getOverview(req.params.symbol));
+});
+
+// 매수·매도 추천 (규칙 기반, 항목별 사유 포함)
+stockSimRouter.get("/stocksim/stocks/:symbol/analysis", async (req, res) => {
+  res.json(await getAnalysis(req.params.symbol));
+});
+
+// 최근 20거래일 투자자별 순매수·공매도 비중 (최신순)
+stockSimRouter.get("/stocksim/stocks/:symbol/investors", async (req, res) => {
+  res.json(await marketData.getInvestorFlows(req.params.symbol));
+});
+
+// 10단계 호가
+stockSimRouter.get("/stocksim/orderbook/:symbol", async (req, res) => {
+  res.json(await marketData.getOrderbook(req.params.symbol));
+});
+
+// 당일 최근 체결 (최신순)
+stockSimRouter.get("/stocksim/trades/:symbol", async (req, res) => {
+  res.json(await marketData.getTrades(req.params.symbol));
 });
 
 stockSimRouter.get("/stocksim/portfolio", async (req, res) => {

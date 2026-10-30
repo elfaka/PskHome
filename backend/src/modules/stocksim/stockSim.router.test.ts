@@ -19,6 +19,9 @@ vi.mock("./toss/tossClient.js", () => ({
   },
 }));
 
+// backend/.env 에 DART 키가 있어도 테스트는 DART 를 부르지 않는다.
+vi.mock("./dart/dartClient.js", () => ({ getDartClient: () => null }));
+
 const { createApp } = await import("../../app.js");
 const { resetMarketDataCache } = await import("./marketData.service.js");
 
@@ -66,19 +69,107 @@ describe("stocksim routes", () => {
     expect(res.body.error.code).toBe("INVALID_SYMBOL");
   });
 
-  it("GET /api/stocksim/candles/:symbol returns oldest first", async () => {
-    const res = await request(app).get("/api/stocksim/candles/005930?count=5");
+  it("GET /api/stocksim/chart/:symbol pages through Toss candles and returns oldest first", async () => {
+    const res = await request(app).get("/api/stocksim/chart/005930?timeframe=1d");
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(5);
-    expect(res.body[0].time < res.body[4].time).toBe(true);
-    expect(toss.calls.at(-1)).toEqual({ method: "getCandles", args: ["005930", "1d", 5] });
+    expect(res.body.candles).toHaveLength(300);
+    expect(res.body.candles[0].time < res.body.candles[299].time).toBe(true);
+    expect(res.body.indicators.ma20).toHaveLength(300);
+    expect(res.body.indicators.ma20[18]).toBeNull();
+    expect(res.body.indicators.ma20[19]).not.toBeNull();
+
+    // 200 + 100 — 두 페이지로 이어 받았다.
+    const candleCalls = toss.calls.filter((c) => c.method === "getCandles");
+    expect(candleCalls.map((c) => c.args[2])).toEqual([200, 200]);
+    expect(candleCalls[1].args[3]).toBeTruthy();
   });
 
-  it("rejects a candle count outside 1..200", async () => {
-    const res = await request(app).get("/api/stocksim/candles/005930?count=500");
+  it("aggregates daily candles into weekly bars", async () => {
+    const res = await request(app).get("/api/stocksim/chart/005930?timeframe=1w");
+
+    expect(res.status).toBe(200);
+    expect(res.body.candles).toHaveLength(60); // 평일 300일 = 60주
+    expect(res.body.candles.at(-1).volume).toBe(5000);
+  });
+
+  it("aggregates minute candles into 15-minute bars", async () => {
+    const res = await request(app).get("/api/stocksim/chart/005930?timeframe=15m");
+
+    expect(res.status).toBe(200);
+    expect(res.body.candles.length).toBeGreaterThanOrEqual(20);
+    expect(res.body.candles.length).toBeLessThanOrEqual(21);
+  });
+
+  it("rejects an unknown timeframe", async () => {
+    const res = await request(app).get("/api/stocksim/chart/005930?timeframe=3d");
 
     expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("INVALID_PARAM");
+  });
+
+  it("GET /api/stocksim/orderbook/:symbol returns 10 levels with asks high to low", async () => {
+    const res = await request(app).get("/api/stocksim/orderbook/005930");
+
+    expect(res.status).toBe(200);
+    expect(res.body.asks).toHaveLength(10);
+    expect(res.body.bids).toHaveLength(10);
+    expect(res.body.asks[0].price).toBeGreaterThan(res.body.asks[9].price);
+    expect(res.body.asks[9].price).toBe(70_100); // 최우선 매도호가가 가운데(아래)
+    expect(res.body.bids[0].price).toBe(70_000);
+    expect(res.body.totalBidVolume).toBe(20 + 21 + 22 + 23 + 24 + 25 + 26 + 27 + 28 + 29);
+  });
+
+  it("GET /api/stocksim/trades/:symbol returns recent ticks", async () => {
+    const res = await request(app).get("/api/stocksim/trades/005930");
+
+    expect(res.status).toBe(200);
+    expect(res.body[0]).toEqual({ price: 70_000, volume: 1, time: expect.any(String) });
+  });
+
+  it("GET /api/stocksim/stocks/:symbol/investors merges flows and short selling", async () => {
+    const res = await request(app).get("/api/stocksim/stocks/005930/investors");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(20);
+    expect(res.body[0]).toMatchObject({
+      foreigner: 200,
+      institution: 100,
+      individual: -300,
+      foreignerHoldingRate: 0.5,
+      shortSellingRate: 0.01,
+    });
+  });
+
+  it("GET /api/stocksim/stocks/:symbol/overview combines price, ranges and limits", async () => {
+    const res = await request(app).get("/api/stocksim/stocks/005930/overview");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      symbol: "005930",
+      name: "삼성전자",
+      price: 70_000,
+      prevClose: 399,
+      upperLimit: 91_000,
+      lowerLimit: 49_000,
+      sharesOutstanding: 1_000_000,
+      marketCap: 70_000_000_000,
+      valuation: null,
+    });
+    expect(res.body.valuationNote).toContain("DART_API_KEY");
+  });
+
+  it("GET /api/stocksim/stocks/:symbol/analysis explains every factor", async () => {
+    const res = await request(app).get("/api/stocksim/stocks/005930/analysis");
+
+    expect(res.status).toBe(200);
+    expect(["STRONG_BUY", "BUY", "NEUTRAL", "SELL", "STRONG_SELL"]).toContain(res.body.rating);
+    expect(res.body.factors.length).toBeGreaterThan(10);
+    for (const f of res.body.factors) expect(f.reason).toBeTruthy();
+    expect(res.body.disclaimer).toContain("투자 권유가 아닙니다");
+    // DART 키가 없으면 가치 항목은 0점 + 사유
+    const per = res.body.factors.find((f: { key: string }) => f.key === "per");
+    expect(per).toMatchObject({ score: 0, signal: "unavailable" });
   });
 
   it("GET /api/stocksim/search finds KOSPI and KOSDAQ stocks by name or code", async () => {

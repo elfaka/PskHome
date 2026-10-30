@@ -34,5 +34,8 @@ services:
       # 토스증권 Open API (모의투자 시세). 이 서버의 공인 IP 가 토스 WTS 허용 IP 에 등록돼 있어야 한다.
       TOSS_CLIENT_ID: ${TOSS_CLIENT_ID}
       TOSS_CLIENT_SECRET: ${TOSS_CLIENT_SECRET}
+
+      # OpenDART (모의투자 재무 지표). 없으면 PER·PBR 등만 빠진다.
+      DART_API_KEY: ${DART_API_KEY}
     ports:
       - 8080:8080

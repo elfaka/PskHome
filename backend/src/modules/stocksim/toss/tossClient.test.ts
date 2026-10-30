@@ -188,6 +188,16 @@ describe("createTossClient", () => {
   it("only exposes read-only market data calls", () => {
     const t = setup(() => tokenResponse("tok"));
 
-    expect(Object.keys(t.client).sort()).toEqual(["getAllStocks", "getCandles", "getPrices", "getStocks"]);
+    expect(Object.keys(t.client).sort()).toEqual([
+      "getAllStocks",
+      "getCandles",
+      "getInvestorTrading",
+      "getOrderbook",
+      "getPriceLimits",
+      "getPrices",
+      "getShortSelling",
+      "getStocks",
+      "getTrades",
+    ]);
   });
 });

@@ -107,3 +107,164 @@ export interface CandlePoint {
   close: number;
   volume: number;
 }
+
+// ---------------------------------------------------------------------------
+// 시세 화면 (차트·호가·체결·수급·종목 개요)
+// ---------------------------------------------------------------------------
+
+/** 차트 봉 단위. 분봉은 토스 1분봉을, 주·월봉은 일봉을 묶어 만든다. */
+export type Timeframe = "1m" | "5m" | "15m" | "1d" | "1w" | "1M";
+
+export interface ChartIndicators {
+  ma5: (number | null)[];
+  ma20: (number | null)[];
+  ma60: (number | null)[];
+  ma120: (number | null)[];
+  bollinger: { middle: number | null; upper: number | null; lower: number | null }[];
+  rsi: (number | null)[];
+  macd: { macd: number | null; signal: number | null; histogram: number | null }[];
+}
+
+export interface ChartData {
+  symbol: string;
+  timeframe: Timeframe;
+  /** 오래된 것부터 */
+  candles: CandlePoint[];
+  /** candles 와 같은 길이·순서 */
+  indicators: ChartIndicators;
+}
+
+export interface OrderbookLevel {
+  price: number;
+  volume: number;
+}
+
+export interface Orderbook {
+  timestamp: string | null;
+  /** 매도호가 — 높은 가격이 위로 오도록 높은 가격순 */
+  asks: OrderbookLevel[];
+  /** 매수호가 — 높은 가격순 */
+  bids: OrderbookLevel[];
+  totalAskVolume: number;
+  totalBidVolume: number;
+}
+
+export interface TradeTick {
+  price: number;
+  volume: number;
+  time: string;
+}
+
+export interface InvestorFlowDay {
+  date: string;
+  /** 순매수 거래량(주). 당일 잠정치에서는 개인·기타법인이 null */
+  individual: number | null;
+  foreigner: number;
+  institution: number;
+  otherCorporation: number | null;
+  /** 외국인 보유율 (0.5 = 50%) */
+  foreignerHoldingRate: number | null;
+  /** 공매도 거래량 비중 (0.05 = 5%) */
+  shortSellingRate: number | null;
+}
+
+/** DART 사업보고서 기반 재무 지표 */
+export interface Valuation {
+  /** 예: "2025 사업보고서 (연결)" */
+  basis: string;
+  bsnsYear: number;
+  consolidated: boolean;
+  revenue: number | null;
+  operatingIncome: number | null;
+  netIncome: number | null;
+  totalEquity: number | null;
+  totalLiabilities: number | null;
+  eps: number | null;
+  bps: number | null;
+  /** EPS 가 0 이하(적자)면 null */
+  per: number | null;
+  pbr: number | null;
+  /** 0.12 = 12% */
+  roe: number | null;
+  operatingMargin: number | null;
+  debtRatio: number | null;
+  dividendPerShare: number | null;
+  dividendYield: number | null;
+}
+
+export interface StockOverview {
+  symbol: string;
+  name: string;
+  market: string;
+  securityType: string;
+  currency: "KRW" | "USD";
+  tradingSuspended: boolean;
+  price: number | null;
+  priceTime: string | null;
+  prevClose: number | null;
+  change: number | null;
+  changeRate: number | null;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  volume: number | null;
+  high52w: number | null;
+  low52w: number | null;
+  upperLimit: number | null;
+  lowerLimit: number | null;
+  sharesOutstanding: number | null;
+  marketCap: number | null;
+  valuation: Valuation | null;
+  /** valuation 이 null 인 이유 (키 미설정, ETF 등) */
+  valuationNote: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// 매수·매도 추천
+// ---------------------------------------------------------------------------
+
+export type Rating = "STRONG_BUY" | "BUY" | "NEUTRAL" | "SELL" | "STRONG_SELL";
+
+export type FactorCategory = "trend" | "momentum" | "position" | "flow" | "valuation";
+
+export interface AnalysisFactor {
+  key: string;
+  category: FactorCategory;
+  label: string;
+  /** 이 항목의 점수 (+ 매수 / - 매도) */
+  score: number;
+  /** 이 항목이 낼 수 있는 최대 절댓값 */
+  maxScore: number;
+  /** unavailable = 데이터가 없어 0점 처리 / info = 참고용(점수 없음) */
+  signal: "positive" | "negative" | "neutral" | "unavailable" | "info";
+  reason: string;
+}
+
+export interface Analysis {
+  symbol: string;
+  name: string;
+  asOf: string;
+  price: number;
+  /** -100 ~ 100 */
+  score: number;
+  rating: Rating;
+  ratingLabel: string;
+  summary: string;
+  factors: AnalysisFactor[];
+  indicators: {
+    ma5: number | null;
+    ma20: number | null;
+    ma60: number | null;
+    ma120: number | null;
+    rsi14: number | null;
+    macd: number | null;
+    macdSignal: number | null;
+    bollingerUpper: number | null;
+    bollingerLower: number | null;
+    high52w: number | null;
+    low52w: number | null;
+    return1y: number | null;
+    maxDrawdown1y: number | null;
+  };
+  disclaimer: string;
+}
