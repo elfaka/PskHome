@@ -13,6 +13,8 @@ const WIDTH = {
   content: "max-w-5xl",
   /** 도구 화면처럼 좌우로 넓게 쓰는 경우 */
   wide: "max-w-6xl",
+  /** 화면 폭 전체 — 증권사 시세 화면처럼 정보를 빽빽하게 펼치는 경우 (/stocksim 전용) */
+  full: "max-w-none",
 } as const;
 
 export default function Container({
@@ -27,7 +29,9 @@ export default function Container({
   return (
     <div
       className={cn(
-        "mx-auto w-full px-4 sm:px-6 lg:px-8",
+        "mx-auto w-full",
+        // 전체 폭 화면은 양옆 여백도 최소로 둔다.
+        size === "full" ? "px-2 sm:px-3" : "px-4 sm:px-6 lg:px-8",
         WIDTH[size],
         className
       )}

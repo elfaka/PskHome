@@ -1,9 +1,15 @@
 import { describe, it, expect } from "vitest";
 
-import type { CandlePoint } from "@/api/stockSim";
-
-import { previousClose } from "./candles";
-import { changeTone, formatRate, formatSignedWon, formatWon, maxBuyable } from "./format";
+import {
+  changeTone,
+  formatKrwCompact,
+  formatPercent,
+  formatRate,
+  formatShares,
+  formatSignedWon,
+  formatWon,
+  maxBuyable,
+} from "./format";
 
 describe("format", () => {
   it("formats won with thousands separators", () => {
@@ -36,34 +42,22 @@ describe("format", () => {
   });
 });
 
-describe("previousClose", () => {
-  const candle = (iso: string, close: number): CandlePoint => ({
-    time: iso,
-    open: close,
-    high: close,
-    low: close,
-    close,
-    volume: 0,
+describe("large number formats", () => {
+  it("formats market caps in 조·억", () => {
+    expect(formatKrwCompact(1_297_873_850_976_000)).toBe("1,297조 8,738억");
+    expect(formatKrwCompact(5_000_000_000_000)).toBe("5조");
+    expect(formatKrwCompact(123_400_000_000)).toBe("1,234억");
+    expect(formatKrwCompact(-250_000_000)).toBe("-2억");
   });
 
-  // KST 기준 10/28(수), 10/29(목), 10/30(금) 일봉
-  const candles = [
-    candle("2026-10-27T15:00:00.000Z", 100),
-    candle("2026-10-28T15:00:00.000Z", 110),
-    candle("2026-10-29T15:00:00.000Z", 120),
-  ];
-
-  it("uses the last candle before the quote's KST date", () => {
-    // 금요일 장중 현재가 → 전일(목) 종가
-    expect(previousClose(candles, "2026-10-30T03:00:00.000Z")).toBe(110);
+  it("formats share counts in 만·억", () => {
+    expect(formatShares(29_363_972)).toBe("2,936만");
+    expect(formatShares(-17_791_243)).toBe("-1,779만");
+    expect(formatShares(250_000_000)).toBe("2.50억");
+    expect(formatShares(950)).toBe("950");
   });
 
-  it("keeps Friday's comparison over the weekend", () => {
-    // 토요일에 봐도 현재가 시각은 금요일 장 마감이다.
-    expect(previousClose(candles, "2026-10-30T06:30:00.000Z", new Date("2026-10-31T03:00:00.000Z"))).toBe(110);
-  });
-
-  it("returns null without an earlier candle", () => {
-    expect(previousClose(candles.slice(0, 1), "2026-10-27T16:00:00.000Z")).toBeNull();
+  it("formats unsigned percentages", () => {
+    expect(formatPercent(0.1036)).toBe("10.36%");
   });
 });

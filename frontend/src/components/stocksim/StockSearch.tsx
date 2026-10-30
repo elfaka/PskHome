@@ -13,7 +13,14 @@ const DEBOUNCE_MS = 250;
  * 종목명·종목코드 검색. 고르면 `onSelect` 로 알리고 입력을 비운다.
  * 첫 검색은 백엔드가 토스에서 전체 종목 목록을 받아오느라 1~2초 걸린다 (이후 하루 캐시).
  */
-export default function StockSearch({ onSelect }: { onSelect: (item: StockSearchItem) => void }) {
+export default function StockSearch({
+  id,
+  onSelect,
+}: {
+  /** 넓은/좁은 화면용으로 두 번 그려지므로 라벨 연결용 id 를 따로 받는다 */
+  id: string;
+  onSelect: (item: StockSearchItem) => void;
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<StockSearchItem[]>([]);
   const [searching, setSearching] = useState(false);
@@ -62,11 +69,11 @@ export default function StockSearch({ onSelect }: { onSelect: (item: StockSearch
 
   return (
     <div className="relative">
-      <label htmlFor="stocksim-search" className="sr-only">
+      <label htmlFor={id} className="sr-only">
         종목 검색
       </label>
       <Input
-        id="stocksim-search"
+        id={id}
         type="search"
         value={query}
         onChange={(e) => changeQuery(e.target.value)}

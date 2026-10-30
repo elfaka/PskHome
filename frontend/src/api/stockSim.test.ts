@@ -4,8 +4,14 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/test/mocks/server";
 
 import {
-  getDailyCandles,
+  getAnalysis,
+  getChart,
+  getInvestorFlows,
+  getOrderbook,
+  getOverview,
   getPortfolio,
+  getQuotesWithChange,
+  getTrades,
   getQuotes,
   placeOrder,
   resetPortfolio,
@@ -31,10 +37,42 @@ describe("stockSim API functions", () => {
     expect(seen).toBe("005930,000660");
   });
 
-  it("getDailyCandles requests the given count", async () => {
-    const points = await getDailyCandles("005930", 5);
-    expect(points).toHaveLength(5);
-    expect(points[0]).toHaveProperty("close");
+  it("getChart passes the timeframe and returns aligned indicators", async () => {
+    let seen: string | null = null;
+    server.use(
+      http.get("/api/stocksim/chart/:symbol", ({ request }) => {
+        seen = new URL(request.url).searchParams.get("timeframe");
+        return HttpResponse.json({ symbol: "005930", timeframe: "1w", candles: [], indicators: {} });
+      })
+    );
+
+    await getChart("005930", "1w");
+    expect(seen).toBe("1w");
+
+    server.resetHandlers();
+    const chart = await getChart("005930", "1d");
+    expect(chart.indicators.ma20).toHaveLength(chart.candles.length);
+  });
+
+  it("getQuotesWithChange asks for the change", async () => {
+    let change: string | null = null;
+    server.use(
+      http.get("/api/stocksim/quotes", ({ request }) => {
+        change = new URL(request.url).searchParams.get("change");
+        return HttpResponse.json([]);
+      })
+    );
+
+    await getQuotesWithChange(["005930"]);
+    expect(change).toBe("1");
+  });
+
+  it("loads overview, analysis, flows, orderbook and trades", async () => {
+    expect((await getOverview("005930")).valuation?.per).toBeGreaterThan(0);
+    expect((await getAnalysis("005930")).factors.length).toBeGreaterThan(0);
+    expect((await getInvestorFlows("005930"))[0]).toHaveProperty("foreigner");
+    expect((await getOrderbook("005930")).asks).toHaveLength(10);
+    expect((await getTrades("005930"))[0]).toHaveProperty("price");
   });
 
   it("getPortfolio returns the portfolio shape", async () => {

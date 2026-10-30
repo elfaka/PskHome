@@ -15,6 +15,7 @@ Next.js (App Router) + TypeScript 프론트엔드 개발 가이드.
 | axios | HTTP 클라이언트 |
 | react-markdown | PS 게시글 본문 렌더링 |
 | motion (`motion/react`) | 청첩장 인트로·스크롤 애니메이션 (`/wedding` 에서만 import) |
+| lightweight-charts (TradingView) | 모의투자 캔들 차트 (`/stocksim` 에서만, `next/dynamic` 으로 브라우저에서만 로드) |
 | Vitest + MSW + Testing Library | 테스트 |
 
 > 이 프로젝트는 **클라이언트 중심**이다. 데이터는 서버 컴포넌트가 아니라
@@ -76,7 +77,7 @@ src/
 │   ├── layout/   # SiteShell, SiteHeader, SiteFooter, ProjectFlyout, nav.ts
 │   ├── pspost/PostForm.tsx
 │   ├── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
-│   ├── stocksim/    (StockSimulator, StockSearch, OrderPanel, PortfolioSections, PriceChart)
+│   ├── stocksim/    (StockSimulator 레이아웃, CandleChart/ChartPanel, OrderbookPanel, OrderPanel, AnalysisPanel ...)
 │   └── wedding/     (WeddingInvitation, introMachine, scene/* 첫 화면, sections/*, ui/*)
 ├── data/         # 화면이 공유하는 정적 데이터 (projects.ts, profile.ts, wedding.ts)
 ├── lib/          # 공용 유틸 (errorMessage, cn 등) — lib/wedding/ 은 청첩장 전용 순수 로직
@@ -107,6 +108,17 @@ src/
 `ThemeScript` 가 첫 페인트 전에 동기적으로 속성을 심어 플래시를 막고,
 상태는 `themeStore` + `useSyncExternalStore` 로 구독한다.
 `prefers-color-scheme` 만 쓰면 사용자 토글을 표현할 수 없어서 이 구조다.
+
+### 예외: `/stocksim` (주식 모의투자)
+
+- 이 화면만 `Container size="full"` 로 양옆 여백 없이 전체 폭을 쓴다 (증권사 WTS 형태).
+  xl 이상 3열(관심/보유 · 시세·차트·분석 · 호가·주문·체결) + 아래 계좌, lg 는 2열, 그보다 좁으면 탭으로 나눈다.
+- 국내 증권 관례대로 **상승 빨강(`danger`) / 하락 파랑(`info`)** 이다. `lib/stocksim/format.ts` 의 `TONE_TEXT` 를 쓴다.
+- 차트(`CandleChart`)는 canvas 라 클래스를 못 쓴다 — CSS 토큰 값을 읽어 색을 정하고, 테마가 바뀌면 다시 그린다.
+  시간은 KST 로 보이도록 9시간을 더해 넘긴다 (lightweight-charts 는 UTC 로 표시).
+  jsdom 에는 canvas 가 없으므로 테스트에서는 `vi.mock("./CandleChart")` 로 바꾼다.
+- 시세는 REST 폴링이다 (`lib/stocksim/usePolling.ts`, 탭이 보일 때만). 관심종목은 localStorage (`lib/stocksim/watchlist.ts`).
+- `cn` 은 클래스 충돌을 병합하지 않는다. 색이 바뀌는 텍스트는 기본 색(`text-fg`)을 빼고 넣어야 한다.
 
 ### 예외: `/wedding` (모바일 청첩장)
 
@@ -197,7 +209,7 @@ export async function fetchData(id: number) {
 **기존 API 파일:**
 - `src/api/pspost.ts` — PS 게시글 CRUD (`listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`)
 - `src/api/jsonPrettierApi.ts` — JSON 포맷 (`formatJson`)
-- `src/api/stockSim.ts` — 주식 모의투자 (`searchStocks`, `getQuotes`, `getDailyCandles`, `getPortfolio`, `placeOrder`, `resetPortfolio`)
+- `src/api/stockSim.ts` — 주식 모의투자 (검색·시세·차트·호가·체결·개요·분석·수급·포트폴리오·주문)
 
 **에러 메시지**는 `@/lib/errorMessage` 의 `errorMessage(e, fallback)` 로 뽑는다.
 백엔드 실패 응답 형태(`{ error: { code, message } }`)를 알고 있으므로 화면마다 파싱하지 않는다.

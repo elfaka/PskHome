@@ -79,7 +79,7 @@ backend/src/
     ├── ping/ping.router.ts
     ├── jsonprettier/                # router / service / types
     ├── pspost/                      # router / service / types
-    ├── stocksim/                    # 모의투자: router / service / marketData / toss/ (토스증권 클라이언트)
+    ├── stocksim/                    # 모의투자: 시세(toss/)·재무(dart/)·지표·추천·가상 매매
     └── survey/                      # auth.router, forms.router,
                                      # forms.service, analyze.service, google/
 
@@ -134,6 +134,7 @@ frontend/src/
 | `GOOGLE_CALLBACK_URL` | `http://localhost:8080/api/login/oauth2/code/google` | Console 등록값과 일치 필요 |
 | `APP_LOGIN_SUCCESS_REDIRECT` | `http://localhost:5173/googleform/forms` | |
 | `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` | (없음) | 토스증권 Open API (모의투자 시세). 호출 IP 를 WTS 허용 IP 에 등록 |
+| `DART_API_KEY` | (없음) | OpenDART (모의투자 재무 지표 PER·EPS·PBR 등) |
 
 ### 프론트엔드
 

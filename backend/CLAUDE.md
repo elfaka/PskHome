@@ -42,7 +42,7 @@ src/
     ├── ping/                   # GET /api/ping
     ├── jsonprettier/           # /api/json/**       (공개)
     ├── pspost/                 # /api/posts/**      (공개)
-    ├── stocksim/               # /api/stocksim/**   (공개, 토스증권 시세 + 세션 포트폴리오)
+    ├── stocksim/               # /api/stocksim/**   (공개) 모의투자 — 아래 '모의투자 모듈' 참고
     └── survey/                 # /api/auth/**, /api/oauth2/**, /api/forms/**
 ```
 
@@ -114,10 +114,29 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | `APP_LOGIN_SUCCESS_REDIRECT` | `http://localhost:5173/googleform/forms` | |
 | `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` | (없음) | 토스증권 Open API. 없으면 `/api/stocksim` 시세 요청만 503 |
 | `TOSS_API_BASE_URL` | `https://openapi.tossinvest.com` | |
+| `DART_API_KEY` | (없음) | OpenDART. 없으면 재무 지표(PER·PBR 등)만 빠지고 나머지는 동작 |
+| `DART_API_BASE_URL` | `https://opendart.fss.or.kr/api` | |
 
 **시크릿은 전부 optional 이다.** 하나가 없다고 프로세스 부팅을 막지 않고,
 해당 시크릿을 쓰는 엔드포인트만 런타임에 실패한다.
 (예: Google 시크릿이 없어도 JSON Prettier / PS Post 는 동작한다)
+
+## 모의투자 모듈 (`modules/stocksim/`)
+
+| 파일 | 역할 |
+|---|---|
+| `toss/tossClient.ts` | 토스증권 Open API — **조회 전용**. 주문 API(실계좌 체결)는 노출하지 않는다. 토큰은 client 당 1개라 캐시·단일 발급 |
+| `dart/dartClient.ts` | OpenDART — 종목코드→고유번호(zip), 사업보고서 주요계정·배당. 회사별 하루 캐시 |
+| `marketData.service.ts` | 시세·캔들(200개씩 이어 받기)·호가·체결·수급·검색. `TtlCache` 로 토스 rate limit 보호 |
+| `indicators.ts` | 이동평균·EMA·RSI·MACD·볼린저·최대낙폭·봉 묶기(5/15분, 주, 월) — 순수 함수 |
+| `valuation.ts` | DART 값 + 발행주식수 + 현재가 → EPS·BPS·PER·PBR·ROE·배당수익률 |
+| `overview.service.ts` | 종목 헤더용 개요 (부분 실패해도 나머지는 보여준다) |
+| `analysis.service.ts` | 규칙 기반 매수·매도 점수표. 항목마다 점수·사유, 합계로 5단계 등급 |
+| `stockSim.service.ts` | 가상 매매 규칙 (시장가, 체결가=서버가 조회한 현재가) |
+
+- 추천은 교육용 신호다. 응답의 `disclaimer` 를 화면에 항상 보여준다.
+- 지표·점수 규칙을 바꾸면 `analysis.service.ts` 상단 표와 `analysis.service.test.ts` 를 함께 고친다.
+- 재무 지표는 실패해도 예외를 던지지 않고 `valuationNote` 에 이유를 남긴다 (키 미설정, ETF 등).
 
 ## 데이터베이스
 
@@ -179,6 +198,7 @@ cd backend && npm run test:watch
 - DB: `vi.mock("../../lib/prisma.js")` + `src/testing/fakePrisma.ts` (기존 H2 역할)
 - Google: `vi.mock("./google/googleClientFactory.js")`
 - 토스: `vi.mock("./toss/tossClient.js")` + `src/testing/fakeTossClient.ts`
+- DART: `vi.mock("./dart/dartClient.js", () => ({ getDartClient: () => null }))` (클라이언트 자체 테스트는 fetch 주입)
   (`backend/.env` 에 실제 키가 있어도 테스트가 토스를 부르지 않도록 반드시 mock 한다)
 - 세션: 저장소가 프로세스 메모리라 별도 준비가 필요 없다
 

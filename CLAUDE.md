@@ -176,7 +176,8 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 - **`modules/jsonprettier/`** — `/api/json/**` 에 노출된 stateless JSON 포맷 서비스 (인증 불필요).
 - **`modules/pspost/`** — Prisma 로 MySQL 에 저장되는 게시글 CRUD. 엔드포인트 `/api/posts/**` 는 공개.
   응답은 Spring Data `Page<T>` 형태를 그대로 유지한다 (`lib/page.ts`).
-- **`modules/stocksim/`** — 주식 모의투자. 시세는 토스증권 Open API(`toss/tossClient.ts`, 조회 전용)에서 받고,
+- **`modules/stocksim/`** — 주식 모의투자. 시세·호가·수급은 토스증권 Open API(`toss/tossClient.ts`, 조회 전용),
+  재무 지표(PER·EPS·PBR 등)는 OpenDART(`dart/dartClient.ts`)에서 받는다. 규칙 기반 매수·매도 추천(`analysis.service.ts`) 포함.
   매매는 서버에서 가상 체결해 포트폴리오를 express-session 에 둔다. `/api/stocksim/**` 는 공개.
   **토스 주문 API 는 실제 계좌에 체결되므로 호출하지 않는다.**
 - **`modules/stocksim/`** — 주식 모의투자. 시세는 토스증권 Open API(`toss/tossClient.ts`, 조회 전용)에서 받고,
@@ -202,7 +203,7 @@ Next.js App Router SPA. 최상위 라우트 5개:
 - `/`, `/about`, `/project`, `/pspost/**` → `app/(home)/`
 - `/googleform/**` → `app/googleform/`
 - `/jsonprettier` → `app/jsonprettier/`
-- `/stocksim` → `app/stocksim/` (주식 모의투자)
+- `/stocksim` → `app/stocksim/` (주식 모의투자. 증권사 WTS 형태, 이 화면만 전체 폭)
 - `/wedding` → `app/wedding/` (모바일 청첩장. 백엔드 호출 없음, 사이트 테마와 분리)
 
 라우트 페이지는 얇게 유지하고 화면 구현은 `src/components/` 에 둔다.
