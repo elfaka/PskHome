@@ -132,11 +132,18 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | `valuation.ts` | DART 값 + 발행주식수 + 현재가 → EPS·BPS·PER·PBR·ROE·배당수익률 |
 | `overview.service.ts` | 종목 헤더용 개요 (부분 실패해도 나머지는 보여준다) |
 | `analysis.service.ts` | 규칙 기반 매수·매도 점수표. 항목마다 점수·사유, 합계로 5단계 등급 |
+| `market.service.ts` | 코스피·코스닥 지수(토스 시장 지표 API), 시장 투자자별 매매대금, 자체 계산 공포·탐욕 지수 |
 | `stockSim.service.ts` | 가상 매매 규칙 (시장가, 체결가=서버가 조회한 현재가) |
 
 - 추천은 교육용 신호다. 응답의 `disclaimer` 를 화면에 항상 보여준다.
 - 지표·점수 규칙을 바꾸면 `analysis.service.ts` 상단 표와 `analysis.service.test.ts` 를 함께 고친다.
 - 재무 지표는 실패해도 예외를 던지지 않고 `valuationNote` 에 이유를 남긴다 (키 미설정, ETF 등).
+- 공포·탐욕 지수는 공식 지수가 아니다. 항목·구간을 바꾸면 `market.service.ts` 상단 표와 `market.service.test.ts` 를 함께 고친다.
+  계산하지 못하면 `fearGreed: null` + `fearGreedNote` 로 이유를 주고 지수는 그대로 보여준다.
+- 시장 지표 캔들은 토스 한도가 초당 5회라 `marketThrottle` 로 호출 간격을 벌린다 (테스트는 0 으로 둔다).
+- 토스 토큰은 client 당 1개다. **로컬에서 운영과 같은 키로 서버를 오래 띄워 두면 운영 토큰이 계속 밀려난다** (401 `token-revoked`).
+  클라이언트가 한 번은 새로 받아 재시도하지만, 두 프로세스가 번갈아 발급하면 요청마다 토큰을 새로 받게 된다.
+  로컬 화면 확인은 가능하면 가짜 토스 서버(`TOSS_API_BASE_URL`)로 한다.
 
 ## 데이터베이스
 

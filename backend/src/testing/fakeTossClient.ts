@@ -14,7 +14,16 @@ export interface FakeTossClient extends TossClient {
   calls: { method: keyof TossClient; args: unknown[] }[];
   dailyCount: number;
   minuteCount: number;
+  /** 시장 지표 현재가 (KOSPI, KOSDAQ, KR_BOND_10Y) */
+  indicatorPrices: Map<string, number>;
 }
+
+/** 시장 지표 캔들의 가장 오래된 봉 값과 봉마다 오르는 폭 */
+const INDICATOR_CANDLE: Record<string, { base: number; step: number }> = {
+  KOSPI: { base: 2_500, step: 1 },
+  KOSDAQ: { base: 800, step: 0.5 },
+  KR_BOND_10Y: { base: 3, step: 0.001 },
+};
 
 export function krStock(symbol: string, name: string, overrides: Partial<TossStock> = {}): TossStock {
   return {
@@ -73,6 +82,11 @@ export function createFakeTossClient(): FakeTossClient {
     calls,
     dailyCount: 300,
     minuteCount: 300,
+    indicatorPrices: new Map([
+      ["KOSPI", 2_820],
+      ["KOSDAQ", 960],
+      ["KR_BOND_10Y", 3.3],
+    ]),
     async getPrices(symbols) {
       calls.push({ method: "getPrices", args: [symbols] });
       return symbols
@@ -176,6 +190,50 @@ export function createFakeTossClient(): FakeTossClient {
           shortSellingAmount: "1000",
           shortSellingVolumeRate: "0.01",
           shortSellingAmountRate: "0.01",
+        })),
+        nextUntil: null,
+      };
+    },
+    async getIndicatorPrices(symbols) {
+      calls.push({ method: "getIndicatorPrices", args: [symbols] });
+      return symbols
+        .filter((s) => fake.indicatorPrices.has(s))
+        .map((s) => ({ symbol: s, timestamp: "2026-10-30T06:30:00.000Z", lastPrice: String(fake.indicatorPrices.get(s)) }));
+    },
+    async getIndicatorCandles(symbol, interval, count, before) {
+      calls.push({ method: "getIndicatorCandles", args: [symbol, interval, count, before] });
+      const times = interval === "1d" ? dailyTimes(fake.dailyCount) : minuteTimes(fake.minuteCount);
+      const start = before ? times.findIndex((t) => t <= before) : 0;
+      const page = start < 0 ? [] : times.slice(start, start + count);
+      const { base, step } = INDICATOR_CANDLE[symbol];
+
+      // 오래된 봉일수록 `step` 만큼 낮다 → 꾸준히 오르는 시장
+      const candles = page.map((timestamp, i) => {
+        const close = base + (times.length - (start + i)) * step;
+        return {
+          timestamp,
+          openPrice: String(close - step),
+          highPrice: String(close + step),
+          lowPrice: String(close - 2 * step),
+          closePrice: String(close),
+          volume: "1000",
+        };
+      });
+      const next = start + count;
+      return { candles, nextBefore: start >= 0 && next < times.length ? times[next] : null };
+    },
+    async getMarketInvestorTrading(symbol, count) {
+      calls.push({ method: "getMarketInvestorTrading", args: [symbol, count] });
+      const amount = (buy: number, sell: number) => ({ buyAmount: String(buy * 1e9), sellAmount: String(sell * 1e9) });
+      return {
+        // 매수 합 = 매도 합 = 11,350억원. 외국인 +1,000억, 기관 +500억
+        records: dailyTimes(count).map((t) => ({
+          date: t.slice(0, 10),
+          updatedAt: t,
+          individual: amount(5_000, 5_100),
+          foreigner: amount(3_800, 3_700),
+          institution: amount(2_100, 2_050),
+          otherCorporation: amount(450, 500),
         })),
         nextUntil: null,
       };

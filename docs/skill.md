@@ -79,7 +79,7 @@ backend/src/
     ├── ping/ping.router.ts
     ├── jsonprettier/                # router / service / types
     ├── pspost/                      # router / service / types
-    ├── stocksim/                    # 모의투자: 시세(toss/)·재무(dart/)·지표·추천·가상 매매
+    ├── stocksim/                    # 모의투자: 시세(toss/)·재무(dart/)·지표·추천·지수·공포탐욕·가상 매매
     └── survey/                      # auth.router, forms.router,
                                      # forms.service, analyze.service, google/
 

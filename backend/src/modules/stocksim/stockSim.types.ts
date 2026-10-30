@@ -275,3 +275,65 @@ export interface Analysis {
   };
   disclaimer: string;
 }
+
+// ---------------------------------------------------------------------------
+// 시장 (지수·공포탐욕)
+// ---------------------------------------------------------------------------
+
+export type MarketIndexSymbol = "KOSPI" | "KOSDAQ";
+
+export interface MarketIndex {
+  symbol: MarketIndexSymbol;
+  name: string;
+  value: number;
+  /** 지수 시각 (토스가 주지 않으면 null) */
+  timestamp: string | null;
+  prevClose: number | null;
+  change: number | null;
+  changeRate: number | null;
+  /** 당일 추이 (5분 간격 종가, 오래된 것부터). 장 시작 전이면 마지막 거래일 */
+  intraday: { time: string; value: number }[];
+}
+
+export type FearGreedLevel = "EXTREME_FEAR" | "FEAR" | "NEUTRAL" | "GREED" | "EXTREME_GREED";
+
+export interface FearGreedFactor {
+  key: "momentum" | "rsi" | "volatility" | "riskAppetite" | "safeHaven" | "flow";
+  label: string;
+  /** 0(공포) ~ 100(탐욕). 데이터가 없으면 null */
+  score: number | null;
+  /** 근거가 된 값 (예: "125일선 대비 +3.2%") */
+  value: string;
+  reason: string;
+}
+
+export interface FearGreed {
+  /** 0 ~ 100 */
+  score: number;
+  level: FearGreedLevel;
+  label: string;
+  /** 기준 일봉 날짜 (KST) */
+  asOf: string;
+  factors: FearGreedFactor[];
+  /** 같은 방식으로 다시 계산한 과거 값 (5·21 거래일 전) */
+  history: { label: string; score: number | null }[];
+  disclaimer: string;
+}
+
+export interface MarketOverview {
+  indices: MarketIndex[];
+  fearGreed: FearGreed | null;
+  /** 공포탐욕을 계산하지 못한 이유 */
+  fearGreedNote: string | null;
+}
+
+/** 시장 전체 투자자별 순매수 대금 (원, 일별) */
+export interface MarketInvestorDay {
+  date: string;
+  individual: number;
+  foreigner: number;
+  institution: number;
+  otherCorporation: number;
+  /** 시장 전체 거래대금 (네 분류의 매수 합) */
+  tradingValue: number;
+}

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { HttpError } from "../../lib/httpError.js";
 import { getAnalysis } from "./analysis.service.js";
+import { getIndexChart, getMarketInvestors, getMarketOverview } from "./market.service.js";
 import * as marketData from "./marketData.service.js";
 import { getOverview } from "./overview.service.js";
 import * as stockSimService from "./stockSim.service.js";
@@ -67,6 +68,21 @@ stockSimRouter.get("/stocksim/stocks/:symbol/analysis", async (req, res) => {
 // 최근 20거래일 투자자별 순매수·공매도 비중 (최신순)
 stockSimRouter.get("/stocksim/stocks/:symbol/investors", async (req, res) => {
   res.json(await marketData.getInvestorFlows(req.params.symbol));
+});
+
+// 코스피·코스닥 지수 + 공포·탐욕 지수
+stockSimRouter.get("/stocksim/market", async (_req, res) => {
+  res.json(await getMarketOverview());
+});
+
+// 지수 차트 — 종목 차트와 같은 형태
+stockSimRouter.get("/stocksim/market/:symbol/chart", async (req, res) => {
+  res.json(await getIndexChart(req.params.symbol, parseTimeframe(req.query.timeframe)));
+});
+
+// 시장 전체 투자자별 순매수 대금 (최신순)
+stockSimRouter.get("/stocksim/market/:symbol/investors", async (req, res) => {
+  res.json(await getMarketInvestors(req.params.symbol));
 });
 
 // 10단계 호가

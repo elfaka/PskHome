@@ -3,9 +3,13 @@ import { HttpError } from "../../../lib/httpError.js";
 import type {
   TossCandlePage,
   TossErrorBody,
+  TossIndicatorCandlePage,
+  TossIndicatorPrice,
+  TossIndicatorSymbol,
   TossInvestorTradingPage,
   TossListedStock,
   TossMarket,
+  TossMarketInvestorPage,
   TossOAuthErrorBody,
   TossOrderbook,
   TossPrice,
@@ -28,8 +32,9 @@ import type {
  * - Client Credentials 로 발급받고 refresh token 은 없다. 만료가 다가오면 같은 엔드포인트로 재발급한다.
  * - **client 당 유효한 토큰은 1개뿐**이라, 재발급하면 이전 토큰은 즉시 무효가 된다.
  *   그래서 요청마다 발급하지 않고 메모리에 캐시하며, 동시에 여러 요청이 와도 발급은 한 번만 한다.
- * - 다른 프로세스(예: 로컬 개발 서버)가 같은 키로 재발급하면 우리 토큰이 죽는다.
- *   401(invalid-token / expired-token)을 받으면 토큰을 버리고 한 번만 재시도한다.
+ * - 다른 프로세스(예: 로컬 개발 서버)가 같은 키로 재발급하면 우리 토큰이 죽는다 (401 `token-revoked`).
+ *   토큰이 거절되면(`TOKEN_REJECTED_CODES`) 토큰을 버리고 새로 받아 한 번만 재시도한다.
+ *   같은 키로 두 프로세스를 동시에 띄워 두면 서로의 토큰을 계속 끊으므로, 로컬에서는 운영 키를 오래 켜 두지 않는다.
  */
 export interface TossClient {
   getPrices(symbols: string[]): Promise<TossPrice[]>;
@@ -44,6 +49,17 @@ export interface TossClient {
   getInvestorTrading(symbol: string, count: number): Promise<TossInvestorTradingPage>;
   /** 국내 종목만. 최신순 */
   getShortSelling(symbol: string, count: number): Promise<TossShortSellingPage>;
+  /** 시장 지표(지수·국채) 현재가 */
+  getIndicatorPrices(symbols: TossIndicatorSymbol[]): Promise<TossIndicatorPrice[]>;
+  /** 시장 지표 캔들. 분봉은 지수만 된다. 최신순 */
+  getIndicatorCandles(
+    symbol: TossIndicatorSymbol,
+    interval: "1m" | "1d",
+    count: number,
+    before?: string
+  ): Promise<TossIndicatorCandlePage>;
+  /** 시장 전체 투자자별 매매대금 (일별, 최신순) */
+  getMarketInvestorTrading(symbol: "KOSPI" | "KOSDAQ", count: number): Promise<TossMarketInvestorPage>;
 }
 
 export interface TossClientOptions {
@@ -58,7 +74,11 @@ export interface TossClientOptions {
 /** 만료 직전 토큰으로 요청하다 실패하지 않도록 여유를 두고 갱신한다. */
 const TOKEN_REFRESH_MARGIN_MS = 60_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
-const TOKEN_REJECTED_CODES = new Set(["invalid-token", "expired-token"]);
+/**
+ * 새 토큰으로 다시 시도하면 풀리는 401.
+ * `token-revoked` 는 다른 곳에서 같은 키로 재발급해 이 토큰이 밀려난 경우다.
+ */
+const TOKEN_REJECTED_CODES = new Set(["invalid-token", "expired-token", "token-revoked"]);
 
 /**
  * 토스 호출 실패(연결·인증·허용 IP·토스 쪽 오류)를 알리는 상태코드.
@@ -190,6 +210,19 @@ export function createTossClient(options: TossClientOptions): TossClient {
       }),
     getShortSelling: (symbol, count) =>
       get<TossShortSellingPage>(`/api/v1/stocks/${encodeURIComponent(symbol)}/short-selling`, {
+        count: String(count),
+      }),
+    getIndicatorPrices: (symbols) =>
+      get<TossIndicatorPrice[]>("/api/v1/market-indicators/prices", { symbols: symbols.join(",") }),
+    getIndicatorCandles: (symbol, interval, count, before) =>
+      get<TossIndicatorCandlePage>(`/api/v1/market-indicators/${symbol}/candles`, {
+        interval,
+        count: String(count),
+        ...(before ? { before } : {}),
+      }),
+    getMarketInvestorTrading: (symbol, count) =>
+      get<TossMarketInvestorPage>(`/api/v1/market-indicators/${symbol}/investor-trading`, {
+        interval: "1d",
         count: String(count),
       }),
   };

@@ -141,6 +141,47 @@ export interface TossInvestorTradingPage {
   nextUntil: string | null;
 }
 
+/** 시장 지표 심볼 카탈로그 중 쓰는 것 (지수, 국고채 10년 금리 %) */
+export type TossIndicatorSymbol = "KOSPI" | "KOSDAQ" | "KR_BOND_10Y";
+
+/** GET /api/v1/market-indicators/prices */
+export interface TossIndicatorPrice {
+  symbol: string;
+  /** 데이터 미제공 시 null */
+  timestamp: string | null;
+  lastPrice: string;
+}
+
+/** GET /api/v1/market-indicators/{symbol}/candles — 종목 캔들과 같고 통화만 없다 */
+export type TossIndicatorCandle = Omit<TossCandle, "currency">;
+
+export interface TossIndicatorCandlePage {
+  /** 최신순 */
+  candles: TossIndicatorCandle[];
+  nextBefore: string | null;
+}
+
+export interface TossTradingAmount {
+  buyAmount: string;
+  sellAmount: string;
+}
+
+/** GET /api/v1/market-indicators/{symbol}/investor-trading 의 기록 (원화 거래대금) */
+export interface TossMarketInvestorRecord {
+  date: string;
+  updatedAt: string;
+  individual: TossTradingAmount;
+  foreigner: TossTradingAmount;
+  institution: TossTradingAmount;
+  otherCorporation: TossTradingAmount;
+}
+
+export interface TossMarketInvestorPage {
+  /** 최신순 */
+  records: TossMarketInvestorRecord[];
+  nextUntil: string | null;
+}
+
 /** GET /api/v1/stocks/{symbol}/short-selling 의 일별 기록 */
 export interface TossShortSellingRecord {
   date: string;

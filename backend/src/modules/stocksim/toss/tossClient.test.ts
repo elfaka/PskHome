@@ -124,6 +124,66 @@ describe("createTossClient", () => {
     expect(t.tokenCalls()).toHaveLength(2);
   });
 
+  it("re-issues the token when another process revoked it", async () => {
+    let issued = 0;
+    const t = setup((call) => {
+      if (call.url.endsWith("/oauth2/token")) return tokenResponse(`tok-${++issued}`);
+      const auth = (call.init?.headers as Record<string, string>).Authorization;
+      return auth === "Bearer tok-1"
+        ? json(401, { error: { code: "token-revoked", message: "새로 발급된 토큰으로 대체" } })
+        : priceResponse();
+    });
+
+    await t.client.getPrices(["005930"]);
+    t.advance(1_000);
+    // 이후 요청은 새 토큰을 그대로 쓴다.
+    await t.client.getPrices(["005930"]);
+
+    expect(t.tokenCalls()).toHaveLength(2);
+  });
+
+  it("re-issues only once when concurrent requests all hit a revoked token", async () => {
+    let issued = 0;
+    let revoked = false;
+    const t = setup(async (call) => {
+      if (call.url.endsWith("/oauth2/token")) {
+        await new Promise((r) => setTimeout(r, 5));
+        return tokenResponse(`tok-${++issued}`);
+      }
+      const auth = (call.init?.headers as Record<string, string>).Authorization;
+      return revoked && auth === "Bearer tok-1"
+        ? json(401, { error: { code: "token-revoked", message: "무효화" } })
+        : priceResponse();
+    });
+
+    await t.client.getPrices(["005930"]);
+    revoked = true; // 로컬 서버가 같은 키로 재발급한 상황
+
+    const results = await Promise.all([
+      t.client.getPrices(["005930"]),
+      t.client.getPrices(["000660"]),
+      t.client.getPrices(["035720"]),
+    ]);
+
+    expect(results.every((r) => r.length === 1)).toBe(true);
+    expect(t.tokenCalls()).toHaveLength(2);
+  });
+
+  it("calls the market indicator endpoints with an encoded before cursor", async () => {
+    const t = setup((call) =>
+      call.url.endsWith("/oauth2/token") ? tokenResponse("tok") : json(200, { result: { candles: [], nextBefore: null } })
+    );
+
+    await t.client.getIndicatorCandles("KOSPI", "1d", 200, "2026-06-10T09:00:00+09:00");
+    await t.client.getMarketInvestorTrading("KOSDAQ", 20);
+
+    const [candles, investors] = t.calls.filter((c) => !c.url.endsWith("/oauth2/token"));
+    expect(candles.url).toBe(
+      "https://toss.test/api/v1/market-indicators/KOSPI/candles?interval=1d&count=200&before=2026-06-10T09%3A00%3A00%2B09%3A00"
+    );
+    expect(investors.url).toBe("https://toss.test/api/v1/market-indicators/KOSDAQ/investor-trading?interval=1d&count=20");
+  });
+
   it("gives up after one retry when the token keeps being rejected", async () => {
     const t = setup((call) =>
       call.url.endsWith("/oauth2/token")
@@ -191,7 +251,10 @@ describe("createTossClient", () => {
     expect(Object.keys(t.client).sort()).toEqual([
       "getAllStocks",
       "getCandles",
+      "getIndicatorCandles",
+      "getIndicatorPrices",
       "getInvestorTrading",
+      "getMarketInvestorTrading",
       "getOrderbook",
       "getPriceLimits",
       "getPrices",
