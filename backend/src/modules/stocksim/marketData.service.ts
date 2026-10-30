@@ -1,6 +1,6 @@
 import { HttpError } from "../../lib/httpError.js";
 import { TtlCache } from "../../lib/ttlCache.js";
-import { aggregateCandles, bollinger, macd, rsi, sma } from "./indicators.js";
+import { aggregateCandles, bollinger, kstDate, macd, rsi, sma } from "./indicators.js";
 import type { TossPriceLimits, TossStock } from "./toss/toss.types.js";
 import { getTossClient } from "./toss/tossClient.js";
 import type {
@@ -9,6 +9,7 @@ import type {
   InvestorFlowDay,
   Orderbook,
   Quote,
+  QuoteWithChange,
   StockSearchItem,
   Timeframe,
   TradeTick,
@@ -58,6 +59,8 @@ const orderbookCache = new TtlCache<Orderbook>(2_000);
 const tradesCache = new TtlCache<TradeTick[]>(2_000);
 const priceLimitCache = new TtlCache<TossPriceLimits>(60_000);
 const flowCache = new TtlCache<InvestorFlowDay[]>(10 * 60_000);
+/** 관심종목 등락률용 최근 일봉 2개 (최신순) */
+const recentDailyCache = new TtlCache<CandlePoint[]>(5 * 60_000);
 let universe: Cached<StockSearchItem[]> | null = null;
 let universeLoading: Promise<StockSearchItem[]> | null = null;
 
@@ -75,6 +78,7 @@ export function resetMarketDataCache(): void {
   tradesCache.clear();
   priceLimitCache.clear();
   flowCache.clear();
+  recentDailyCache.clear();
   universe = null;
   universeLoading = null;
 }
@@ -132,6 +136,40 @@ export async function getQuote(symbol: string): Promise<Quote> {
   }
 
   return quote;
+}
+
+/**
+ * 현재가 + 전일 대비. 토스 현재가에는 전일 종가가 없어서 최근 일봉 2개로 구한다.
+ * 장 마감 뒤·주말에는 현재가가 마지막 거래일 종가라서, 현재가 날짜의 봉이 있으면 그 전 봉이 전일이다.
+ * 일봉을 못 받은 종목은 등락만 비운다.
+ */
+export async function getQuotesWithChange(rawSymbols: string[]): Promise<QuoteWithChange[]> {
+  const quotes = await getQuotes(rawSymbols);
+  const client = getTossClient();
+
+  return Promise.all(
+    quotes.map(async (q) => {
+      const bars = await recentDailyCache
+        .get(q.symbol, async () =>
+          (await client.getCandles(q.symbol, "1d", 2)).candles.map((c) => ({
+            time: c.timestamp,
+            open: Number(c.openPrice),
+            high: Number(c.highPrice),
+            low: Number(c.lowPrice),
+            close: Number(c.closePrice),
+            volume: Number(c.volume),
+          }))
+        )
+        .catch(() => [] as CandlePoint[]);
+
+      const quoteDate = q.timestamp ? kstDate(q.timestamp) : null;
+      const prev = bars[0] && quoteDate === kstDate(bars[0].time) ? bars[1] : bars[0];
+      const prevClose = prev?.close ?? null;
+      const change = prevClose != null ? q.price - prevClose : null;
+
+      return { ...q, prevClose, change, changeRate: change != null && prevClose ? change / prevClose : null };
+    })
+  );
 }
 
 export async function getStock(rawSymbol: string): Promise<TossStock> {

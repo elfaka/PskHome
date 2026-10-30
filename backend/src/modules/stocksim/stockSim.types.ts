@@ -92,6 +92,13 @@ export interface Quote {
   timestamp: string | null;
 }
 
+/** 관심종목 목록용 — 현재가 + 전일 대비 */
+export interface QuoteWithChange extends Quote {
+  prevClose: number | null;
+  change: number | null;
+  changeRate: number | null;
+}
+
 export interface StockSearchItem {
   symbol: string;
   name: string;

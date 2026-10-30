@@ -42,10 +42,11 @@ stockSimRouter.get("/stocksim/search", async (req, res) => {
   res.json(await marketData.searchStocks(q));
 });
 
-// 현재가 다건 조회 — symbols=005930,000660
+// 현재가 다건 조회 — symbols=005930,000660 (change=1 이면 전일 대비 포함)
 stockSimRouter.get("/stocksim/quotes", async (req, res) => {
   const raw = typeof req.query.symbols === "string" ? req.query.symbols : "";
-  res.json(await marketData.getQuotes(raw.split(",")));
+  const symbols = raw.split(",");
+  res.json(req.query.change === "1" ? await marketData.getQuotesWithChange(symbols) : await marketData.getQuotes(symbols));
 });
 
 // 차트 — 봉(오래된 것부터) + 같은 길이의 지표 배열 (이동평균·볼린저·RSI·MACD)

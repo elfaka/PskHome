@@ -55,6 +55,14 @@ describe("stocksim routes", () => {
     ]);
   });
 
+  it("GET /api/stocksim/quotes?change=1 adds the change from the previous close", async () => {
+    const res = await request(app).get("/api/stocksim/quotes?symbols=005930&change=1");
+
+    expect(res.status).toBe(200);
+    // 현재가(10/30)와 같은 날 봉이 있으므로 그 전 봉(10/29, 종가 399)이 전일 종가다.
+    expect(res.body[0]).toMatchObject({ symbol: "005930", price: 70_000, prevClose: 399, change: 70_000 - 399 });
+  });
+
   it("caches quotes briefly so repeated views hit Toss once", async () => {
     await request(app).get("/api/stocksim/quotes?symbols=005930");
     await request(app).get("/api/stocksim/quotes?symbols=005930");
