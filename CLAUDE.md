@@ -176,12 +176,18 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 - **`modules/jsonprettier/`** — `/api/json/**` 에 노출된 stateless JSON 포맷 서비스 (인증 불필요).
 - **`modules/pspost/`** — Prisma 로 MySQL 에 저장되는 게시글 CRUD. 엔드포인트 `/api/posts/**` 는 공개.
   응답은 Spring Data `Page<T>` 형태를 그대로 유지한다 (`lib/page.ts`).
+- **`modules/stocksim/`** — 주식 모의투자. 시세는 토스증권 Open API(`toss/tossClient.ts`, 조회 전용)에서 받고,
+  매매는 서버에서 가상 체결해 포트폴리오를 express-session 에 둔다. `/api/stocksim/**` 는 공개.
+  **토스 주문 API 는 실제 계좌에 체결되므로 호출하지 않는다.**
+- **`modules/stocksim/`** — 주식 모의투자. 시세는 토스증권 Open API(`toss/tossClient.ts`, 조회 전용)에서 받고,
+  매매는 서버에서 가상 체결해 포트폴리오를 express-session 에 둔다. `/api/stocksim/**` 는 공개.
+  **토스 주문 API 는 실제 계좌에 체결되므로 호출하지 않는다.**
 - **`modules/survey/`** — Google Forms/Drive 연동. `passport-google-oauth20` 세션 로그인.
   OAuth2 엔드포인트: `/api/oauth2/**`, `/api/login/oauth2/**`.
   로그인 성공 시 `APP_LOGIN_SUCCESS_REDIRECT` 로 리다이렉트.
 - **`app.ts`** — 미들웨어/라우터 조립. **공개/인증 경계가 여기서 결정된다.**
   인증이 필요한 라우터만 `middleware/requireAuth.ts` 를 붙인다.
-  공개: `/api/ping`, `/api/auth/me`, `/api/auth/logout`, `/api/json/**`, `/api/posts/**`, OAuth2 flow.
+  공개: `/api/ping`, `/api/auth/me`, `/api/auth/logout`, `/api/json/**`, `/api/posts/**`, `/api/stocksim/**`, OAuth2 flow.
   인증 필요: `/api/forms/**`.
 
 **설정:** 프로파일 대신 `.env` + `config/env.ts`(zod 스키마) 하나로 관리한다.
@@ -192,10 +198,11 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 
 ### 프론트엔드 (`frontend/src/`)
 
-Next.js App Router SPA. 최상위 라우트 4개:
+Next.js App Router SPA. 최상위 라우트 5개:
 - `/`, `/about`, `/project`, `/pspost/**` → `app/(home)/`
 - `/googleform/**` → `app/googleform/`
 - `/jsonprettier` → `app/jsonprettier/`
+- `/stocksim` → `app/stocksim/` (주식 모의투자)
 - `/wedding` → `app/wedding/` (모바일 청첩장. 백엔드 호출 없음, 사이트 테마와 분리)
 
 라우트 페이지는 얇게 유지하고 화면 구현은 `src/components/` 에 둔다.
@@ -203,4 +210,4 @@ Next.js App Router SPA. 최상위 라우트 4개:
 개발 서버는 `next.config.ts` 의 `rewrites` 로 `/api` 를 `http://localhost:8080` 에 프록시한다.
 프로덕션 빌드는 standalone Node 서버로 실행한다.
 
-API 호출은 `src/api/` 폴더에 기능별로 구성(`pspost.ts`, `jsonPrettierApi.ts`, `client.ts`).
+API 호출은 `src/api/` 폴더에 기능별로 구성(`pspost.ts`, `jsonPrettierApi.ts`, `stockSim.ts`, `client.ts`).

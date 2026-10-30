@@ -49,6 +49,12 @@ src/app/
 │   ├── layout.tsx                               # metadata
 │   ├── page.tsx                                 # /jsonprettier
 │   └── [...slug]/page.tsx                       # 그 외 → /jsonprettier 로 리다이렉트
+├── stocksim/                                    # 주식 모의투자 (layout: metadata + SiteShell)
+│   ├── page.tsx                                 # /stocksim
+│   └── [...slug]/page.tsx                       # 그 외 → /stocksim 으로 리다이렉트
+├── stocksim/                                    # 주식 모의투자 (layout: metadata + SiteShell)
+│   ├── page.tsx                                 # /stocksim
+│   └── [...slug]/page.tsx                       # 그 외 → /stocksim 으로 리다이렉트
 └── wedding/                                     # 모바일 청첩장 — SiteShell 없음, 사이트 테마와 분리
     ├── layout.tsx                               # metadata(noindex), 폰트, .wedding-root
     ├── page.tsx                                 # /wedding
@@ -70,6 +76,7 @@ src/
 │   ├── layout/   # SiteShell, SiteHeader, SiteFooter, ProjectFlyout, nav.ts
 │   ├── pspost/PostForm.tsx
 │   ├── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
+│   ├── stocksim/    (StockSimulator, StockSearch, OrderPanel, PortfolioSections, PriceChart)
 │   └── wedding/     (WeddingInvitation, introMachine, scene/* 첫 화면, sections/*, ui/*)
 ├── data/         # 화면이 공유하는 정적 데이터 (projects.ts, profile.ts, wedding.ts)
 ├── lib/          # 공용 유틸 (errorMessage, cn 등) — lib/wedding/ 은 청첩장 전용 순수 로직
@@ -190,6 +197,7 @@ export async function fetchData(id: number) {
 **기존 API 파일:**
 - `src/api/pspost.ts` — PS 게시글 CRUD (`listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`)
 - `src/api/jsonPrettierApi.ts` — JSON 포맷 (`formatJson`)
+- `src/api/stockSim.ts` — 주식 모의투자 (`searchStocks`, `getQuotes`, `getDailyCandles`, `getPortfolio`, `placeOrder`, `resetPortfolio`)
 
 **에러 메시지**는 `@/lib/errorMessage` 의 `errorMessage(e, fallback)` 로 뽑는다.
 백엔드 실패 응답 형태(`{ error: { code, message } }`)를 알고 있으므로 화면마다 파싱하지 않는다.

@@ -79,6 +79,7 @@ backend/src/
     ├── ping/ping.router.ts
     ├── jsonprettier/                # router / service / types
     ├── pspost/                      # router / service / types
+    ├── stocksim/                    # 모의투자: router / service / marketData / toss/ (토스증권 클라이언트)
     └── survey/                      # auth.router, forms.router,
                                      # forms.service, analyze.service, google/
 
@@ -96,17 +97,20 @@ frontend/src/
 │   ├── layout.tsx                   #   루트 레이아웃
 │   ├── (home)/                      #   /, /about, /project, /pspost/**
 │   ├── googleform/                  #   /googleform/**
-│   └── jsonprettier/                #   /jsonprettier
+│   ├── jsonprettier/                #   /jsonprettier
+│   └── stocksim/                    #   /stocksim (주식 모의투자)
 ├── api/
 │   ├── client.ts                    # axios 인스턴스 (withCredentials)
 │   ├── pspost.ts                    # PS Post API 함수
-│   └── jsonPrettierApi.ts           # JSON Prettier API 함수
+│   ├── jsonPrettierApi.ts           # JSON Prettier API 함수
+│   └── stockSim.ts                  # 주식 모의투자 API 함수
 ├── components/
 │   ├── ui/                          # 디자인 프리미티브 (Button, Card, Field ...)
 │   ├── theme/                       # 라이트/다크 테마
 │   ├── layout/                      # SiteShell, SiteHeader, SiteFooter
 │   ├── pspost/PostForm.tsx          # 작성/수정 공용 폼
-│   └── googleform/                  # GoogleFormShell, FormsList, Login, analyze/*
+│   ├── googleform/                  # GoogleFormShell, FormsList, Login, analyze/*
+│   └── stocksim/                    # StockSimulator 와 하위 패널
 ├── lib/
 │   ├── errorMessage.ts              # 공용 에러 메시지 추출
 │   └── cn.ts                        # 조건부 클래스 합성
@@ -129,6 +133,7 @@ frontend/src/
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (없음) | 없으면 로그인 경로만 503 |
 | `GOOGLE_CALLBACK_URL` | `http://localhost:8080/api/login/oauth2/code/google` | Console 등록값과 일치 필요 |
 | `APP_LOGIN_SUCCESS_REDIRECT` | `http://localhost:5173/googleform/forms` | |
+| `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` | (없음) | 토스증권 Open API (모의투자 시세). 호출 IP 를 WTS 허용 IP 에 등록 |
 
 ### 프론트엔드
 
@@ -154,7 +159,7 @@ cd frontend && npm run test
 ## 보안 엔드포인트 정책
 
 - **공개 (인증 불필요):** `/api/ping`, `/api/auth/me`, `/api/auth/logout`,
-  `/api/json/**`, `/api/posts/**`, `/api/oauth2/**`, `/api/login/oauth2/**`
+  `/api/json/**`, `/api/posts/**`, `/api/stocksim/**`, `/api/oauth2/**`, `/api/login/oauth2/**`
 - **인증 필요:** `/api/forms/**` (Google OAuth2 세션)
 - **미인증 응답:** 302 리다이렉트가 아니라 401 JSON
 

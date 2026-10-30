@@ -23,6 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/project", label: "Project", group: "main" },
   { href: "/jsonprettier", label: "JSON Prettier", section: true, group: "tools" },
   { href: "/googleform", label: "Forms 분석", section: true, group: "tools" },
+  { href: "/stocksim", label: "모의투자", section: true, group: "tools" },
 ];
 
 /** 현재 경로가 해당 항목에 해당하는지. */

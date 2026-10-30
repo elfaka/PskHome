@@ -62,6 +62,16 @@ export const PROJECTS: ProjectInfo[] = [
     tags: ["Next.js", "TypeScript", "Express", "JSON", "Toy Project"],
     link: { href: "/jsonprettier", internal: true },
   },
+  {
+    id: 5,
+    title: "주식 모의투자 시뮬레이터",
+    subtitle: "Stock Trading Simulator (토스증권 Open API)",
+    description:
+      "토스증권 Open API 의 실시세로 국내 주식을 가상 매수·매도해 보는 모의투자 페이지입니다. 가상 예수금 1,000만 원으로 시작해 보유 종목의 평가손익과 수익률, 거래내역을 확인할 수 있습니다. 실제 계좌로는 주문이 나가지 않습니다.",
+    status: "in-progress",
+    tags: ["Toss Securities Open API", "Express", "Next.js", "Finance"],
+    link: { href: "/stocksim", internal: true },
+  },
 ];
 
 /**
