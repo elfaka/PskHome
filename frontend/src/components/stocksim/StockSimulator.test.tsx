@@ -16,22 +16,63 @@ vi.mock("./CandleChart", () => ({
   ),
 }));
 
-/** 넓은 화면용·좁은 화면용 검색창이 둘 다 그려진다 (CSS 로 하나만 보인다). */
 const searchBox = () => screen.getByLabelText("종목 검색", { selector: "#stocksim-search" });
+/** 상단 바의 화면 탭 */
+const screenTab = (name: string) => within(screen.getByRole("tablist", { name: "화면" })).getByRole("tab", { name });
 
 describe("StockSimulator", () => {
   beforeEach(() => {
     localStorage.clear();
+    // 탭은 주소(?tab=)에 남으므로 테스트마다 처음 주소로 돌린다.
+    window.history.replaceState(null, "", "/stocksim");
   });
 
-  it("shows the quote header with price, change and key stats", async () => {
+  it("starts on the trade tab with the quote, key stats, chart, signal and order panels", async () => {
     render(<StockSimulator />);
+
+    expect(screenTab("매매")).toHaveAttribute("aria-selected", "true");
 
     const header = screen.getByRole("region", { name: "종목 시세" });
     expect(await within(header).findByText("77,000")).toBeInTheDocument();
     expect(within(header).getByText(/▲ 1,000 \(\+1\.32%\)/)).toBeInTheDocument();
-    expect(within(header).getByText("시가총액")).toBeInTheDocument();
-    expect(within(header).getByText("11.66배")).toBeInTheDocument();
+
+    const stats = await screen.findByRole("region", { name: "시세 요약" });
+    expect(within(stats).getByText("시가총액")).toBeInTheDocument();
+    expect(within(stats).getByText("11.66배")).toBeInTheDocument();
+
+    expect(screen.getByRole("region", { name: "매매 신호" })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "주문" })).toBeInTheDocument();
+    // 다른 탭의 내용은 그리지 않는다
+    expect(screen.queryByRole("region", { name: "투자 지표" })).not.toBeInTheDocument();
+  });
+
+  it("opens the tab named in the address and keeps the chosen tab in it", async () => {
+    window.history.replaceState(null, "", "/stocksim?tab=account");
+    const user = userEvent.setup();
+    render(<StockSimulator />);
+
+    expect(screenTab("계좌")).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("region", { name: "보유종목 1" })).toBeInTheDocument();
+    // 계좌 탭에는 종목 선택 줄이 없다
+    expect(screen.queryByRole("region", { name: "종목 시세" })).not.toBeInTheDocument();
+
+    await user.click(screenTab("투자자 동향"));
+    expect(window.location.search).toBe("?tab=investors");
+
+    await user.click(screenTab("매매"));
+    expect(window.location.search).toBe("");
+  });
+
+  it("goes back to the trade tab when a holding is picked in the account tab", async () => {
+    window.history.replaceState(null, "", "/stocksim?tab=account");
+    const user = userEvent.setup();
+    render(<StockSimulator />);
+
+    const holdings = await screen.findByRole("region", { name: "보유종목 1" });
+    await user.click(within(holdings).getByRole("button", { name: /삼성전자/ }));
+
+    expect(screenTab("매매")).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("form", { name: "주문" })).toBeInTheDocument();
   });
 
   it("draws the chart and switches timeframe", async () => {
@@ -53,17 +94,28 @@ describe("StockSimulator", () => {
     expect(screen.getByText(/투자 권유가 아닙니다/)).toBeInTheDocument();
   });
 
-  it("shows valuation metrics and investor flows in their tabs", async () => {
+  it("shows valuation metrics with three years of financials, and investor flows, in their tabs", async () => {
     const user = userEvent.setup();
     render(<StockSimulator />);
 
-    await user.click(screen.getByRole("tab", { name: "투자 지표" }));
+    await user.click(screenTab("투자 지표"));
     const value = await screen.findByRole("region", { name: "가치" });
     expect(within(value).getByText("6,605원")).toBeInTheDocument();
-    expect(screen.getByText(/2025 사업보고서/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "투자자 동향" }));
+    const fin = screen.getByRole("region", { name: "재무 지표 (최근 3년)" });
+    const table = within(fin).getByRole("table");
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["항목", "2023", "2024", "2025"]);
+    const revenue = within(table).getByRole("row", { name: /매출액/ });
+    expect(within(revenue).getByText("258조 9,354억원")).toBeInTheDocument();
+    expect(within(revenue).getByText("전년 대비 +16.20%")).toBeInTheDocument();
+    expect(within(table).getByRole("row", { name: /주당배당금/ })).toHaveTextContent("1,444원1,446원1,668원");
+    expect(within(fin).getByRole("figure", { name: "실적 추이" })).toBeInTheDocument();
+    // 종목 선택 줄은 투자 지표 탭에도 있다
+    expect(screen.getByRole("region", { name: "종목 시세" })).toBeInTheDocument();
+
+    await user.click(screenTab("투자자 동향"));
     expect(await screen.findByText(/외국인 5일 누적/)).toBeInTheDocument();
+    expect(screen.getByRole("figure", { name: "일별 순매수 추이" })).toBeInTheDocument();
   });
 
   it("shows KOSPI, KOSDAQ and the fear & greed index in the market strip", async () => {
@@ -71,10 +123,9 @@ describe("StockSimulator", () => {
 
     const strip = await screen.findByRole("region", { name: "시장 지수" });
     expect(await within(strip).findByText("2,812.45")).toBeInTheDocument();
-    expect(within(strip).getByText("▲14.35")).toBeInTheDocument();
-    expect(within(strip).getByText("+0.51%")).toBeInTheDocument();
+    expect(within(strip).getByText("▲14.35 +0.51%")).toBeInTheDocument();
     expect(within(strip).getByText("845.32")).toBeInTheDocument();
-    expect(within(strip).getByText("▼4.68")).toBeInTheDocument();
+    expect(within(strip).getByText("▼4.68 -0.55%")).toBeInTheDocument();
     expect(within(strip).getByRole("button", { name: "공포·탐욕 지수 62 탐욕" })).toBeInTheDocument();
   });
 
@@ -85,7 +136,8 @@ describe("StockSimulator", () => {
     const strip = await screen.findByRole("region", { name: "시장 지수" });
     await user.click(await within(strip).findByRole("button", { name: /코스닥/ }));
 
-    expect(screen.getByRole("tab", { name: "시장" })).toHaveAttribute("aria-selected", "true");
+    expect(screenTab("시장")).toHaveAttribute("aria-selected", "true");
+    expect(window.location.search).toBe("?tab=market");
     expect(screen.getByRole("tab", { name: "코스닥" })).toHaveAttribute("aria-selected", "true");
 
     const indexChart = screen.getByRole("region", { name: "지수 차트" });

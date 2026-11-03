@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 import type { Holding, Portfolio, Trade } from "@/api/stockSim";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -16,7 +14,7 @@ import {
   TONE_TEXT,
 } from "@/lib/stocksim/format";
 
-/** 총자산·손익·예수금·평가금액 — 한 줄 요약 (화면 상단 계좌 바) */
+/** 총자산·손익 — 상단 바의 한 줄 요약 */
 export function PortfolioSummary({ portfolio }: { portfolio: Portfolio }) {
   const tone = TONE_TEXT[changeTone(portfolio.totalPnl)];
 
@@ -28,17 +26,10 @@ export function PortfolioSummary({ portfolio }: { portfolio: Portfolio }) {
       sub: formatRate(portfolio.totalReturnRate),
       className: tone,
     },
-    { label: "예수금", value: formatWon(portfolio.cash) },
-    { label: "평가금액", value: formatWon(portfolio.totalMarketValue) },
-    {
-      label: "실현손익",
-      value: formatSignedWon(portfolio.realizedPnl),
-      className: TONE_TEXT[changeTone(portfolio.realizedPnl)],
-    },
   ];
 
   return (
-    <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+    <dl aria-label="계좌 요약 (간략)" className="flex shrink-0 items-baseline gap-x-4 whitespace-nowrap">
       {stats.map((s) => (
         <div key={s.label} className="flex items-baseline gap-1.5">
           <dt className="text-xs text-fg-subtle">{s.label}</dt>
@@ -162,8 +153,8 @@ export function TradeHistory({ trades }: { trades: Trade[] }) {
   );
 }
 
-/** 하단 계좌 영역 — 보유종목 / 거래내역 탭 */
-export function AccountDock({
+/** 계좌 탭 — 요약 카드, 보유 종목, 거래내역 */
+export function AccountPanel({
   portfolio,
   selectedSymbol,
   onSelect,
@@ -174,43 +165,50 @@ export function AccountDock({
   onSelect: (h: Holding) => void;
   onReset: () => void;
 }) {
-  const [tab, setTab] = useState<"holdings" | "trades">("holdings");
+  const tone = TONE_TEXT[changeTone(portfolio.totalPnl)];
+  const cards: { label: string; value: string; sub?: string; className?: string }[] = [
+    { label: "총자산", value: formatWon(portfolio.totalAssets), sub: `시작 ${formatWon(portfolio.initialCash)}` },
+    { label: "총손익", value: formatSignedWon(portfolio.totalPnl), sub: formatRate(portfolio.totalReturnRate), className: tone },
+    { label: "예수금", value: formatWon(portfolio.cash) },
+    { label: "평가금액", value: formatWon(portfolio.totalMarketValue) },
+    {
+      label: "실현손익",
+      value: formatSignedWon(portfolio.realizedPnl),
+      className: TONE_TEXT[changeTone(portfolio.realizedPnl)],
+    },
+  ];
 
   return (
-    <section aria-label="계좌" className="flex flex-col">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3">
-        <div role="tablist" className="flex">
-          {(
-            [
-              ["holdings", `보유종목 ${portfolio.holdings.length}`],
-              ["trades", `거래내역 ${portfolio.trades.length}`],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={tab === value}
-              onClick={() => setTab(value)}
-              className={cn(
-                "border-b-2 px-3 py-2.5 text-sm font-medium transition",
-                tab === value ? "border-fg text-fg" : "border-transparent text-fg-muted hover:text-fg"
-              )}
-            >
-              {label}
-            </button>
-          ))}
+    <div className="space-y-3">
+      <section aria-label="계좌 요약" className="overflow-hidden rounded-card border border-line bg-surface">
+        <div className="flex items-center justify-between border-b border-line px-3 py-2">
+          <h2 className="text-sm font-semibold text-fg">계좌 요약</h2>
+          <Button size="sm" variant="ghost" onClick={onReset}>
+            계좌 초기화
+          </Button>
         </div>
-        <Button size="sm" variant="ghost" onClick={onReset}>
-          계좌 초기화
-        </Button>
-      </div>
+        <dl className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-5">
+          {cards.map((c) => (
+            <div key={c.label} className="bg-surface px-3 py-2.5">
+              <dt className="text-xs text-fg-subtle">{c.label}</dt>
+              <dd className={cn("text-base font-semibold tabular-nums", c.className ?? "text-fg")}>
+                {c.value}
+                {c.sub && <span className="ml-1.5 text-xs font-medium">{c.sub}</span>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
 
-      {tab === "holdings" ? (
+      <section aria-label={`보유종목 ${portfolio.holdings.length}`} className="overflow-hidden rounded-card border border-line bg-surface">
+        <h2 className="border-b border-line px-3 py-2 text-sm font-semibold text-fg">보유종목 {portfolio.holdings.length}</h2>
         <HoldingsTable holdings={portfolio.holdings} selectedSymbol={selectedSymbol} onSelect={onSelect} />
-      ) : (
+      </section>
+
+      <section aria-label={`거래내역 ${portfolio.trades.length}`} className="overflow-hidden rounded-card border border-line bg-surface">
+        <h2 className="border-b border-line px-3 py-2 text-sm font-semibold text-fg">거래내역 {portfolio.trades.length}</h2>
         <TradeHistory trades={portfolio.trades} />
-      )}
-    </section>
+      </section>
+    </div>
   );
 }

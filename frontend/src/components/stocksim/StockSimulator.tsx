@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import {
   getMarket,
@@ -13,22 +13,24 @@ import {
   type QuoteWithChange,
 } from "@/api/stockSim";
 import Alert from "@/components/ui/Alert";
-import Badge from "@/components/ui/Badge";
 import Container from "@/components/ui/Container";
+import Skeleton from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/errorMessage";
 import { usePolling } from "@/lib/stocksim/usePolling";
+import { useSimTab, type SimTab } from "@/lib/stocksim/useTab";
 import { DEFAULT_WATCHLIST, useWatchlist } from "@/lib/stocksim/watchlist";
 
 import AnalysisPanel from "./AnalysisPanel";
 import ChartPanel from "./ChartPanel";
+import FinancialsPanel from "./FinancialsPanel";
 import InvestorFlowPanel from "./InvestorFlowPanel";
 import MarketPanel from "./MarketPanel";
 import MarketStrip from "./MarketStrip";
 import OrderbookPanel from "./OrderbookPanel";
 import OrderPanel from "./OrderPanel";
-import { AccountDock, PortfolioSummary } from "./PortfolioSections";
-import StockHeader from "./StockHeader";
+import { AccountPanel, PortfolioSummary } from "./PortfolioSections";
+import StockHeader, { StockStats } from "./StockHeader";
 import StockSearch from "./StockSearch";
 import TradesPanel from "./TradesPanel";
 import ValuationPanel from "./ValuationPanel";
@@ -41,49 +43,55 @@ const PRICE_REFRESH_MS = 5_000;
 const PORTFOLIO_REFRESH_MS = 10_000;
 const MARKET_REFRESH_MS = 10_000;
 
-type InsightTab = "analysis" | "valuation" | "investors" | "market";
-const INSIGHT_TABS: { value: InsightTab; label: string }[] = [
-  { value: "analysis", label: "매매 신호" },
+const TABS: { value: SimTab; label: string }[] = [
+  { value: "trade", label: "매매" },
   { value: "valuation", label: "투자 지표" },
   { value: "investors", label: "투자자 동향" },
   { value: "market", label: "시장" },
-];
-
-/** 좁은 화면에서는 패널을 탭으로 나눠 하나씩 보여준다. */
-type MobileTab = "chart" | "order" | "insight" | "account";
-const MOBILE_TABS: { value: MobileTab; label: string }[] = [
-  { value: "chart", label: "차트" },
-  { value: "order", label: "호가·주문" },
-  { value: "insight", label: "분석" },
   { value: "account", label: "계좌" },
 ];
 
-const panel = "overflow-hidden rounded-card border border-line bg-surface";
+/** 종목을 고르는 탭 — 이 탭들에서만 종목 선택 줄을 보여준다 */
+const STOCK_TABS: SimTab[] = ["trade", "valuation", "investors"];
+
+/** 좁은 화면의 매매 탭은 차트·신호 / 호가·주문을 나눠 보여준다. */
+type TradePane = "chart" | "order";
+
+function Panel({ title, aside, children, className }: { title?: string; aside?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <section aria-label={title} className={cn("overflow-hidden rounded-card border border-line bg-surface", className)}>
+      {title && (
+        <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
+          <h2 className="text-sm font-semibold text-fg">{title}</h2>
+          {aside}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
 
 /**
- * 주식 모의투자 — 증권사 WTS 형태의 화면.
+ * 주식 모의투자 — 상단 바의 탭으로 화면을 나눈다.
  *
  * ```
- *   코스피 · 코스닥 · 공포탐욕 (지수 띠, 누르면 "시장" 탭)
- * ┌ 관심/보유 ┬ 종목 시세 · 차트 · 분석 탭 ┬ 호가 · 주문 · 체결 ┐   (xl 이상 3열)
- * └──────────┴───────── 계좌(보유종목·거래내역) ──────────────┘
+ * ┌ 주식 모의투자 [매매|투자 지표|투자자 동향|시장|계좌]   코스피 · 코스닥 · 공포탐욕 │ 총자산 ┐  (상단 바, 고정)
+ * ├ ★ 종목 시세 · 검색 · 관심/보유 칩 ─────────────────────────────────────────┤  (종목 탭에서만)
+ * └ 탭 화면 — 매매: 시세 요약·차트·매매 신호 │ 호가·주문·체결 ───────────────────┘
  * ```
- * lg 에서는 왼쪽 목록이 가로 칩으로 위에 붙고, 그보다 좁으면 패널을 탭으로 나눈다.
- * 포트폴리오는 백엔드 세션에 있다 (로그인 불필요, 재배포 시 초기화).
+ * 탭은 주소 `?tab=` 에 남는다. 포트폴리오는 백엔드 세션에 있다 (로그인 불필요, 재배포 시 초기화).
  */
 export default function StockSimulator() {
+  const [tab, setTab] = useSimTab();
   const [selected, setSelected] = useState<SelectedStock>(DEFAULT_WATCHLIST[0]);
   const [side, setSide] = useState<OrderSide>("BUY");
-  const [insightTab, setInsightTab] = useState<InsightTab>("analysis");
-  const [mobileTab, setMobileTab] = useState<MobileTab>("chart");
-  const [resetError, setResetError] = useState<string | null>(null);
+  const [tradePane, setTradePane] = useState<TradePane>("chart");
   const [marketIndex, setMarketIndex] = useState<MarketIndexSymbol>("KOSPI");
-  const insightRef = useRef<HTMLDivElement | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
   const watchlist = useWatchlist();
 
-  const market = usePolling("market", getMarket, MARKET_REFRESH_MS, "지수를 불러오지 못했습니다.");
-
   const portfolio = usePolling("portfolio", getPortfolio, PORTFOLIO_REFRESH_MS, "포트폴리오를 불러오지 못했습니다.");
+  const market = usePolling("market", getMarket, MARKET_REFRESH_MS, "지수를 불러오지 못했습니다.");
   const overview = usePolling(selected.symbol, () => getOverview(selected.symbol), PRICE_REFRESH_MS, "시세를 불러오지 못했습니다.");
 
   const holdings = useMemo(() => portfolio.data?.holdings ?? [], [portfolio.data]);
@@ -93,8 +101,10 @@ export default function StockSimulator() {
     return [...symbols];
   }, [watchlist.items, holdings]);
 
+  // 종목 선택 줄이 보일 때만 관심종목 시세를 받는다.
+  const stockTab = STOCK_TABS.includes(tab);
   const railQuotes = usePolling(
-    railSymbols.length > 0 ? railSymbols.join(",") : null,
+    stockTab && railSymbols.length > 0 ? railSymbols.join(",") : null,
     () => getQuotesWithChange(railSymbols),
     PRICE_REFRESH_MS
   );
@@ -108,21 +118,18 @@ export default function StockSimulator() {
 
   const select = (stock: SelectedStock) => {
     setSelected({ symbol: stock.symbol, name: stock.name });
-    setMobileTab("chart");
+    setTradePane("chart");
   };
 
-  /** 지수 띠를 누르면 분석 영역의 시장 탭으로 */
+  /** 지수 요약을 누르면 시장 탭으로 */
   const openMarket = (target: MarketIndexSymbol | "fearGreed") => {
     if (target !== "fearGreed") setMarketIndex(target);
-    setInsightTab("market");
-    setMobileTab("insight");
-    // 좁은 화면에서는 분석 패널이 아직 숨겨져 있으니, 탭이 바뀌어 그려진 뒤에 스크롤한다.
-    requestAnimationFrame(() => insightRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" }));
+    setTab("market");
   };
 
   const pickSide = (next: OrderSide) => {
     setSide(next);
-    setMobileTab("order");
+    setTradePane("order");
   };
 
   const reset = async () => {
@@ -138,71 +145,54 @@ export default function StockSimulator() {
     }
   };
 
-  /** 좁은 화면에서 지금 탭이 아니면 숨긴다 (lg 이상은 항상 보인다) */
-  const mobileOnly = (tab: MobileTab) => mobileTab !== tab && "max-lg:hidden";
+  /** 좁은 화면 매매 탭에서 지금 하위 탭이 아니면 숨긴다 (lg 이상은 항상 보인다) */
+  const paneOnly = (pane: TradePane) => tradePane !== pane && "max-lg:hidden";
 
   return (
-    <Container size="full" className="py-2 sm:py-3">
-      {/* 상단 바 — 화면 이름 · 출처 · 계좌 요약 */}
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
-        <div className="flex items-center gap-2">
-          <h1 className="text-base font-bold text-fg">주식 모의투자</h1>
-          <Badge>시세 토스증권</Badge>
-          <Badge>재무 OpenDART</Badge>
-        </div>
-        {portfolio.data && <PortfolioSummary portfolio={portfolio.data} />}
-      </div>
-
-      <div className="mb-2">
-        <MarketStrip
-          indices={market.data?.indices ?? null}
-          fearGreed={market.data?.fearGreed ?? null}
-          error={market.error}
-          onOpen={openMarket}
-        />
-      </div>
-
-      {(portfolio.error || resetError) && (
-        <Alert className="mb-2">{resetError ?? portfolio.error}</Alert>
-      )}
-
-      {/* 좁은 화면: 검색 + 관심종목 칩 */}
-      <div className="mb-2 space-y-2 xl:hidden">
-        <StockSearch id="stocksim-search-compact" onSelect={select} />
-        <WatchRail
-          layout="horizontal"
-          watchlist={watchlist.items}
-          holdings={holdings}
-          quotes={quoteMap}
-          selectedSymbol={selected.symbol}
-          onSelect={select}
-        />
-      </div>
-
-      <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[15rem_minmax(0,1fr)_21rem]">
-        {/* 왼쪽: 검색 + 관심/보유 (xl 이상) */}
-        <aside
-          className={cn(
-            panel,
-            "hidden xl:sticky xl:top-[4.5rem] xl:flex xl:max-h-[calc(100dvh-5.5rem)] xl:flex-col xl:self-start"
-          )}
-        >
-          <div className="border-b border-line p-2">
-            <StockSearch id="stocksim-search" onSelect={select} />
+    <Container size="full" className="pb-3">
+      {/* 상단 바 — 탭 · 지수 요약 · 계좌 요약 */}
+      <div className="sticky top-16 z-30 -mx-2 border-b border-line bg-bg/90 px-2 backdrop-blur-md sm:-mx-3 sm:px-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5">
+          <h1 className="text-base font-bold whitespace-nowrap text-fg max-sm:hidden">주식 모의투자</h1>
+          <div role="tablist" aria-label="화면" className="flex min-w-0 gap-0.5 overflow-x-auto">
+            {TABS.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.value}
+                onClick={() => setTab(t.value)}
+                className={cn(
+                  "h-8 shrink-0 rounded-control px-3 text-sm font-medium whitespace-nowrap transition",
+                  tab === t.value ? "bg-fg text-bg" : "text-fg-muted hover:bg-surface-hover hover:text-fg"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
-          <WatchRail
-            layout="vertical"
-            watchlist={watchlist.items}
-            holdings={holdings}
-            quotes={quoteMap}
-            selectedSymbol={selected.symbol}
-            onSelect={select}
-          />
-        </aside>
+          <div className="flex min-w-0 items-center gap-3 max-xl:w-full xl:ml-auto">
+            <MarketStrip
+              indices={market.data?.indices ?? null}
+              fearGreed={market.data?.fearGreed ?? null}
+              error={market.error}
+              onOpen={openMarket}
+            />
+            {portfolio.data && (
+              <div className="ml-auto border-l border-line pl-3 max-md:hidden">
+                <PortfolioSummary portfolio={portfolio.data} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-        {/* 가운데: 종목 시세 · 차트 · 분석 */}
-        <div className="flex min-w-0 flex-col gap-2">
-          <div className={panel}>
+      {(portfolio.error || resetError) && <Alert className="mt-2">{resetError ?? portfolio.error}</Alert>}
+
+      {/* 종목 선택 줄 — 종목 시세 · 검색 · 관심/보유 칩 */}
+      {stockTab && (
+        <div className="mt-2 space-y-2 rounded-card border border-line bg-surface px-3 py-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <StockHeader
               name={selected.name}
               symbol={selected.symbol}
@@ -211,99 +201,123 @@ export default function StockSimulator() {
               watched={watchlist.has(selected.symbol)}
               onToggleWatch={() => watchlist.toggle({ symbol: selected.symbol, name: o?.name ?? selected.name })}
             />
+            <div className="w-full sm:ml-auto sm:w-80">
+              <StockSearch id="stocksim-search" onSelect={select} />
+            </div>
           </div>
+          <WatchRail
+            layout="horizontal"
+            watchlist={watchlist.items}
+            holdings={holdings}
+            quotes={quoteMap}
+            selectedSymbol={selected.symbol}
+            onSelect={select}
+          />
+        </div>
+      )}
 
-          {/* 모바일 탭 */}
-          <div
-            role="tablist"
-            aria-label="화면 구역"
-            className="sticky top-16 z-20 grid grid-cols-4 rounded-card border border-line bg-surface p-1 shadow-card lg:hidden"
-          >
-            {MOBILE_TABS.map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                role="tab"
-                aria-selected={mobileTab === t.value}
-                onClick={() => setMobileTab(t.value)}
-                className={cn(
-                  "h-8 rounded-control text-sm font-medium transition",
-                  mobileTab === t.value ? "bg-fg text-bg" : "text-fg-muted"
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <div className={cn(panel, mobileOnly("chart"))}>
-            <ChartPanel symbol={selected.symbol} livePrice={o?.price ?? null} liveTime={o?.priceTime ?? null} />
-          </div>
-
-          <div ref={insightRef} className={cn(panel, "scroll-mt-20", mobileOnly("insight"))}>
-            <div role="tablist" aria-label="분석" className="flex overflow-x-auto border-b border-line px-1">
-              {INSIGHT_TABS.map((t) => (
+      <div className="mt-2">
+        {tab === "trade" && (
+          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_21rem]">
+            <div role="tablist" aria-label="매매 화면" className="grid grid-cols-2 rounded-card border border-line bg-surface p-1 lg:hidden">
+              {(
+                [
+                  ["chart", "차트·신호"],
+                  ["order", "호가·주문"],
+                ] as const
+              ).map(([value, label]) => (
                 <button
-                  key={t.value}
+                  key={value}
                   type="button"
                   role="tab"
-                  aria-selected={insightTab === t.value}
-                  onClick={() => setInsightTab(t.value)}
+                  aria-selected={tradePane === value}
+                  onClick={() => setTradePane(value)}
                   className={cn(
-                    "shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium transition",
-                    insightTab === t.value ? "border-fg text-fg" : "border-transparent text-fg-muted hover:text-fg"
+                    "h-8 rounded-control text-sm font-medium transition",
+                    tradePane === value ? "bg-fg text-bg" : "text-fg-muted"
                   )}
                 >
-                  {t.label}
+                  {label}
                 </button>
               ))}
             </div>
-            {insightTab === "analysis" && <AnalysisPanel symbol={selected.symbol} />}
-            {insightTab === "valuation" && <ValuationPanel overview={o} />}
-            {insightTab === "investors" && <InvestorFlowPanel symbol={selected.symbol} />}
-            {insightTab === "market" && (
-              <MarketPanel market={market.data} error={market.error} index={marketIndex} onIndexChange={setMarketIndex} />
-            )}
-          </div>
-        </div>
 
-        {/* 오른쪽: 호가 · 주문 · 체결 */}
-        <div className={cn("flex min-w-0 flex-col gap-2", mobileOnly("order"))}>
-          <div className={panel}>
-            <OrderbookPanel
-              symbol={selected.symbol}
-              prevClose={o?.prevClose ?? null}
-              currentPrice={o?.price ?? null}
-              onPickSide={pickSide}
-            />
-          </div>
-          <div className={panel}>
-            <OrderPanel
-              stock={selected}
-              price={o?.price ?? null}
-              cash={portfolio.data?.cash ?? 0}
-              heldQuantity={held?.quantity ?? 0}
-              side={side}
-              onSideChange={setSide}
-              onFilled={() => portfolio.refresh()}
-            />
-          </div>
-          <div className={panel}>
-            <TradesPanel symbol={selected.symbol} prevClose={o?.prevClose ?? null} />
-          </div>
-        </div>
+            <div className={cn("flex min-w-0 flex-col gap-2", paneOnly("chart"))}>
+              <Panel>
+                <StockStats overview={o} />
+                <div className="border-t border-line">
+                  <ChartPanel symbol={selected.symbol} livePrice={o?.price ?? null} liveTime={o?.priceTime ?? null} />
+                </div>
+              </Panel>
+              <Panel title="매매 신호">
+                <AnalysisPanel symbol={selected.symbol} />
+              </Panel>
+            </div>
 
-        {/* 아래: 계좌 */}
-        {portfolio.data && (
-          <div className={cn(panel, "lg:col-span-2 xl:col-span-3", mobileOnly("account"))}>
-            <AccountDock
-              portfolio={portfolio.data}
-              selectedSymbol={selected.symbol}
-              onSelect={(h) => select(h)}
-              onReset={reset}
-            />
+            <div className={cn("flex min-w-0 flex-col gap-2", paneOnly("order"))}>
+              <Panel>
+                <OrderbookPanel
+                  symbol={selected.symbol}
+                  prevClose={o?.prevClose ?? null}
+                  currentPrice={o?.price ?? null}
+                  onPickSide={pickSide}
+                />
+              </Panel>
+              <Panel>
+                <OrderPanel
+                  stock={selected}
+                  price={o?.price ?? null}
+                  cash={portfolio.data?.cash ?? 0}
+                  heldQuantity={held?.quantity ?? 0}
+                  side={side}
+                  onSideChange={setSide}
+                  onFilled={() => portfolio.refresh()}
+                />
+              </Panel>
+              <Panel>
+                <TradesPanel symbol={selected.symbol} prevClose={o?.prevClose ?? null} />
+              </Panel>
+            </div>
           </div>
         )}
+
+        {tab === "valuation" && (
+          <div className="grid gap-2">
+            <Panel title="투자 지표">
+              <ValuationPanel overview={o} />
+            </Panel>
+            <Panel title="재무 지표 (최근 3년)">
+              <FinancialsPanel overview={o} />
+            </Panel>
+          </div>
+        )}
+
+        {tab === "investors" && (
+          <Panel title="투자자 동향">
+            <InvestorFlowPanel symbol={selected.symbol} />
+          </Panel>
+        )}
+
+        {tab === "market" && (
+          <Panel>
+            <MarketPanel market={market.data} error={market.error} index={marketIndex} onIndexChange={setMarketIndex} />
+          </Panel>
+        )}
+
+        {tab === "account" &&
+          (portfolio.data ? (
+            <AccountPanel
+              portfolio={portfolio.data}
+              selectedSymbol={selected.symbol}
+              onSelect={(h) => {
+                select(h);
+                setTab("trade");
+              }}
+              onReset={reset}
+            />
+          ) : portfolio.error ? null : (
+            <Skeleton className="h-60 w-full" />
+          ))}
       </div>
     </Container>
   );

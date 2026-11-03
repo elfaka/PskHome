@@ -11,6 +11,57 @@ const REFRESH_MS = 10 * 60_000;
 
 const signed = (v: number | null) => (v == null ? "-" : `${v > 0 ? "+" : ""}${formatShares(v)}`);
 
+const SERIES = [
+  { key: "foreigner", label: "외국인", className: "fill-accent", swatch: "bg-accent" },
+  { key: "institution", label: "기관", className: "fill-warning", swatch: "bg-warning" },
+] as const;
+
+/** 일별 외국인·기관 순매수 막대 (왼쪽이 오래된 날). 0 선 위가 순매수, 아래가 순매도. */
+function NetBars({ days }: { days: InvestorFlowDay[] }) {
+  const ordered = [...days].reverse();
+  const max = Math.max(...ordered.flatMap((d) => SERIES.map((s) => Math.abs(d[s.key]))), 1);
+  const STEP = 14;
+  const H = 120;
+  const mid = H / 2;
+
+  return (
+    <figure aria-label="일별 순매수 추이" className="rounded-card border border-line p-3">
+      <svg viewBox={`0 0 ${ordered.length * STEP} ${H}`} preserveAspectRatio="none" className="h-32 w-full" aria-hidden>
+        <line x1={0} x2={ordered.length * STEP} y1={mid} y2={mid} className="stroke-line-strong" vectorEffect="non-scaling-stroke" />
+        {ordered.map((d, i) =>
+          SERIES.map((s, j) => {
+            const h = (Math.abs(d[s.key]) / max) * (mid - 4);
+            return (
+              <rect
+                key={`${d.date}-${s.key}`}
+                x={i * STEP + 2 + j * 5}
+                width={4}
+                y={d[s.key] >= 0 ? mid - h : mid}
+                height={Math.max(h, 0.5)}
+                className={s.className}
+              />
+            );
+          })
+        )}
+      </svg>
+      <figcaption className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-fg-subtle">
+        <span>
+          {ordered[0]?.date} ~ {ordered[ordered.length - 1]?.date}
+        </span>
+        <span className="flex gap-3">
+          {SERIES.map((s) => (
+            <span key={s.key} className="flex items-center gap-1.5">
+              <span className={cn("size-2 rounded-sm", s.swatch)} aria-hidden />
+              {s.label}
+            </span>
+          ))}
+          <span>0 선 위 순매수 · 아래 순매도</span>
+        </span>
+      </figcaption>
+    </figure>
+  );
+}
+
 /** 투자자별 순매수(주)·외국인 보유율·공매도 비중 — 최근 20거래일 */
 export default function InvestorFlowPanel({ symbol }: { symbol: string }) {
   const { data: days, error } = usePolling(symbol, () => getInvestorFlows(symbol), REFRESH_MS, "투자자 동향을 불러오지 못했습니다.");
@@ -42,6 +93,8 @@ export default function InvestorFlowPanel({ symbol }: { symbol: string }) {
           </div>
         ))}
       </dl>
+
+      <NetBars days={days} />
 
       <div className="max-h-96 overflow-auto rounded-card border border-line">
         <table className="w-full min-w-[34rem] text-xs tabular-nums">

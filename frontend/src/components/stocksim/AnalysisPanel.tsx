@@ -103,7 +103,7 @@ export default function AnalysisPanel({ symbol }: { symbol: string }) {
   ];
 
   return (
-    <div className="space-y-4 p-3">
+    <div className="space-y-3 p-3">
       <div className="grid gap-4 rounded-card border border-line bg-surface-2 p-4 md:grid-cols-[auto_minmax(0,1fr)] md:items-center">
         <div className="flex items-center gap-3">
           <div className="text-center">
@@ -135,7 +135,7 @@ export default function AnalysisPanel({ symbol }: { symbol: string }) {
         ))}
       </dl>
 
-      <div className="grid gap-3 xl:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
         {CATEGORIES.map((cat) => {
           const factors = a.factors.filter((f) => f.category === cat);
           if (factors.length === 0) return null;
@@ -156,7 +156,7 @@ export default function AnalysisPanel({ symbol }: { symbol: string }) {
               </h3>
               <ul className="divide-y divide-line">
                 {factors.map((f) => (
-                  <li key={f.key} className="space-y-1.5 px-3 py-2.5">
+                  <li key={f.key} className="space-y-1 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium text-fg">{f.label}</span>
                       <ScorePill factor={f} />

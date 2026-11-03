@@ -101,6 +101,28 @@ export type Valuation = {
   debtRatio: number | null;
   dividendPerShare: number | null;
   dividendYield: number | null;
+  /** 최근 3개 사업연도 (오래된 것부터) */
+  history: FinancialYear[];
+};
+
+/** 사업연도별 재무 요약 + 비율 + 전년 대비 증감 (0.1 = +10%) */
+export type FinancialYear = {
+  year: number;
+  revenue: number | null;
+  operatingIncome: number | null;
+  netIncome: number | null;
+  totalAssets: number | null;
+  totalLiabilities: number | null;
+  totalEquity: number | null;
+  eps: number | null;
+  dividendPerShare: number | null;
+  operatingMargin: number | null;
+  netMargin: number | null;
+  roe: number | null;
+  debtRatio: number | null;
+  revenueGrowth: number | null;
+  operatingIncomeGrowth: number | null;
+  netIncomeGrowth: number | null;
 };
 
 export type StockOverview = {
