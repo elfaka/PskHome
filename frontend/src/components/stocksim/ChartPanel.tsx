@@ -63,7 +63,7 @@ function Legend({ data, index, toggles, digits }: { data: ChartData; index: numb
         종 <b className={cn("font-medium", tone)}>{formatNumber(bar.close, digits)}</b>
         {change != null && prev && <span className={cn("ml-1", tone)}>({formatRate(change / prev.close)})</span>}
       </span>
-      <span>거래량 <b className="font-medium text-fg">{formatShares(bar.volume)}</b></span>
+      {toggles.volume && <span>거래량 <b className="font-medium text-fg">{formatShares(bar.volume)}</b></span>}
       {toggles.ma &&
         MA_LEGEND.map((m) => {
           const v = data.indicators[m.key][index];
@@ -79,20 +79,31 @@ function Legend({ data, index, toggles, digits }: { data: ChartData; index: numb
   );
 }
 
-/** `kind="index"` 면 코스피·코스닥 지수 차트 (소수 둘째 자리까지) */
+/** 분봉 — 일별 기록만 있는 지표(VIX)에서는 숨긴다 */
+const INTRADAY: Timeframe[] = ["1m", "5m", "15m"];
+
+/**
+ * `kind="index"` 면 코스피·코스닥·VIX 지수 차트 (소수 둘째 자리까지).
+ * `dailyOnly` 면 일·주·월봉만 보여준다.
+ */
 export default function ChartPanel({
   symbol,
   livePrice,
   liveTime,
   kind = "stock",
+  dailyOnly = false,
 }: {
   symbol: string;
   livePrice: number | null;
   liveTime: string | null;
   kind?: "stock" | "index";
+  dailyOnly?: boolean;
 }) {
-  const [timeframe, setTimeframe] = useState<Timeframe>("1d");
-  const [toggles, setToggles] = useState<ChartToggles>({ ma: true, bollinger: false, volume: true, rsi: true, macd: false });
+  const [pickedTimeframe, setTimeframe] = useState<Timeframe>("1d");
+  // 분봉을 보다가 일별 전용 지표로 바꾸면 일봉으로 보여준다.
+  const timeframe: Timeframe = dailyOnly && INTRADAY.includes(pickedTimeframe) ? "1d" : pickedTimeframe;
+  const timeframes = dailyOnly ? TIMEFRAMES.filter((t) => !INTRADAY.includes(t.value)) : TIMEFRAMES;
+  const [picked, setToggles] = useState<ChartToggles>({ ma: true, bollinger: false, volume: true, rsi: true, macd: false });
   const [hover, setHover] = useState<HoverBar | null>(null);
   const { resolved } = useTheme();
 
@@ -105,13 +116,17 @@ export default function ChartPanel({
   const digits = kind === "index" ? 2 : 0;
   const data = chart.data;
   const legendIndex = hover?.index ?? (data ? data.candles.length - 1 : -1);
+  // 거래량이 없는 지표(VIX)는 거래량 패널·버튼을 뺀다.
+  const hasVolume = !data || data.candles.some((c) => c.volume > 0);
+  const toggles: ChartToggles = { ...picked, volume: picked.volume && hasVolume };
+  const toggleButtons = hasVolume ? TOGGLES : TOGGLES.filter((t) => t.key !== "volume");
   const subPanes = Number(toggles.rsi) + Number(toggles.macd);
 
   return (
     <section aria-label={kind === "index" ? "지수 차트" : "차트"} className="flex min-w-0 flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-3 py-2">
         <div role="tablist" aria-label="봉 단위" className="flex items-center gap-0.5 rounded-control bg-surface-2 p-0.5">
-          {TIMEFRAMES.map((t) => (
+          {timeframes.map((t) => (
             <button
               key={t.value}
               type="button"
@@ -129,7 +144,7 @@ export default function ChartPanel({
         </div>
 
         <div role="group" aria-label="보조지표" className="flex flex-wrap items-center gap-1">
-          {TOGGLES.map((t) => (
+          {toggleButtons.map((t) => (
             <button
               key={t.key}
               type="button"

@@ -113,6 +113,8 @@ src/
   (`lib/stocksim/useTab.ts`, `history.pushState` 의 state 는 null 로 넘겨야 Next 라우터와 주소가 맞는다).
   종목 선택 줄(시세·검색·관심/보유 칩)은 종목 탭(매매·투자 지표·투자자 동향)에서만 보인다.
   매매 탭은 lg 이상 2열(시세 요약·차트·매매 신호 │ 호가·주문·체결), 좁으면 "차트·신호 / 호가·주문" 하위 탭.
+  상단 바는 사이트 헤더(h-14 + 테두리 1px) 바로 밑에 고정한다(`top-[calc(3.5rem+1px)]`). 헤더 높이를 바꾸면 같이 바꾼다.
+- 시장 탭의 VIX 는 Cboe 일별 기록만 있어 `ChartPanel dailyOnly` 로 일·주·월봉만 보여주고, 거래량이 0 인 차트는 거래량 버튼·패널을 뺀다.
 - 국내 증권 관례대로 **상승 빨강(`danger`) / 하락 파랑(`info`)** 이다. `lib/stocksim/format.ts` 의 `TONE_TEXT` 를 쓴다.
 - 차트(`CandleChart`)는 canvas 라 클래스를 못 쓴다 — CSS 토큰 값을 읽어 색을 정하고, 테마가 바뀌면 다시 그린다.
   시간은 KST 로 보이도록 9시간을 더해 넘긴다 (lightweight-charts 는 UTC 로 표시).

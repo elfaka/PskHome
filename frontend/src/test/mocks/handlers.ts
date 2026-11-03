@@ -187,6 +187,27 @@ export const handlers = [
         disclaimer: "코스피·코스닥 지수, 국고채 금리, 투자자별 매매대금으로 직접 계산한 참고 지표이며 공식 공포·탐욕 지수가 아닙니다.",
       },
       fearGreedNote: null,
+      vix: {
+        symbol: "VIX",
+        name: "VIX",
+        value: 21.15,
+        timestamp: "2026-11-02T21:15:01.000Z",
+        prevClose: 19.42,
+        change: 1.73,
+        changeRate: 0.081797,
+        open: 19.05,
+        high: 21.77,
+        low: 18.03,
+        level: "ELEVATED",
+        levelLabel: "불안",
+        recent: [
+          { time: "2026-10-29T00:00:00+09:00", value: 18.5 },
+          { time: "2026-10-30T00:00:00+09:00", value: 19.42 },
+          { time: "2026-11-02T00:00:00+09:00", value: 21.15 },
+        ],
+        source: "Cboe · 15분 지연",
+      },
+      vixNote: null,
     })
   ),
 
@@ -198,7 +219,8 @@ export const handlers = [
       high: 2_850,
       low: 2_690,
       close: 2_700 + i * 3.5,
-      volume: 500_000_000,
+      // VIX 는 거래량이 없다
+      volume: params.symbol === "VIX" ? 0 : 500_000_000,
     }));
     const empty = candles.map(() => null);
     return HttpResponse.json({

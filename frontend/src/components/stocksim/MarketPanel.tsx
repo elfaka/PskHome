@@ -4,9 +4,12 @@ import {
   getMarketInvestors,
   type FearGreed,
   type FearGreedFactor,
+  type MarketChartSymbol,
   type MarketIndexSymbol,
   type MarketInvestorDay,
   type MarketOverview,
+  type VixLevel,
+  type VixSummary,
 } from "@/api/stockSim";
 import Skeleton from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
@@ -17,7 +20,7 @@ import {
   FEAR_GREED_TEXT,
   fearGreedLevel,
 } from "@/lib/stocksim/fearGreed";
-import { changeTone, formatKrwCompact, formatNumber, formatRate, TONE_TEXT } from "@/lib/stocksim/format";
+import { changeTone, formatClock, formatKrwCompact, formatNumber, formatRate, TONE_TEXT } from "@/lib/stocksim/format";
 import { usePolling } from "@/lib/stocksim/usePolling";
 
 import ChartPanel from "./ChartPanel";
@@ -25,10 +28,87 @@ import ChartPanel from "./ChartPanel";
 /** 일별 데이터라 드물게 받는다 (백엔드 5분 캐시). */
 const INVESTOR_REFRESH_MS = 5 * 60_000;
 
-const INDEX_TABS: { value: MarketIndexSymbol; label: string }[] = [
+const INDEX_TABS: { value: MarketChartSymbol; label: string }[] = [
   { value: "KOSPI", label: "코스피" },
   { value: "KOSDAQ", label: "코스닥" },
+  { value: "VIX", label: "VIX" },
 ];
+
+/** VIX 구간 경계와 색 — 변동성(위험) 계기판이라 경고 색을 쓴다 */
+const VIX_BANDS: { level: VixLevel; label: string; from: number; to: number; className: string; text: string }[] = [
+  { level: "CALM", label: "안정", from: 0, to: 15, className: "bg-success", text: "text-success-soft-fg" },
+  { level: "NORMAL", label: "보통", from: 15, to: 20, className: "bg-line-strong", text: "text-fg-muted" },
+  { level: "ELEVATED", label: "불안", from: 20, to: 30, className: "bg-warning", text: "text-warning-soft-fg" },
+  { level: "FEAR", label: "공포", from: 30, to: 50, className: "bg-danger", text: "text-danger-soft-fg" },
+];
+const VIX_SCALE_MAX = 50;
+
+/** VIX — 현재 구간, 시·고·저가, 설명. 투자자별 매매대금 대신 보여준다. */
+function VixCard({ vix, note }: { vix: VixSummary | null; note: string | null }) {
+  if (!vix) {
+    return <p className="rounded-card border border-line p-6 text-center text-sm text-fg-subtle">{note ?? "VIX 를 불러오지 못했습니다."}</p>;
+  }
+
+  const band = VIX_BANDS.find((b) => b.level === vix.level) ?? VIX_BANDS[1];
+  const pos = Math.min(100, (vix.value / VIX_SCALE_MAX) * 100);
+  const stats = [
+    { label: "시가", value: vix.open },
+    { label: "고가", value: vix.high },
+    { label: "저가", value: vix.low },
+    { label: "전일 종가", value: vix.prevClose },
+  ];
+
+  return (
+    <section aria-label="VIX 변동성 지수" className="rounded-card border border-line">
+      <h3 className="border-b border-line px-3 py-2 text-sm font-semibold text-fg">VIX 변동성 지수</h3>
+      <div className="space-y-4 p-3">
+        <div className="flex items-baseline gap-3">
+          <span className="text-3xl font-bold tabular-nums text-fg">{formatNumber(vix.value, 2)}</span>
+          <span className={cn("text-sm font-semibold", band.text)}>{vix.levelLabel}</span>
+        </div>
+
+        <div aria-hidden>
+          <div className="relative flex h-2 overflow-hidden rounded-full">
+            {VIX_BANDS.map((b) => (
+              <div key={b.level} className={b.className} style={{ width: `${((b.to - b.from) / VIX_SCALE_MAX) * 100}%` }} />
+            ))}
+          </div>
+          <div className="relative h-3">
+            <span
+              className="absolute top-0 size-0 -translate-x-1/2 border-x-[5px] border-b-[6px] border-x-transparent border-b-fg"
+              style={{ left: `${pos}%` }}
+            />
+          </div>
+          <div className="relative h-4 text-[10px] text-fg-subtle">
+            {[15, 20, 30].map((v) => (
+              <span key={v} className="absolute -translate-x-1/2 tabular-nums" style={{ left: `${(v / VIX_SCALE_MAX) * 100}%` }}>
+                {v}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <dl className="grid grid-cols-4 gap-2 text-xs">
+          {stats.map((s) => (
+            <div key={s.label}>
+              <dt className="text-fg-subtle">{s.label}</dt>
+              <dd className="font-medium tabular-nums text-fg">{s.value == null ? "-" : formatNumber(s.value, 2)}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <p className="text-xs leading-5 text-fg-muted">
+          S&amp;P 500 옵션 가격으로 계산한 앞으로 30일 동안의 예상 변동성입니다. 높을수록 시장이 불안하다는 뜻이며,
+          보통 15 미만은 안정, 20 이상은 불안, 30 이상은 공포 구간으로 봅니다. 미국 장 시간(한국 시간 밤 11시 30분~새벽 6시)에 움직입니다.
+        </p>
+        <p className="text-[11px] text-fg-subtle">
+          {vix.source}
+          {vix.timestamp && ` · ${formatClock(vix.timestamp)} (한국 시간) 기준`}
+        </p>
+      </div>
+    </section>
+  );
+}
 
 /** 반원 게이지의 점수 위치 (중심 100,100 반지름 r) */
 function arcPoint(score: number, r: number) {
@@ -228,8 +308,8 @@ export default function MarketPanel({
 }: {
   market: MarketOverview | null;
   error: string | null;
-  index: MarketIndexSymbol;
-  onIndexChange: (index: MarketIndexSymbol) => void;
+  index: MarketChartSymbol;
+  onIndexChange: (index: MarketChartSymbol) => void;
 }) {
   if (!market) {
     return error ? (
@@ -241,7 +321,8 @@ export default function MarketPanel({
     );
   }
 
-  const current = market.indices.find((i) => i.symbol === index);
+  // 지수 탭 머리의 값 — VIX 는 Cboe 요약에서, 코스피·코스닥은 토스 지수에서
+  const current = index === "VIX" ? market.vix : market.indices.find((i) => i.symbol === index);
   const name = INDEX_TABS.find((t) => t.value === index)?.label ?? index;
   const tone = TONE_TEXT[changeTone(current?.change)];
 
@@ -280,12 +361,22 @@ export default function MarketPanel({
       </div>
 
       <div className="overflow-hidden rounded-card border border-line">
-        <ChartPanel kind="index" symbol={index} livePrice={current?.value ?? null} liveTime={current?.timestamp ?? null} />
+        <ChartPanel
+          kind="index"
+          symbol={index}
+          dailyOnly={index === "VIX"}
+          livePrice={current?.value ?? null}
+          liveTime={current?.timestamp ?? null}
+        />
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <FearGreedCard fearGreed={market.fearGreed} note={market.fearGreedNote} />
-        <MarketInvestors symbol={index} name={name} />
+        {index === "VIX" ? (
+          <VixCard vix={market.vix} note={market.vixNote} />
+        ) : (
+          <MarketInvestors symbol={index as MarketIndexSymbol} name={name} />
+        )}
       </div>
     </div>
   );

@@ -282,11 +282,38 @@ export type FearGreed = {
   disclaimer: string;
 };
 
+export type VixLevel = "CALM" | "NORMAL" | "ELEVATED" | "FEAR";
+
+/** 미국 변동성 지수 (Cboe, 15분 지연) */
+export type VixSummary = {
+  symbol: "VIX";
+  name: string;
+  value: number;
+  timestamp: string | null;
+  prevClose: number | null;
+  change: number | null;
+  changeRate: number | null;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  /** 15 미만 안정 · 20 미만 보통 · 30 미만 불안 · 30 이상 공포 */
+  level: VixLevel;
+  levelLabel: string;
+  /** 최근 60 거래일 종가 (오래된 것부터) */
+  recent: { time: string; value: number }[];
+  source: string;
+};
+
 export type MarketOverview = {
   indices: MarketIndex[];
   fearGreed: FearGreed | null;
   fearGreedNote: string | null;
+  vix: VixSummary | null;
+  vixNote: string | null;
 };
+
+/** 시장 탭에서 차트를 볼 수 있는 지표 */
+export type MarketChartSymbol = MarketIndexSymbol | "VIX";
 
 /** 시장 전체 투자자별 순매수 대금 (원) */
 export type MarketInvestorDay = {

@@ -8,7 +8,7 @@ import {
   getPortfolio,
   getQuotesWithChange,
   resetPortfolio,
-  type MarketIndexSymbol,
+  type MarketChartSymbol,
   type OrderSide,
   type QuoteWithChange,
 } from "@/api/stockSim";
@@ -75,18 +75,18 @@ function Panel({ title, aside, children, className }: { title?: string; aside?: 
  * 주식 모의투자 — 상단 바의 탭으로 화면을 나눈다.
  *
  * ```
- * ┌ 주식 모의투자 [매매|투자 지표|투자자 동향|시장|계좌]   코스피 · 코스닥 · 공포탐욕 │ 총자산 ┐  (상단 바, 고정)
+ * ┌ 주식 모의투자 [매매|투자 지표|투자자 동향|시장|계좌]   코스피 · 코스닥 · VIX · 공포탐욕 │ 총자산 ┐  (상단 바, 고정)
  * ├ ★ 종목 시세 · 검색 · 관심/보유 칩 ─────────────────────────────────────────┤  (종목 탭에서만)
  * └ 탭 화면 — 매매: 시세 요약·차트·매매 신호 │ 호가·주문·체결 ───────────────────┘
  * ```
  * 탭은 주소 `?tab=` 에 남는다. 포트폴리오는 백엔드 세션에 있다 (로그인 불필요, 재배포 시 초기화).
  */
 export default function StockSimulator() {
-  const [tab, setTab] = useSimTab();
+  const [tab, changeTab] = useSimTab();
   const [selected, setSelected] = useState<SelectedStock>(DEFAULT_WATCHLIST[0]);
   const [side, setSide] = useState<OrderSide>("BUY");
   const [tradePane, setTradePane] = useState<TradePane>("chart");
-  const [marketIndex, setMarketIndex] = useState<MarketIndexSymbol>("KOSPI");
+  const [marketIndex, setMarketIndex] = useState<MarketChartSymbol>("KOSPI");
   const [resetError, setResetError] = useState<string | null>(null);
   const watchlist = useWatchlist();
 
@@ -116,13 +116,19 @@ export default function StockSimulator() {
   const o = overview.data;
   const held = holdings.find((h) => h.symbol === selected.symbol);
 
+  /** 탭을 바꾸면 새 화면을 처음부터 보이게 맨 위로 올린다 (상단 바는 고정이라 그대로 보인다). */
+  const setTab = (next: SimTab) => {
+    changeTab(next);
+    if (window.scrollY > 0) window.scrollTo({ top: 0 });
+  };
+
   const select = (stock: SelectedStock) => {
     setSelected({ symbol: stock.symbol, name: stock.name });
     setTradePane("chart");
   };
 
   /** 지수 요약을 누르면 시장 탭으로 */
-  const openMarket = (target: MarketIndexSymbol | "fearGreed") => {
+  const openMarket = (target: MarketChartSymbol | "fearGreed") => {
     if (target !== "fearGreed") setMarketIndex(target);
     setTab("market");
   };
@@ -150,8 +156,9 @@ export default function StockSimulator() {
 
   return (
     <Container size="full" className="pb-3">
-      {/* 상단 바 — 탭 · 지수 요약 · 계좌 요약 */}
-      <div className="sticky top-16 z-30 -mx-2 border-b border-line bg-bg/90 px-2 backdrop-blur-md sm:-mx-3 sm:px-3">
+      {/* 상단 바 — 탭 · 지수 요약 · 계좌 요약.
+          사이트 헤더(SiteHeader: h-14 + 아래 테두리 1px) 바로 밑에 붙는다. 헤더 높이를 바꾸면 여기도 바꾼다. */}
+      <div className="sticky top-[calc(3.5rem+1px)] z-30 -mx-2 border-b border-line bg-bg/90 px-2 backdrop-blur-md sm:-mx-3 sm:px-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5">
           <h1 className="text-base font-bold whitespace-nowrap text-fg max-sm:hidden">주식 모의투자</h1>
           <div role="tablist" aria-label="화면" className="flex min-w-0 gap-0.5 overflow-x-auto">
@@ -174,6 +181,7 @@ export default function StockSimulator() {
           <div className="flex min-w-0 items-center gap-3 max-xl:w-full xl:ml-auto">
             <MarketStrip
               indices={market.data?.indices ?? null}
+              vix={market.data?.vix ?? null}
               fearGreed={market.data?.fearGreed ?? null}
               error={market.error}
               onOpen={openMarket}

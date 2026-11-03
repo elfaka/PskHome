@@ -1,6 +1,6 @@
 "use client";
 
-import type { FearGreed, MarketIndex, MarketIndexSymbol } from "@/api/stockSim";
+import type { FearGreed, MarketChartSymbol, MarketIndex, VixSummary } from "@/api/stockSim";
 import Skeleton from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 import { FEAR_GREED_TEXT } from "@/lib/stocksim/fearGreed";
@@ -39,19 +39,21 @@ const chip =
   "flex h-8 shrink-0 items-center gap-2 rounded-control px-2 text-left text-xs whitespace-nowrap transition hover:bg-surface-hover";
 
 /**
- * 상단 바의 지수 요약 — 코스피·코스닥(값·등락률·당일 추이)과 공포·탐욕 지수.
+ * 상단 바의 지수 요약 — 코스피·코스닥(값·등락률·당일 추이), VIX(최근 60일 추이), 공포·탐욕 지수.
  * 누르면 시장 탭으로 간다.
  */
 export default function MarketStrip({
   indices,
+  vix,
   fearGreed,
   error,
   onOpen,
 }: {
   indices: MarketIndex[] | null;
+  vix: VixSummary | null;
   fearGreed: FearGreed | null;
   error: string | null;
-  onOpen: (target: MarketIndexSymbol | "fearGreed") => void;
+  onOpen: (target: MarketChartSymbol | "fearGreed") => void;
 }) {
   if (!indices) {
     return error ? (
@@ -79,6 +81,23 @@ export default function MarketStrip({
           </button>
         );
       })}
+
+      {vix && (
+        <button
+          type="button"
+          onClick={() => onOpen("VIX")}
+          className={chip}
+          title={`미국 변동성 지수 · ${vix.levelLabel} · ${vix.source}`}
+        >
+          <span className="font-medium text-fg-muted">VIX</span>
+          <span className={cn("font-semibold tabular-nums", TONE_TEXT[changeTone(vix.change)])}>{formatNumber(vix.value, 2)}</span>
+          <span className={cn("tabular-nums", TONE_TEXT[changeTone(vix.change)])}>
+            {vix.change == null ? "" : `${vix.change > 0 ? "▲" : vix.change < 0 ? "▼" : ""}${formatNumber(Math.abs(vix.change), 2)}`}
+            {vix.changeRate == null ? "" : ` ${formatRate(vix.changeRate)}`}
+          </span>
+          <Sparkline points={vix.recent} base={null} className={TONE_TEXT[changeTone(vix.change)]} />
+        </button>
+      )}
 
       {fearGreed && (
         <button

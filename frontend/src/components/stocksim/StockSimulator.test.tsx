@@ -127,6 +127,63 @@ describe("StockSimulator", () => {
     expect(within(strip).getByText("845.32")).toBeInTheDocument();
     expect(within(strip).getByText("▼4.68 -0.55%")).toBeInTheDocument();
     expect(within(strip).getByRole("button", { name: "공포·탐욕 지수 62 탐욕" })).toBeInTheDocument();
+    // VIX (Cboe)
+    expect(within(strip).getByText("21.15")).toBeInTheDocument();
+    expect(within(strip).getByText("▲1.73 +8.18%")).toBeInTheDocument();
+  });
+
+  it("shows VIX in the market tab with daily-only chart and its level card instead of investor flows", async () => {
+    const user = userEvent.setup();
+    render(<StockSimulator />);
+
+    const strip = await screen.findByRole("region", { name: "시장 지수" });
+    await user.click(await within(strip).findByRole("button", { name: /VIX/ }));
+
+    expect(screenTab("시장")).toHaveAttribute("aria-selected", "true");
+    expect(within(screen.getByRole("tablist", { name: "지수" })).getByRole("tab", { name: "VIX" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    const chart = screen.getByRole("region", { name: "지수 차트" });
+    expect(await within(chart).findByTestId("candle-chart")).toHaveTextContent("1d:30");
+    const timeframes = within(within(chart).getByRole("tablist", { name: "봉 단위" })).getAllByRole("tab");
+    expect(timeframes.map((t) => t.textContent)).toEqual(["일", "주", "월"]);
+    // 거래량이 없는 지표라 거래량 버튼을 뺀다
+    expect(within(chart).queryByRole("button", { name: "거래량" })).not.toBeInTheDocument();
+
+    const card = screen.getByRole("region", { name: "VIX 변동성 지수" });
+    expect(within(card).getByText("불안")).toBeInTheDocument();
+    expect(within(card).getByText("19.42")).toBeInTheDocument();
+    expect(within(card).getByText(/Cboe · 15분 지연/)).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /투자자별 순매수/ })).not.toBeInTheDocument();
+  });
+
+  it("explains a missing VIX without hiding the Korean indices", async () => {
+    server.use(
+      http.get("/api/stocksim/market", () =>
+        HttpResponse.json({
+          indices: [],
+          fearGreed: null,
+          fearGreedNote: null,
+          vix: null,
+          vixNote: "VIX 를 불러오지 못했습니다: Cboe 에 연결하지 못했습니다",
+        })
+      )
+    );
+    window.history.replaceState(null, "", "/stocksim?tab=market");
+    const user = userEvent.setup();
+    render(<StockSimulator />);
+
+    await user.click(await within(await screen.findByRole("tablist", { name: "지수" })).findByRole("tab", { name: "VIX" }));
+    expect(await screen.findByText(/VIX 를 불러오지 못했습니다/)).toBeInTheDocument();
+  });
+
+  it("pins the top bar right under the site header (h-14 + 1px border) with no gap", () => {
+    render(<StockSimulator />);
+
+    const bar = screen.getByRole("tablist", { name: "화면" }).closest(".sticky");
+    expect(bar?.className).toContain("top-[calc(3.5rem+1px)]");
   });
 
   it("opens the market tab with the index chart, fear & greed reasons and market flows", async () => {
