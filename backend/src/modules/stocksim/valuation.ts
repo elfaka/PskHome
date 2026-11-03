@@ -1,7 +1,7 @@
-import type { DartFinancials } from "./dart/dartClient.js";
+import type { DartFinancials, DartYear } from "./dart/dartClient.js";
 import { getDartClient } from "./dart/dartClient.js";
 import type { TossStock } from "./toss/toss.types.js";
-import type { Valuation } from "./stockSim.types.js";
+import type { FinancialYear, Valuation } from "./stockSim.types.js";
 
 /**
  * 재무 지표 계산.
@@ -10,6 +10,7 @@ import type { Valuation } from "./stockSim.types.js";
  * - EPS: 배당사항의 주당순이익(지배기업 소유주 기준)을 우선 쓰고, 없으면 당기순이익 ÷ 발행주식수
  * - BPS: 자본총계 ÷ 발행주식수 (비지배지분 포함이라 증권사 BPS 보다 조금 클 수 있다)
  * - PER: 적자(EPS ≤ 0)면 의미가 없어 null
+ * - history: 3개 사업연도 비율과 전년 대비 증감 (자본 ≤ 0 이면 ROE·부채비율 null)
  */
 export function computeValuation(fin: DartFinancials, price: number | null, shares: number | null): Valuation {
   const perShare = (v: number | null) => (v != null && shares ? v / shares : null);
@@ -36,7 +37,31 @@ export function computeValuation(fin: DartFinancials, price: number | null, shar
     debtRatio: fin.totalEquity != null && fin.totalEquity > 0 ? ratio(fin.totalLiabilities, fin.totalEquity) : null,
     dividendPerShare: fin.dividendPerShare,
     dividendYield: price != null && price > 0 && fin.dividendPerShare != null ? fin.dividendPerShare / price : null,
+    history: financialHistory(fin.history),
   };
+}
+
+const safeRatio = (a: number | null, b: number | null) => (a != null && b != null && b !== 0 ? a / b : null);
+/** (올해 - 작년) / |작년| — 적자에서 흑자로 바뀌어도 부호가 맞도록 절댓값으로 나눈다 */
+const growth = (now: number | null, prev: number | null | undefined) =>
+  now != null && prev != null && prev !== 0 ? (now - prev) / Math.abs(prev) : null;
+
+export function financialHistory(years: DartYear[]): FinancialYear[] {
+  return years.map((y, i) => {
+    const prev = years[i - 1]?.year === y.year - 1 ? years[i - 1] : undefined;
+    const equity = y.totalEquity != null && y.totalEquity > 0 ? y.totalEquity : null;
+
+    return {
+      ...y,
+      operatingMargin: safeRatio(y.operatingIncome, y.revenue),
+      netMargin: safeRatio(y.netIncome, y.revenue),
+      roe: safeRatio(y.netIncome, equity),
+      debtRatio: safeRatio(y.totalLiabilities, equity),
+      revenueGrowth: growth(y.revenue, prev?.revenue),
+      operatingIncomeGrowth: growth(y.operatingIncome, prev?.operatingIncome),
+      netIncomeGrowth: growth(y.netIncome, prev?.netIncome),
+    };
+  });
 }
 
 export interface ValuationResult {

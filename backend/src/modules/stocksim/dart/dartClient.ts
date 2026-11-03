@@ -10,11 +10,27 @@ import { TtlCache } from "../../../lib/ttlCache.js";
  * 토스증권 Open API 에는 재무 데이터가 없어서 PER·EPS·PBR 등은 여기서 받은 사업보고서 값으로 계산한다.
  *
  * - `corpCode.xml`: 전체 회사의 고유번호(zip). 종목코드 → 고유번호 변환에 쓰고 하루 캐시한다.
- * - `fnlttSinglAcnt.json`: 단일회사 주요계정 (매출액·영업이익·당기순이익·자본총계·부채총계)
+ * - `fnlttSinglAcnt.json`: 단일회사 주요계정 (매출액·영업이익·당기순이익·자산·부채·자본총계)
  * - `alotMatter.json`: 배당에 관한 사항 (주당순이익·주당 현금배당금)
+ *
+ * 사업보고서 한 건에 당기·전기·전전기 값이 같이 들어 있어서, 3개년 추이도 추가 호출 없이 만든다.
+ * (주요계정 thstrm_amount·frmtrm_amount·bfefrmtrm_amount / 배당 thstrm·frmtrm·lwfr)
  *
  * 하루 2만 건 한도가 있어 재무 데이터도 회사별로 하루 캐시한다 (사업보고서는 1년에 한 번 바뀐다).
  */
+
+/** 한 사업연도 값 */
+export interface DartYear {
+  year: number;
+  revenue: number | null;
+  operatingIncome: number | null;
+  netIncome: number | null;
+  totalAssets: number | null;
+  totalLiabilities: number | null;
+  totalEquity: number | null;
+  eps: number | null;
+  dividendPerShare: number | null;
+}
 
 export interface DartFinancials {
   bsnsYear: number;
@@ -29,6 +45,8 @@ export interface DartFinancials {
   eps: number | null;
   /** 보통주 주당 현금배당금 */
   dividendPerShare: number | null;
+  /** 전전기·전기·당기 (오래된 것부터). 당기 값은 위 필드와 같다 */
+  history: DartYear[];
 }
 
 export interface DartClient {
@@ -70,7 +88,12 @@ const ACCOUNT_NAMES = {
   netIncome: ["당기순이익", "당기순이익(손실)"],
   totalEquity: ["자본총계"],
   totalLiabilities: ["부채총계"],
+  totalAssets: ["자산총계"],
 } as const;
+
+/** 당기(0)·전기(1)·전전기(2) 열 이름 */
+const ACCOUNT_COLUMNS = ["thstrm_amount", "frmtrm_amount", "bfefrmtrm_amount"] as const;
+const DIVIDEND_COLUMNS = ["thstrm", "frmtrm", "lwfr"] as const;
 
 /** "1,234" → 1234, "-" / "" → null */
 export function parseDartNumber(raw: string | undefined): number | null {
@@ -118,9 +141,9 @@ export function parseFinancials(bsnsYear: number, accounts: DartRow[], dividends
   const consolidated = accounts.some((r) => r.fs_div === "CFS");
   const rows = accounts.filter((r) => r.fs_div === (consolidated ? "CFS" : "OFS"));
 
-  const pick = (names: readonly string[]) => {
+  const pick = (names: readonly string[], back = 0) => {
     const row = rows.find((r) => names.includes((r.account_nm ?? "").trim()));
-    return parseDartNumber(row?.thstrm_amount);
+    return parseDartNumber(row?.[ACCOUNT_COLUMNS[back]]);
   };
 
   const dividendRow = (label: (se: string) => boolean, stockKind?: string) =>
@@ -130,16 +153,35 @@ export function parseFinancials(bsnsYear: number, accounts: DartRow[], dividends
   const epsRow = dividendRow((se) => se === epsLabel) ?? dividendRow((se) => se.includes("주당순이익"));
   const dpsRow = dividendRow((se) => se === "주당현금배당금(원)", "보통주");
 
+  const yearAt = (back: number): DartYear => ({
+    year: bsnsYear - back,
+    revenue: pick(ACCOUNT_NAMES.revenue, back),
+    operatingIncome: pick(ACCOUNT_NAMES.operatingIncome, back),
+    netIncome: pick(ACCOUNT_NAMES.netIncome, back),
+    totalAssets: pick(ACCOUNT_NAMES.totalAssets, back),
+    totalLiabilities: pick(ACCOUNT_NAMES.totalLiabilities, back),
+    totalEquity: pick(ACCOUNT_NAMES.totalEquity, back),
+    eps: parseDartNumber(epsRow?.[DIVIDEND_COLUMNS[back]]),
+    dividendPerShare: parseDartNumber(dpsRow?.[DIVIDEND_COLUMNS[back]]),
+  });
+
+  const current = yearAt(0);
+  // 값이 하나도 없는 연도(신규 상장 등)는 뺀다.
+  const history = [yearAt(2), yearAt(1), current].filter((y) =>
+    [y.revenue, y.operatingIncome, y.netIncome, y.totalEquity].some((v) => v != null)
+  );
+
   return {
     bsnsYear,
     consolidated,
-    revenue: pick(ACCOUNT_NAMES.revenue),
-    operatingIncome: pick(ACCOUNT_NAMES.operatingIncome),
-    netIncome: pick(ACCOUNT_NAMES.netIncome),
-    totalEquity: pick(ACCOUNT_NAMES.totalEquity),
-    totalLiabilities: pick(ACCOUNT_NAMES.totalLiabilities),
-    eps: parseDartNumber(epsRow?.thstrm),
-    dividendPerShare: parseDartNumber(dpsRow?.thstrm),
+    revenue: current.revenue,
+    operatingIncome: current.operatingIncome,
+    netIncome: current.netIncome,
+    totalEquity: current.totalEquity,
+    totalLiabilities: current.totalLiabilities,
+    eps: current.eps,
+    dividendPerShare: current.dividendPerShare,
+    history,
   };
 }
 
