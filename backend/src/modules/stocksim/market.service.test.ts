@@ -8,13 +8,15 @@ import type { CandlePoint, MarketInvestorDay } from "./stockSim.types.js";
 /**
  * 시장 지수·공포탐욕 — 계산 규칙은 순수 함수로, 응답 조립은 fake 토스로 라우트까지 검증한다.
  */
-const holder = vi.hoisted(() => ({ client: null as unknown }));
+const holder = vi.hoisted(() => ({ client: null as unknown, cboe: null as unknown }));
 
 vi.mock("./toss/tossClient.js", () => ({ getTossClient: () => holder.client }));
+vi.mock("./cboe/cboeClient.js", () => ({ getCboeClient: () => holder.cboe }));
 vi.mock("./dart/dartClient.js", () => ({ getDartClient: () => null }));
 
 const { createApp } = await import("../../app.js");
 const {
+  buildVixSummary,
   computeFearGreed,
   fearGreedLevel,
   intradayLine,
@@ -22,6 +24,7 @@ const {
   marketThrottle,
   previousClose,
   resetMarketCache,
+  vixLevel,
 } = await import("./market.service.js");
 
 const app = createApp();
@@ -167,12 +170,49 @@ describe("index helpers", () => {
   });
 });
 
+const VIX_QUOTE = {
+  value: 21.15,
+  change: 1.73,
+  changeRate: 0.081797,
+  open: 19.05,
+  high: 21.77,
+  low: 18.03,
+  timestamp: "2026-11-02T21:15:01.000Z",
+};
+
+describe("VIX summary", () => {
+  it("labels VIX levels", () => {
+    expect([12, 15, 19.99, 20, 29.9, 30, 45].map(vixLevel)).toEqual([
+      "CALM",
+      "NORMAL",
+      "NORMAL",
+      "ELEVATED",
+      "ELEVATED",
+      "FEAR",
+      "FEAR",
+    ]);
+  });
+
+  it("derives the previous close and keeps the last 60 closes", () => {
+    const v = buildVixSummary(VIX_QUOTE, bars(line(100, 10, 30)));
+
+    expect(v).toMatchObject({ symbol: "VIX", value: 21.15, prevClose: 19.42, level: "ELEVATED", levelLabel: "불안" });
+    expect(v.recent).toHaveLength(60);
+    expect(v.recent.at(-1)?.value).toBe(30);
+    expect(v.source).toContain("Cboe");
+  });
+});
+
 describe("market routes", () => {
   let toss: FakeTossClient;
 
   beforeEach(() => {
     toss = createFakeTossClient();
     holder.client = toss;
+    holder.cboe = {
+      getVixQuote: async () => VIX_QUOTE,
+      getVixHistory: async () => bars(line(300, 15, 21.15)),
+    };
     marketThrottle.intervalMs = 0;
     resetMarketCache();
   });
@@ -195,6 +235,45 @@ describe("market routes", () => {
     expect(res.body.fearGreed.score).toBeLessThanOrEqual(100);
     expect(res.body.fearGreed.factors).toHaveLength(6);
     expect(res.body.fearGreed.factors.every((f: { score: number | null }) => f.score != null)).toBe(true);
+
+    expect(res.body.vixNote).toBeNull();
+    expect(res.body.vix).toMatchObject({ value: 21.15, change: 1.73, prevClose: 19.42, levelLabel: "불안" });
+  });
+
+  it("keeps the Korean indices when Cboe is unavailable", async () => {
+    holder.cboe = {
+      getVixQuote: async () => {
+        throw new Error("Cboe 에 연결하지 못했습니다");
+      },
+      getVixHistory: async () => [],
+    };
+
+    const res = await request(app).get("/api/stocksim/market");
+
+    expect(res.status).toBe(200);
+    expect(res.body.indices).toHaveLength(2);
+    expect(res.body.vix).toBeNull();
+    expect(res.body.vixNote).toContain("VIX 를 불러오지 못했습니다");
+  });
+
+  it("GET /api/stocksim/market/VIX/chart gives daily, weekly and monthly bars only", async () => {
+    const daily = await request(app).get("/api/stocksim/market/vix/chart?timeframe=1d");
+    expect(daily.status).toBe(200);
+    expect(daily.body.symbol).toBe("VIX");
+    expect(daily.body.candles).toHaveLength(300);
+    expect(daily.body.candles.at(-1).close).toBe(21.15);
+
+    const weekly = await request(app).get("/api/stocksim/market/VIX/chart?timeframe=1w");
+    expect(weekly.body.candles.length).toBeLessThan(80);
+
+    const minute = await request(app).get("/api/stocksim/market/VIX/chart?timeframe=1m");
+    expect(minute.status).toBe(400);
+    expect(minute.body.error.code).toBe("INVALID_PARAM");
+  });
+
+  it("has no investor data for VIX", async () => {
+    const res = await request(app).get("/api/stocksim/market/VIX/investors");
+    expect(res.status).toBe(400);
   });
 
   it("falls back to the last minute bar when Toss omits the index timestamp", async () => {

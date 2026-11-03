@@ -50,6 +50,9 @@ const envSchema = z.object({
   // https://opendart.fss.or.kr 에서 발급. 없으면 재무 지표만 빠지고 나머지는 동작한다.
   DART_API_KEY: z.string().optional(),
   DART_API_BASE_URL: z.string().default("https://opendart.fss.or.kr/api"),
+
+  // --- Cboe 공개 데이터 (모의투자 VIX 지수, 키 불필요) ---
+  CBOE_API_BASE_URL: z.string().default("https://cdn-api.cboe.com/api/global"),
 });
 
 export type Env = z.infer<typeof envSchema>;

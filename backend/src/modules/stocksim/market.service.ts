@@ -1,6 +1,7 @@
 import { HttpError } from "../../lib/httpError.js";
 import { TtlCache } from "../../lib/ttlCache.js";
 import { aggregateCandles, kstDate, last, rsi, sma } from "./indicators.js";
+import { getCboeClient, type VixQuote } from "./cboe/cboeClient.js";
 import { buildChartIndicators } from "./marketData.service.js";
 import type { TossIndicatorPrice, TossIndicatorSymbol } from "./toss/toss.types.js";
 import { getTossClient } from "./toss/tossClient.js";
@@ -10,23 +11,27 @@ import type {
   FearGreed,
   FearGreedFactor,
   FearGreedLevel,
+  MarketChartSymbol,
   MarketIndex,
   MarketIndexSymbol,
   MarketInvestorDay,
   MarketOverview,
   Timeframe,
+  VixLevel,
+  VixSummary,
 } from "./stockSim.types.js";
 
 /**
- * 시장 화면 — 코스피·코스닥 지수와 자체 계산 공포·탐욕 지수.
+ * 시장 화면 — 코스피·코스닥 지수, 미국 VIX, 자체 계산 공포·탐욕 지수.
  *
- * 토스 시장 지표 API(`/api/v1/market-indicators/...`)만 쓴다.
+ * 국내 지수는 토스 시장 지표 API(`/api/v1/market-indicators/...`), VIX 는 토스에 없어 Cboe 공개 데이터(`cboe/cboeClient.ts`)를 쓴다.
  *
  * | 데이터 | 토스 한도(초당) | 캐시 |
  * |---|---|---|
  * | 지수 현재가 | 10회 | 3초 |
  * | 지수 1분봉 / 일봉 | 5회 (MARKET_INDICATOR_CHART) | 1분봉 20초, 일봉 5분 — 호출 간격을 `marketThrottle` 로 벌린다 |
  * | 시장 투자자별 매매대금 | 10회 | 5분 |
+ * | VIX 현재값 / 일별 기록 (Cboe) | - | 1분 / 1시간 (15분 지연 데이터) |
  *
  * [공포·탐욕 지수]
  * 한국 시장에는 공식 지수가 없어 CNN Fear & Greed 와 같은 방식으로 직접 계산한다.
@@ -91,6 +96,14 @@ export function parseIndexSymbol(raw: string): MarketIndexSymbol {
   const symbol = raw.trim().toUpperCase();
   if (symbol === "KOSPI" || symbol === "KOSDAQ") return symbol;
   throw HttpError.badRequest("지수는 KOSPI, KOSDAQ 중 하나여야 합니다.", "INVALID_SYMBOL");
+}
+
+/** 차트를 볼 수 있는 시장 지표 — 코스피·코스닥·VIX */
+export function parseChartSymbol(raw: string): MarketChartSymbol {
+  const symbol = raw.trim().toUpperCase();
+  if (symbol === "VIX") return symbol;
+  if (symbol === "KOSPI" || symbol === "KOSDAQ") return symbol;
+  throw HttpError.badRequest("지수는 KOSPI, KOSDAQ, VIX 중 하나여야 합니다.", "INVALID_SYMBOL");
 }
 
 /** 봉을 `count` 개까지 이어 받아 오래된 것부터 돌려준다 (marketData 의 fetchCandles 와 같은 방식). */
@@ -158,9 +171,18 @@ export async function getMarketInvestors(rawSymbol: string): Promise<MarketInves
   });
 }
 
-/** 지수 차트 — 종목 차트와 같은 형태 (봉 + 지표) */
+/** 지수 차트 — 종목 차트와 같은 형태 (봉 + 지표). VIX 는 일별 기록만 있어 일·주·월봉만 된다. */
 export async function getIndexChart(rawSymbol: string, timeframe: Timeframe): Promise<ChartData> {
-  const symbol = parseIndexSymbol(rawSymbol);
+  const symbol = parseChartSymbol(rawSymbol);
+
+  if (symbol === "VIX") {
+    if (timeframe !== "1d" && timeframe !== "1w" && timeframe !== "1M") {
+      throw HttpError.badRequest("VIX 는 일·주·월봉만 제공합니다.", "INVALID_PARAM");
+    }
+    const daily = await getCboeClient().getVixHistory();
+    const candles = timeframe === "1d" ? daily : aggregateCandles(daily, timeframe);
+    return { symbol, timeframe, candles, indicators: buildChartIndicators(candles) };
+  }
 
   let candles: CandlePoint[];
   switch (timeframe) {
@@ -245,13 +267,62 @@ export async function getMarketOverview(): Promise<MarketOverview> {
 
   let fearGreed: FearGreed | null = null;
   let fearGreedNote: string | null = null;
-  try {
-    fearGreed = await getFearGreed();
-  } catch (err) {
-    fearGreedNote = `공포·탐욕 지수를 계산하지 못했습니다: ${err instanceof Error ? err.message : String(err)}`;
-  }
+  let vix: VixSummary | null = null;
+  let vixNote: string | null = null;
+  const reason = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-  return { indices, fearGreed, fearGreedNote };
+  // 토스(공포탐욕)와 Cboe(VIX)는 서로 다른 곳이라 같이 받는다.
+  await Promise.all([
+    getFearGreed()
+      .then((v) => (fearGreed = v))
+      .catch((err) => (fearGreedNote = `공포·탐욕 지수를 계산하지 못했습니다: ${reason(err)}`)),
+    getVix()
+      .then((v) => (vix = v))
+      .catch((err) => (vixNote = `VIX 를 불러오지 못했습니다: ${reason(err)}`)),
+  ]);
+
+  return { indices, fearGreed, fearGreedNote, vix, vixNote };
+}
+
+// ---------------------------------------------------------------------------
+// VIX (Cboe)
+// ---------------------------------------------------------------------------
+
+const VIX_LEVEL_LABEL: Record<VixLevel, string> = { CALM: "안정", NORMAL: "보통", ELEVATED: "불안", FEAR: "공포" };
+const VIX_RECENT_DAYS = 60;
+
+export function vixLevel(value: number): VixLevel {
+  if (value < 15) return "CALM";
+  if (value < 20) return "NORMAL";
+  if (value < 30) return "ELEVATED";
+  return "FEAR";
+}
+
+/** 현재값 + 일별 기록 → 화면용 요약. 일별 기록을 못 받아도 현재값만으로 만든다. */
+export function buildVixSummary(quote: VixQuote, history: CandlePoint[]): VixSummary {
+  const level = vixLevel(quote.value);
+  return {
+    symbol: "VIX",
+    name: "VIX",
+    value: quote.value,
+    timestamp: quote.timestamp,
+    prevClose: quote.change == null ? null : Math.round((quote.value - quote.change) * 100) / 100,
+    change: quote.change,
+    changeRate: quote.changeRate,
+    open: quote.open,
+    high: quote.high,
+    low: quote.low,
+    level,
+    levelLabel: VIX_LEVEL_LABEL[level],
+    recent: history.slice(-VIX_RECENT_DAYS).map((c) => ({ time: c.time, value: c.close })),
+    source: "Cboe · 15분 지연",
+  };
+}
+
+async function getVix(): Promise<VixSummary> {
+  const cboe = getCboeClient();
+  const [quote, history] = await Promise.all([cboe.getVixQuote(), cboe.getVixHistory().catch(() => [] as CandlePoint[])]);
+  return buildVixSummary(quote, history);
 }
 
 export async function getFearGreed(): Promise<FearGreed> {

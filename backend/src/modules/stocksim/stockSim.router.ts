@@ -70,12 +70,12 @@ stockSimRouter.get("/stocksim/stocks/:symbol/investors", async (req, res) => {
   res.json(await marketData.getInvestorFlows(req.params.symbol));
 });
 
-// 코스피·코스닥 지수 + 공포·탐욕 지수
+// 코스피·코스닥 지수 + VIX + 공포·탐욕 지수
 stockSimRouter.get("/stocksim/market", async (_req, res) => {
   res.json(await getMarketOverview());
 });
 
-// 지수 차트 — 종목 차트와 같은 형태
+// 지수 차트 (KOSPI · KOSDAQ · VIX) — 종목 차트와 같은 형태. VIX 는 일·주·월봉만
 stockSimRouter.get("/stocksim/market/:symbol/chart", async (req, res) => {
   res.json(await getIndexChart(req.params.symbol, parseTimeframe(req.query.timeframe)));
 });

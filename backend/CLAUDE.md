@@ -116,6 +116,7 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | `TOSS_API_BASE_URL` | `https://openapi.tossinvest.com` | |
 | `DART_API_KEY` | (없음) | OpenDART. 없으면 재무 지표(PER·PBR 등)만 빠지고 나머지는 동작 |
 | `DART_API_BASE_URL` | `https://opendart.fss.or.kr/api` | |
+| `CBOE_API_BASE_URL` | `https://cdn-api.cboe.com/api/global` | Cboe 공개 데이터 (VIX). 키 불필요. 로컬 확인 때 가짜 서버로 바꿀 수 있다 |
 
 **시크릿은 전부 optional 이다.** 하나가 없다고 프로세스 부팅을 막지 않고,
 해당 시크릿을 쓰는 엔드포인트만 런타임에 실패한다.
@@ -126,6 +127,7 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | 파일 | 역할 |
 |---|---|
 | `toss/tossClient.ts` | 토스증권 Open API — **조회 전용**. 주문 API(실계좌 체결)는 노출하지 않는다. 토큰은 client 당 1개라 캐시·단일 발급 |
+| `cboe/cboeClient.ts` | Cboe 공개 데이터 — VIX 현재값(15분 지연)·일별 기록(CSV). 토스 시장 지표에 VIX 가 없어서 쓴다 |
 | `dart/dartClient.ts` | OpenDART — 종목코드→고유번호(zip), 사업보고서 주요계정·배당. 회사별 하루 캐시 |
 | `marketData.service.ts` | 시세·캔들(200개씩 이어 받기)·호가·체결·수급·검색. `TtlCache` 로 토스 rate limit 보호 |
 | `indicators.ts` | 이동평균·EMA·RSI·MACD·볼린저·최대낙폭·봉 묶기(5/15분, 주, 월) — 순수 함수 |
@@ -206,6 +208,7 @@ cd backend && npm run test:watch
 - Google: `vi.mock("./google/googleClientFactory.js")`
 - 토스: `vi.mock("./toss/tossClient.js")` + `src/testing/fakeTossClient.ts`
 - DART: `vi.mock("./dart/dartClient.js", () => ({ getDartClient: () => null }))` (클라이언트 자체 테스트는 fetch 주입)
+- Cboe: `vi.mock("./cboe/cboeClient.js", () => ({ getCboeClient: () => fake }))` (시장 요약을 부르는 테스트만 필요)
   (`backend/.env` 에 실제 키가 있어도 테스트가 토스를 부르지 않도록 반드시 mock 한다)
 - 세션: 저장소가 프로세스 메모리라 별도 준비가 필요 없다
 
