@@ -3,7 +3,14 @@ import { z } from "zod";
 import { env } from "../../config/env.js";
 import { HttpError } from "../../lib/httpError.js";
 import { TtlCache } from "../../lib/ttlCache.js";
-import type { FlightSearchQuery, FlightSearchResult, ParsedFlightSearch } from "./flights.types.js";
+import type {
+  BookingOption,
+  BookingOptionsResult,
+  FlightSearchQuery,
+  FlightSearchResult,
+  ParsedFlightSearch,
+  ReturnFlightsResult,
+} from "./flights.types.js";
 import { getSerpApiClient, type SerpApiClient } from "./serpapi/serpApiClient.js";
 
 /**
@@ -17,6 +24,7 @@ import { getSerpApiClient, type SerpApiClient } from "./serpapi/serpApiClient.js
  * | 인원 | 성인 1~9명 |
  * | 캐시 | 같은 조건 30분 (일일 한도를 쓰지 않는다) |
  * | 일일 한도 | 사용자당 `FLIGHTS_DAILY_LIMIT`회 (KST 자정에 초기화). SerpApi 호출이 실패하면 돌려준다 |
+ * | 한도를 쓰는 호출 | 검색, 오는 편 목록(왕복), 판매처 목록 — 각각 SerpApi 1회 |
  */
 
 export const MAX_DAYS_AHEAD = 330;
@@ -139,6 +147,24 @@ export class DailyLimiter {
   }
 }
 
+function queryKey(query: FlightSearchQuery): string {
+  return [query.tripType, query.from, query.to, query.date, query.returnDate ?? "-", query.adults].join(":");
+}
+
+/**
+ * SerpApi 가 준 토큰(departure_token / booking_token) 검증.
+ * 내용은 SerpApi 만 해석하므로 길이와 문자 종류만 본다 (base64 계열 문자).
+ */
+export function parseToken(raw: unknown, name: string): string {
+  if (typeof raw !== "string" || raw.length === 0) {
+    throw HttpError.badRequest(`${name} 가 필요합니다.`, "INVALID_PARAM");
+  }
+  if (raw.length > 4096 || !/^[A-Za-z0-9+/=_\-.:%]+$/.test(raw)) {
+    throw HttpError.badRequest(`${name} 형식이 올바르지 않습니다.`, "INVALID_PARAM");
+  }
+  return raw;
+}
+
 export interface FlightsServiceOptions {
   getClient?: () => SerpApiClient | null;
   dailyLimit?: number;
@@ -149,34 +175,45 @@ export function createFlightsService(options: FlightsServiceOptions = {}) {
   const getClient = options.getClient ?? getSerpApiClient;
   const now = options.now ?? (() => new Date());
   const limiter = new DailyLimiter(options.dailyLimit ?? env.FLIGHTS_DAILY_LIMIT);
-  const cache = new TtlCache<ParsedFlightSearch & { fetchedAt: string }>(CACHE_TTL_MS);
+  const searchCache = new TtlCache<ParsedFlightSearch & { fetchedAt: string }>(CACHE_TTL_MS);
+  const returnsCache = new TtlCache<ParsedFlightSearch>(CACHE_TTL_MS);
+  const bookingCache = new TtlCache<{ options: BookingOption[]; googleFlightsUrl: string | null }>(CACHE_TTL_MS);
+
+  function requireClient(): SerpApiClient {
+    const client = getClient();
+    if (!client) {
+      throw new HttpError(503, "SERPAPI_DISABLED", "항공권 검색이 설정되지 않았습니다 (SERPAPI_API_KEY 없음).");
+    }
+    return client;
+  }
+
+  /**
+   * 캐시 + 일일 한도를 거쳐 SerpApi 를 부른다.
+   * 캐시에서 꺼내는 요청은 SerpApi 를 부르지 않으므로 한도를 쓰지 않고, 호출이 실패하면 쓴 횟수를 돌려준다.
+   */
+  async function metered<T>(userId: string, cache: TtlCache<T>, key: string, load: () => Promise<T>) {
+    const today = kstDate(now());
+    const cached = cache.has(key);
+    if (!cached) limiter.consume(userId, today);
+
+    try {
+      const value = await cache.get(key, load);
+      return { value, cached, remainingSearches: limiter.remaining(userId, today) };
+    } catch (err) {
+      if (!cached) limiter.refund(userId, today);
+      throw err;
+    }
+  }
 
   return {
     parseSearchQuery: (raw: Record<string, unknown>) => parseSearchQuery(raw, now()),
 
     async search(userId: string, query: FlightSearchQuery): Promise<FlightSearchResult> {
-      const client = getClient();
-      if (!client) {
-        throw new HttpError(503, "SERPAPI_DISABLED", "항공권 검색이 설정되지 않았습니다 (SERPAPI_API_KEY 없음).");
-      }
-
-      const today = kstDate(now());
-      const key = [query.tripType, query.from, query.to, query.date, query.returnDate ?? "-", query.adults].join(":");
-      const cached = cache.has(key);
-
-      // 캐시에서 꺼내는 요청은 SerpApi 를 부르지 않으므로 한도를 쓰지 않는다
-      if (!cached) limiter.consume(userId, today);
-
-      let parsed: ParsedFlightSearch & { fetchedAt: string };
-      try {
-        parsed = await cache.get(key, async () => ({
-          ...(await client.searchFlights(query)),
-          fetchedAt: now().toISOString(),
-        }));
-      } catch (err) {
-        if (!cached) limiter.refund(userId, today);
-        throw err;
-      }
+      const client = requireClient();
+      const { value: parsed, cached, remainingSearches } = await metered(userId, searchCache, queryKey(query), async () => ({
+        ...(await client.searchFlights(query)),
+        fetchedAt: now().toISOString(),
+      }));
 
       const prices = parsed.options.map((o) => o.price).filter((p): p is number => p != null);
 
@@ -188,9 +225,36 @@ export function createFlightsService(options: FlightsServiceOptions = {}) {
         priceInsights: parsed.priceInsights,
         googleFlightsUrl: parsed.googleFlightsUrl,
         fetchedAt: parsed.fetchedAt,
-        remainingSearches: limiter.remaining(userId, today),
+        remainingSearches,
         cached,
       };
+    },
+
+    /** 왕복: 고른 가는 편의 오는 편 목록 (가격은 왕복 총액, 가격순) */
+    async returnFlights(userId: string, query: FlightSearchQuery, departureToken: string): Promise<ReturnFlightsResult> {
+      if (query.tripType !== "round") {
+        throw HttpError.badRequest("오는 편은 왕복 검색에서만 고를 수 있습니다.", "INVALID_PARAM");
+      }
+      const client = requireClient();
+      const { value, cached, remainingSearches } = await metered(
+        userId,
+        returnsCache,
+        `${queryKey(query)}:${departureToken}`,
+        () => client.getReturnFlights(query, departureToken)
+      );
+      return { options: value.options, remainingSearches, cached };
+    },
+
+    /** 고른 여정을 그 가격에 파는 곳 (항공사·여행사) */
+    async bookingOptions(userId: string, query: FlightSearchQuery, bookingToken: string): Promise<BookingOptionsResult> {
+      const client = requireClient();
+      const { value, cached, remainingSearches } = await metered(
+        userId,
+        bookingCache,
+        `${queryKey(query)}:${bookingToken}`,
+        () => client.getBookingOptions(query, bookingToken)
+      );
+      return { options: value.options, googleFlightsUrl: value.googleFlightsUrl, remainingSearches, cached };
     },
 
     remaining: (userId: string) => limiter.remaining(userId, kstDate(now())),

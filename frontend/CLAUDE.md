@@ -237,6 +237,11 @@ export async function fetchData(id: number) {
 - 로그인 버튼은 `FLIGHTS_LOGIN_URL`(`/api/oauth2/authorization/google?returnTo=%2Fflights`)로 이동해
   로그인 후 설문 목록이 아니라 `/flights` 로 돌아온다. 같은 Google 로그인이라 Drive·Forms 읽기 권한 동의 화면이 함께 뜬다.
 - 공항 입력은 `<datalist>` 자동완성(`airports.ts`) + IATA 코드 직접 입력. 목록에 없는 도시 이름은 요청 전에 막는다.
+- 결과 카드의 "판매처 보기"(왕복은 "오는 편 고르기" → "이 편 선택")를 눌렀을 때만 판매처를 불러온다 — 한 번에 한도 1회.
+  패널(`BookingPanel.tsx`)은 열릴 때 마운트되며 그때 한 번 부른다. 새로 검색하면 결과 목록을 key 로 다시 그려 패널을 닫는다.
+- 판매처 이동은 `booking.ts` 의 `openBooking` — `postData` 가 있으면 숨은 폼을 만들어 Google 중계 주소로 **POST**(새 탭),
+  없으면 `window.open`. 링크(`<a href>`)로 바꾸면 Google 이 판매처로 보내 주지 않는다. 클릭 핸들러 안에서 불러야 팝업 차단을 피한다.
+  jsdom 은 `form.submit` 이 없어 테스트에서 `HTMLFormElement.prototype.submit` 을 spy 한다.
 - MSW 기본 핸들러는 `/api/auth/me` 를 **로그인 상태**로 돌려준다. 비로그인 화면은 테스트에서 `server.use` 로 바꾼다.
 
 ## 환경 설정

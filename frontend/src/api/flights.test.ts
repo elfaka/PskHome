@@ -3,7 +3,7 @@ import { http, HttpResponse } from "msw";
 
 import { server } from "@/test/mocks/server";
 
-import { FLIGHTS_LOGIN_URL, getFlightQuota, searchFlights } from "./flights";
+import { FLIGHTS_LOGIN_URL, getBookingOptions, getFlightQuota, getReturnFlights, searchFlights } from "./flights";
 
 describe("flights API functions", () => {
   it("편도 검색은 귀국일을 보내지 않는다", async () => {
@@ -45,5 +45,28 @@ describe("flights API functions", () => {
     const url = new URL(FLIGHTS_LOGIN_URL, "http://localhost");
     expect(url.pathname).toBe("/api/oauth2/authorization/google");
     expect(url.searchParams.get("returnTo")).toBe("/flights");
+  });
+
+  it("판매처·오는 편 조회는 검색 조건에 토큰을 붙여 보낸다", async () => {
+    const seen: Record<string, URLSearchParams> = {};
+    server.use(
+      http.get("/api/flights/booking", ({ request }) => {
+        seen.booking = new URL(request.url).searchParams;
+        return HttpResponse.json({ options: [] });
+      }),
+      http.get("/api/flights/returns", ({ request }) => {
+        seen.returns = new URL(request.url).searchParams;
+        return HttpResponse.json({ options: [] });
+      })
+    );
+    const round = { from: "ICN", to: "NRT", date: "2026-12-01", returnDate: "2026-12-05", tripType: "round" as const, adults: 1 };
+
+    await getBookingOptions({ ...round, tripType: "oneway" }, "bk+/=");
+    await getReturnFlights(round, "dep-1");
+
+    expect(seen.booking.get("bookingToken")).toBe("bk+/=");
+    expect(seen.booking.has("returnDate")).toBe(false);
+    expect(seen.returns.get("departureToken")).toBe("dep-1");
+    expect(seen.returns.get("returnDate")).toBe("2026-12-05");
   });
 });

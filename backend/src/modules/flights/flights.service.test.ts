@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createFlightsService, kstDate, parseSearchQuery } from "./flights.service.js";
-import type { FlightOption, FlightSearchQuery, ParsedFlightSearch } from "./flights.types.js";
+import { createFlightsService, kstDate, parseSearchQuery, parseToken } from "./flights.service.js";
+import type { BookingOption, FlightOption, FlightSearchQuery, ParsedFlightSearch } from "./flights.types.js";
 import type { SerpApiClient } from "./serpapi/serpApiClient.js";
 
 // 2026-11-04 10:00 KST
@@ -19,12 +19,38 @@ function option(id: string, price: number | null): FlightOption {
     segments: [],
     layovers: [],
     best: false,
+    bookingToken: null,
+    departureToken: null,
   };
 }
 
+const booking: BookingOption = {
+  seller: "대한항공",
+  isAirline: true,
+  logo: null,
+  price: 300000,
+  fareName: "이코노미",
+  conditions: [],
+  baggage: [],
+  request: { url: "https://www.google.com/travel/clk/f", postData: "u=abc" },
+  phone: null,
+  separateTickets: false,
+  legs: [],
+};
+
 function fakeClient(result: ParsedFlightSearch = { options: [option("a", 300000), option("b", 210000), option("c", null)], priceInsights: null, googleFlightsUrl: null }) {
   const searchFlights = vi.fn<SerpApiClient["searchFlights"]>(async () => result);
-  return { client: { searchFlights }, searchFlights };
+  const getReturnFlights = vi.fn<SerpApiClient["getReturnFlights"]>(async () => result);
+  const getBookingOptions = vi.fn<SerpApiClient["getBookingOptions"]>(async () => ({
+    options: [booking],
+    googleFlightsUrl: null,
+  }));
+  return {
+    client: { searchFlights, getReturnFlights, getBookingOptions } satisfies SerpApiClient,
+    searchFlights,
+    getReturnFlights,
+    getBookingOptions,
+  };
 }
 
 const valid = { from: "icn", to: "NRT", date: "2026-12-01" };
@@ -137,7 +163,11 @@ describe("createFlightsService.search", () => {
     const searchFlights = vi.fn<SerpApiClient["searchFlights"]>(async () => {
       throw Object.assign(new Error("boom"), { status: 503 });
     });
-    const service = createFlightsService({ getClient: () => ({ searchFlights }), dailyLimit: 3, now: () => NOW });
+    const service = createFlightsService({
+      getClient: () => ({ ...fakeClient().client, searchFlights }),
+      dailyLimit: 3,
+      now: () => NOW,
+    });
 
     await expect(service.search("u1", query)).rejects.toThrow("boom");
     expect(service.remaining("u1")).toBe(3);
@@ -148,5 +178,53 @@ describe("createFlightsService.search", () => {
 
     await expect(service.search("u1", query)).rejects.toMatchObject({ status: 503, code: "SERPAPI_DISABLED" });
     expect(service.remaining("u1")).toBe(3);
+  });
+});
+
+describe("오는 편·판매처 조회", () => {
+  const oneway: FlightSearchQuery = { from: "ICN", to: "NRT", date: "2026-12-01", tripType: "oneway", adults: 1 };
+  const round: FlightSearchQuery = { ...oneway, tripType: "round", returnDate: "2026-12-05" };
+
+  it("판매처 조회도 한도를 1회 쓰고, 같은 토큰은 캐시에서 꺼낸다", async () => {
+    const fake = fakeClient();
+    const service = createFlightsService({ getClient: () => fake.client, dailyLimit: 5, now: () => NOW });
+
+    const first = await service.bookingOptions("u1", oneway, "bk-1");
+    const again = await service.bookingOptions("u1", oneway, "bk-1");
+
+    expect(first.options[0].seller).toBe("대한항공");
+    expect(first.remainingSearches).toBe(4);
+    expect(again.cached).toBe(true);
+    expect(again.remainingSearches).toBe(4);
+    expect(fake.getBookingOptions).toHaveBeenCalledTimes(1);
+    expect(fake.getBookingOptions).toHaveBeenCalledWith(oneway, "bk-1");
+  });
+
+  it("왕복은 가는 편 토큰으로 오는 편 목록을 받는다", async () => {
+    const fake = fakeClient();
+    const service = createFlightsService({ getClient: () => fake.client, dailyLimit: 5, now: () => NOW });
+
+    const result = await service.returnFlights("u1", round, "dep-1");
+
+    expect(result.options).toHaveLength(3);
+    expect(result.remainingSearches).toBe(4);
+    expect(fake.getReturnFlights).toHaveBeenCalledWith(round, "dep-1");
+  });
+
+  it("편도에서 오는 편을 찾으면 400 이고 한도를 쓰지 않는다", async () => {
+    const fake = fakeClient();
+    const service = createFlightsService({ getClient: () => fake.client, dailyLimit: 5, now: () => NOW });
+
+    await expect(service.returnFlights("u1", oneway, "dep-1")).rejects.toMatchObject({ status: 400 });
+    expect(service.remaining("u1")).toBe(5);
+    expect(fake.getReturnFlights).not.toHaveBeenCalled();
+  });
+
+  it("토큰은 base64 계열 문자만 받는다", () => {
+    expect(parseToken("WyJDalJJ_-+/=abc", "bookingToken")).toBe("WyJDalJJ_-+/=abc");
+    expect(() => parseToken(undefined, "bookingToken")).toThrowError(/필요합니다/);
+    expect(() => parseToken("a b", "bookingToken")).toThrowError(/형식/);
+    expect(() => parseToken("x".repeat(4097), "bookingToken")).toThrowError(/형식/);
+    expect(() => parseToken(["a"], "bookingToken")).toThrowError(/필요합니다/);
   });
 });

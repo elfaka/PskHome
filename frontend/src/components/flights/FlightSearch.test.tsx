@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -6,6 +6,7 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/test/mocks/server";
 
 import { toAirportCode } from "./airports";
+import { parsePostData } from "./booking";
 import FlightSearch from "./FlightSearch";
 import { dayOffset, formatDuration } from "./format";
 
@@ -137,5 +138,93 @@ describe("flights helpers", () => {
     expect(formatDuration(60)).toBe("1시간");
     expect(formatDuration(45)).toBe("45분");
     expect(dayOffset("2026-12-01 23:00", "2026-12-02 01:20")).toBe(1);
+  });
+});
+
+describe("판매처로 이동", () => {
+  async function searchOneway(user: ReturnType<typeof userEvent.setup>) {
+    render(<FlightSearch />);
+    await user.type(await screen.findByLabelText("도착지"), "NRT");
+    await user.click(screen.getByRole("button", { name: "최저가 검색" }));
+    return screen.findByRole("list", { name: "항공편 2개" });
+  }
+
+  it("판매처 보기를 누르면 가격순 판매처와 이동 버튼을 보여주고 남은 횟수를 갱신한다", async () => {
+    const user = userEvent.setup();
+    const list = await searchOneway(user);
+    const first = within(list).getAllByRole("listitem")[0];
+
+    await user.click(within(first).getByRole("button", { name: /판매처 보기/ }));
+
+    const sellers = await within(first).findByRole("region", { name: "판매처" });
+    const rows = within(sellers).getAllByRole("listitem");
+    expect(within(rows[0]).getByText("트립닷컴")).toBeInTheDocument();
+    // 검색 결과 가격(180,000원)과 같은 판매처 표시
+    expect(within(rows[0]).getByText("검색 가격")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("항공사 공식")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("전화 예약 02-000-0000")).toBeInTheDocument();
+    expect(screen.getByText("오늘 남은 검색 28회")).toBeInTheDocument();
+  });
+
+  it("사이트로 이동은 Google 중계 주소로 post_data 를 POST 하는 폼을 새 탭으로 보낸다", async () => {
+    const submitted: { action: string; method: string; target: string; fields: [string, string][] }[] = [];
+    const submit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(function (this: HTMLFormElement) {
+      submitted.push({
+        action: this.action,
+        method: this.method,
+        target: this.target,
+        fields: [...new FormData(this).entries()].map(([k, v]) => [k, String(v)]),
+      });
+    });
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+
+    const user = userEvent.setup();
+    const list = await searchOneway(user);
+    const first = within(list).getAllByRole("listitem")[0];
+    await user.click(within(first).getByRole("button", { name: /판매처 보기/ }));
+    const rows = within(await within(first).findByRole("region", { name: "판매처" })).getAllByRole("listitem");
+
+    await user.click(within(rows[0]).getByRole("button", { name: "사이트로 이동 ↗" }));
+    expect(submitted).toEqual([
+      { action: "https://www.google.com/travel/clk/f", method: "post", target: "_blank", fields: [["u", "AAA_bbb-ccc"]] },
+    ]);
+    // 폼은 보낸 뒤 지운다
+    expect(document.querySelector("form[target=_blank]")).toBeNull();
+
+    // post_data 가 없는 판매처는 주소로 바로 연다
+    await user.click(within(rows[1]).getByRole("button", { name: "사이트로 이동 ↗" }));
+    expect(open).toHaveBeenCalledWith("https://www.jejuair.net/booking", "_blank", "noopener,noreferrer");
+
+    submit.mockRestore();
+    open.mockRestore();
+  });
+
+  it("왕복은 오는 편을 고른 뒤 그 조합의 판매처를 보여준다", async () => {
+    const user = userEvent.setup();
+    render(<FlightSearch />);
+
+    await user.click(await screen.findByRole("button", { name: "왕복" }));
+    await user.type(screen.getByLabelText("도착지"), "NRT");
+    await user.click(screen.getByRole("button", { name: "최저가 검색" }));
+
+    const first = within(await screen.findByRole("list", { name: "항공편 2개" })).getAllByRole("listitem")[0];
+    await user.click(within(first).getByRole("button", { name: /오는 편 고르기/ }));
+
+    const returns = await within(first).findByRole("region", { name: "오는 편" });
+    expect(within(returns).getByText("410,000원")).toBeInTheDocument();
+    await user.click(within(returns).getByRole("button", { name: "이 편 선택" }));
+
+    expect(await within(first).findByRole("region", { name: "판매처" })).toBeInTheDocument();
+    expect(within(first).getByText(/왕복 410,000원/)).toBeInTheDocument();
+  });
+});
+
+describe("parsePostData", () => {
+  it("폼 인코딩을 풀어 이름·값으로 나눈다", () => {
+    expect(parsePostData("u=AAA%2Bb%3D&x=1+2&flag")).toEqual([
+      ["u", "AAA+b="],
+      ["x", "1 2"],
+      ["flag", ""],
+    ]);
   });
 });

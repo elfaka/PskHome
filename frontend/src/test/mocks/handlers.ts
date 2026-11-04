@@ -465,7 +465,75 @@ export const handlers = [
     };
     return HttpResponse.json({ ...mockFlightResult, query });
   }),
+
+  // 왕복: 가는 편 토큰 → 오는 편 (각각 판매처 토큰을 가진다)
+  http.get("/api/flights/returns", () =>
+    HttpResponse.json({
+      options: [
+        {
+          ...mockFlightResult.options[1],
+          id: "KE 704",
+          price: 410_000,
+          departureTime: "2026-12-05 12:00",
+          arrivalTime: "2026-12-05 14:30",
+          bookingToken: "bk-round",
+          departureToken: null,
+        },
+      ],
+      remainingSearches: 28,
+      cached: false,
+    })
+  ),
+
+  http.get("/api/flights/booking", () => HttpResponse.json(mockBookingResult)),
 ];
+
+export const mockBookingResult = {
+  options: [
+    {
+      seller: "트립닷컴",
+      isAirline: false,
+      logo: null,
+      price: 180_000,
+      fareName: "이코노미",
+      conditions: ["환불 불가"],
+      baggage: [],
+      request: { url: "https://www.google.com/travel/clk/f", postData: "u=AAA_bbb%2Dccc" },
+      phone: null,
+      separateTickets: false,
+      legs: [],
+    },
+    {
+      seller: "제주항공",
+      isAirline: true,
+      logo: null,
+      price: 195_000,
+      fareName: null,
+      conditions: [],
+      baggage: ["위탁 수하물 15kg"],
+      request: { url: "https://www.jejuair.net/booking", postData: null },
+      phone: null,
+      separateTickets: false,
+      legs: [],
+    },
+    {
+      seller: "전화여행사",
+      isAirline: false,
+      logo: null,
+      price: 199_000,
+      fareName: null,
+      conditions: [],
+      baggage: [],
+      request: null,
+      phone: "02-000-0000",
+      separateTickets: false,
+      legs: [],
+    },
+  ],
+  googleFlightsUrl: "https://www.google.com/travel/flights?b=1",
+  remainingSearches: 28,
+  cached: false,
+};
 
 function mockSegment(flightNumber: string, airline: string, from: string, to: string, dep: string, arr: string) {
   return {
@@ -501,6 +569,8 @@ export const mockFlightResult = {
       ],
       layovers: [{ id: "PUS", name: "김해국제공항", durationMinutes: 120, overnight: false }],
       best: false,
+      bookingToken: "bk-7c",
+      departureToken: "dep-7c",
     },
     {
       id: "KE 703",
@@ -513,6 +583,8 @@ export const mockFlightResult = {
       segments: [mockSegment("KE 703", "대한항공", "ICN", "NRT", "2026-12-01 23:00", "2026-12-02 01:20")],
       layovers: [],
       best: true,
+      bookingToken: "bk-ke",
+      departureToken: "dep-ke",
     },
   ],
   priceInsights: { lowestPrice: 180_000, priceLevel: "low", typicalRange: [200_000, 400_000] },

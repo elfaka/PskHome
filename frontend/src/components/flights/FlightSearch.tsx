@@ -270,7 +270,14 @@ export default function FlightSearch() {
           )}
 
           {searching && <Skeleton className="mt-8 h-64 w-full" />}
-          {!searching && result && <FlightResults result={result} />}
+          {!searching && result && (
+            // 새로 검색하면 펼쳐 둔 판매처 패널을 닫는다 (이전 검색의 토큰을 쓰지 않게)
+            <FlightResults
+              key={`${JSON.stringify(result.query)}@${result.fetchedAt}`}
+              result={result}
+              onRemaining={setRemaining}
+            />
+          )}
         </>
       )}
     </Container>

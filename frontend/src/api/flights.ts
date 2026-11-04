@@ -50,6 +50,48 @@ export type FlightOption = {
   segments: FlightSegment[];
   layovers: Layover[];
   best: boolean;
+  /** 판매처 조회용 (편도 결과, 왕복의 오는 편 결과) */
+  bookingToken: string | null;
+  /** 왕복 가는 편 결과에만 있다. 오는 편 목록 조회용 */
+  departureToken: string | null;
+};
+
+/** `postData` 가 있으면 `url` 로 POST, 없으면 `url` 로 바로 이동 */
+export type BookingRequest = { url: string; postData: string | null };
+
+export type BookingLeg = {
+  label: "가는 편" | "오는 편";
+  seller: string;
+  price: number | null;
+  request: BookingRequest | null;
+};
+
+export type BookingOption = {
+  seller: string;
+  isAirline: boolean;
+  logo: string | null;
+  price: number | null;
+  fareName: string | null;
+  conditions: string[];
+  baggage: string[];
+  request: BookingRequest | null;
+  phone: string | null;
+  separateTickets: boolean;
+  legs: BookingLeg[];
+};
+
+export type BookingOptionsResult = {
+  /** 가격 오름차순 */
+  options: BookingOption[];
+  googleFlightsUrl: string | null;
+  remainingSearches: number;
+  cached: boolean;
+};
+
+export type ReturnFlightsResult = {
+  options: FlightOption[];
+  remainingSearches: number;
+  cached: boolean;
 };
 
 export type PriceInsights = {
@@ -71,10 +113,29 @@ export type FlightSearchResult = {
   cached: boolean;
 };
 
-export async function searchFlights(params: FlightSearchParams): Promise<FlightSearchResult> {
+/** 검색 조건 → 쿼리 (편도에는 귀국일을 넣지 않는다 — 백엔드가 400 으로 거절한다) */
+function queryParams(params: FlightSearchParams) {
   const { returnDate, ...rest } = params;
-  const res = await api.get<FlightSearchResult>("/api/flights/search", {
-    params: params.tripType === "round" ? { ...rest, returnDate } : rest,
+  return params.tripType === "round" ? { ...rest, returnDate } : rest;
+}
+
+export async function searchFlights(params: FlightSearchParams): Promise<FlightSearchResult> {
+  const res = await api.get<FlightSearchResult>("/api/flights/search", { params: queryParams(params) });
+  return res.data;
+}
+
+/** 왕복: 고른 가는 편의 오는 편 목록 (검색 1회 사용) */
+export async function getReturnFlights(params: FlightSearchParams, departureToken: string): Promise<ReturnFlightsResult> {
+  const res = await api.get<ReturnFlightsResult>("/api/flights/returns", {
+    params: { ...queryParams(params), departureToken },
+  });
+  return res.data;
+}
+
+/** 고른 여정을 그 가격에 파는 곳 (검색 1회 사용) */
+export async function getBookingOptions(params: FlightSearchParams, bookingToken: string): Promise<BookingOptionsResult> {
+  const res = await api.get<BookingOptionsResult>("/api/flights/booking", {
+    params: { ...queryParams(params), bookingToken },
   });
   return res.data;
 }

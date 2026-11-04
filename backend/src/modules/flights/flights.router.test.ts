@@ -7,9 +7,14 @@ import type { ParsedFlightSearch } from "./flights.types.js";
 // 테스트가 실제 SerpApi 를 부르지 않도록 클라이언트를 바꾼다 (backend/.env 에 키가 있어도)
 const holder = vi.hoisted(() => ({
   searchFlights: null as unknown as ReturnType<typeof vi.fn>,
+  getBookingOptions: null as unknown as ReturnType<typeof vi.fn>,
 }));
 vi.mock("./serpapi/serpApiClient.js", () => ({
-  getSerpApiClient: () => ({ searchFlights: holder.searchFlights }),
+  getSerpApiClient: () => ({
+    searchFlights: holder.searchFlights,
+    getReturnFlights: holder.searchFlights,
+    getBookingOptions: holder.getBookingOptions,
+  }),
 }));
 
 const { createApp } = await import("../../app.js");
@@ -29,6 +34,8 @@ const result: ParsedFlightSearch = {
       segments: [],
       layovers: [],
       best: true,
+      bookingToken: "bk-1",
+      departureToken: null,
     },
   ],
   priceInsights: null,
@@ -57,9 +64,32 @@ function futureDate(days: number): string {
 describe("flights routes", () => {
   beforeEach(() => {
     holder.searchFlights = vi.fn(async () => result);
+    holder.getBookingOptions = vi.fn(async () => ({
+      options: [
+        {
+          seller: "대한항공",
+          isAirline: true,
+          logo: null,
+          price: 320000,
+          fareName: null,
+          conditions: [],
+          baggage: [],
+          request: { url: "https://www.google.com/travel/clk/f", postData: "u=abc" },
+          phone: null,
+          separateTickets: false,
+          legs: [],
+        },
+      ],
+      googleFlightsUrl: null,
+    }));
   });
 
-  it.each(["/api/flights/search?from=ICN&to=NRT&date=2026-12-01", "/api/flights/quota"])(
+  it.each([
+    "/api/flights/search?from=ICN&to=NRT&date=2026-12-01",
+    "/api/flights/booking?from=ICN&to=NRT&date=2026-12-01&bookingToken=x",
+    "/api/flights/returns?from=ICN&to=NRT&date=2026-12-01&departureToken=x",
+    "/api/flights/quota",
+  ])(
     "비로그인 GET %s 는 401 JSON",
     async (path) => {
       const res = await request(createApp()).get(path);
@@ -86,6 +116,33 @@ describe("flights routes", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("INVALID_PARAM");
     expect(holder.searchFlights).not.toHaveBeenCalled();
+  });
+
+  it("판매처 목록을 돌려준다 (토큰을 그대로 SerpApi 에 넘긴다)", async () => {
+    const date = futureDate(20);
+    const res = await request(loggedInApp("booking-user")).get(
+      `/api/flights/booking?from=ICN&to=NRT&date=${date}&bookingToken=${encodeURIComponent("WyJD+/=")}`
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.options[0]).toMatchObject({ seller: "대한항공", request: { postData: "u=abc" } });
+    expect(holder.getBookingOptions).toHaveBeenCalledWith(expect.objectContaining({ from: "ICN" }), "WyJD+/=");
+  });
+
+  it("판매처 조회에 토큰이 없으면 400", async () => {
+    const res = await request(loggedInApp()).get(`/api/flights/booking?from=ICN&to=NRT&date=${futureDate(20)}`);
+
+    expect(res.status).toBe(400);
+    expect(holder.getBookingOptions).not.toHaveBeenCalled();
+  });
+
+  it("왕복 오는 편 목록을 돌려준다", async () => {
+    const res = await request(loggedInApp("returns-user")).get(
+      `/api/flights/returns?from=ICN&to=NRT&date=${futureDate(20)}&tripType=round&returnDate=${futureDate(25)}&departureToken=dep`
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.options).toHaveLength(1);
   });
 
   it("남은 검색 횟수를 알려준다", async () => {

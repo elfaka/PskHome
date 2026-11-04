@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 
-import type { FlightOption, FlightSearchResult } from "@/api/flights";
+import type { FlightOption, FlightSearchParams, FlightSearchResult } from "@/api/flights";
 import Badge from "@/components/ui/Badge";
+import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import { cardClass } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
 
+import { BookingSellers, ReturnPicker } from "./BookingPanel";
 import {
   clockOf,
   dayOffset,
@@ -25,71 +27,118 @@ function stopsLabel(option: FlightOption): string {
   return `경유 ${option.stops}회${where ? ` · ${where}` : ""}`;
 }
 
-function FlightCard({ option, cheapest }: { option: FlightOption; cheapest: boolean }) {
+function FlightCard({
+  option,
+  cheapest,
+  query,
+  onRemaining,
+}: {
+  option: FlightOption;
+  cheapest: boolean;
+  query: FlightSearchParams;
+  onRemaining: (n: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
   const first = option.segments[0];
   const last = option.segments[option.segments.length - 1];
   const plusDays = dayOffset(option.departureTime, option.arrivalTime);
   const logo = first?.airlineLogo;
+  // 왕복은 가는 편 → 오는 편 → 판매처, 편도는 바로 판매처
+  const canBook = query.tripType === "round" ? !!option.departureToken : !!option.bookingToken;
+  const actionLabel = query.tripType === "round" ? "오는 편 고르기" : "판매처 보기";
 
   return (
-    <li
-      className={cardClass({
-        className: cn("flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:gap-6", cheapest && "border-accent"),
-      })}
-    >
-      {/* 항공사 */}
-      <div className="flex min-w-0 items-center gap-3 sm:w-48">
-        {logo ? (
-          // 외부 CDN 로고라 next/image 최적화 대상이 아니다
-          <img src={logo} alt="" className="size-8 shrink-0 rounded-control bg-surface-2 object-contain" />
-        ) : (
-          <div className="size-8 shrink-0 rounded-control bg-surface-2" aria-hidden />
-        )}
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-fg">{option.airlines.join(" · ") || "항공사 미상"}</div>
-          <div className="truncate text-xs text-fg-subtle">
-            {option.segments.map((s) => s.flightNumber).filter(Boolean).join(", ")}
+    <li className={cardClass({ className: cn("p-4", cheapest && "border-accent") })}>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+        {/* 항공사 */}
+        <div className="flex min-w-0 items-center gap-3 sm:w-48">
+          {logo ? (
+            // 외부 CDN 로고라 next/image 최적화 대상이 아니다
+            <img src={logo} alt="" className="size-8 shrink-0 rounded-control bg-surface-2 object-contain" />
+          ) : (
+            <div className="size-8 shrink-0 rounded-control bg-surface-2" aria-hidden />
+          )}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-fg">{option.airlines.join(" · ") || "항공사 미상"}</div>
+            <div className="truncate text-xs text-fg-subtle">
+              {option.segments.map((s) => s.flightNumber).filter(Boolean).join(", ")}
+            </div>
           </div>
+        </div>
+  
+        {/* 시간 */}
+        <div className="flex flex-1 items-center gap-3">
+          <div className="text-center">
+            <div className="text-lg font-semibold text-fg tabular-nums">{clockOf(option.departureTime)}</div>
+            <div className="text-xs text-fg-subtle">{first?.departureAirport.id}</div>
+          </div>
+  
+          <div className="flex flex-1 flex-col items-center gap-1">
+            <div className="text-xs text-fg-muted">{formatDuration(option.totalDurationMinutes)}</div>
+            <div className="h-px w-full bg-line" aria-hidden />
+            <div className={cn("text-xs", option.stops === 0 ? "text-success-soft-fg" : "text-fg-muted")}>
+              {stopsLabel(option)}
+            </div>
+          </div>
+  
+          <div className="text-center">
+            <div className="text-lg font-semibold text-fg tabular-nums">
+              {clockOf(option.arrivalTime)}
+              {plusDays > 0 && <sup className="ml-0.5 text-xs text-danger-soft-fg">+{plusDays}</sup>}
+            </div>
+            <div className="text-xs text-fg-subtle">{last?.arrivalAirport.id}</div>
+          </div>
+        </div>
+  
+        {/* 가격 */}
+        <div className="flex items-center justify-between gap-2 sm:w-44 sm:flex-col sm:items-end">
+          <div className="flex gap-1">
+            {cheapest && <Badge tone="accent">최저가</Badge>}
+            {option.best && <Badge tone="info">추천</Badge>}
+          </div>
+          <div className="text-lg font-bold text-fg tabular-nums">{formatPrice(option.price)}</div>
         </div>
       </div>
 
-      {/* 시간 */}
-      <div className="flex flex-1 items-center gap-3">
-        <div className="text-center">
-          <div className="text-lg font-semibold text-fg tabular-nums">{clockOf(option.departureTime)}</div>
-          <div className="text-xs text-fg-subtle">{first?.departureAirport.id}</div>
-        </div>
-
-        <div className="flex flex-1 flex-col items-center gap-1">
-          <div className="text-xs text-fg-muted">{formatDuration(option.totalDurationMinutes)}</div>
-          <div className="h-px w-full bg-line" aria-hidden />
-          <div className={cn("text-xs", option.stops === 0 ? "text-success-soft-fg" : "text-fg-muted")}>
-            {stopsLabel(option)}
-          </div>
-        </div>
-
-        <div className="text-center">
-          <div className="text-lg font-semibold text-fg tabular-nums">
-            {clockOf(option.arrivalTime)}
-            {plusDays > 0 && <sup className="ml-0.5 text-xs text-danger-soft-fg">+{plusDays}</sup>}
-          </div>
-          <div className="text-xs text-fg-subtle">{last?.arrivalAirport.id}</div>
-        </div>
+      <div className="mt-3 flex justify-end border-t border-line pt-3">
+        <Button
+          size="sm"
+          variant={open ? "ghost" : "secondary"}
+          aria-expanded={open}
+          disabled={!canBook}
+          title={canBook ? "검색 1회를 사용합니다" : "이 항공편은 판매처 정보가 없습니다"}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? "닫기" : `${actionLabel} ▾`}
+        </Button>
       </div>
 
-      {/* 가격 */}
-      <div className="flex items-center justify-between gap-2 sm:w-44 sm:flex-col sm:items-end">
-        <div className="flex gap-1">
-          {cheapest && <Badge tone="accent">최저가</Badge>}
-          {option.best && <Badge tone="info">추천</Badge>}
+      {open && (
+        <div className="mt-3 rounded-card bg-surface-2 p-3">
+          {query.tripType === "round" ? (
+            <ReturnPicker query={query} departureToken={option.departureToken!} onRemaining={onRemaining} />
+          ) : (
+            <BookingSellers
+              query={query}
+              bookingToken={option.bookingToken!}
+              searchedPrice={option.price}
+              onRemaining={onRemaining}
+            />
+          )}
         </div>
-        <div className="text-lg font-bold text-fg tabular-nums">{formatPrice(option.price)}</div>
-      </div>
+      )}
     </li>
   );
 }
 
-export default function FlightResults({ result }: { result: FlightSearchResult }) {
+export default function FlightResults({
+  result,
+  onRemaining,
+}: {
+  result: FlightSearchResult;
+  /** 판매처·오는 편 조회로 남은 검색 횟수가 바뀌었을 때 */
+  onRemaining: (n: number) => void;
+}) {
   const [nonstopOnly, setNonstopOnly] = useState(false);
   const { query, priceInsights } = result;
 
@@ -146,15 +195,24 @@ export default function FlightResults({ result }: { result: FlightSearchResult }
       ) : (
         <ul className="mt-4 space-y-3" aria-label={`항공편 ${visible.length}개`}>
           {visible.map((option) => (
-            <FlightCard key={option.id} option={option} cheapest={option.price != null && option.price === cheapestPrice} />
+            <FlightCard
+              key={option.id}
+              option={option}
+              query={query}
+              onRemaining={onRemaining}
+              cheapest={option.price != null && option.price === cheapestPrice}
+            />
           ))}
         </ul>
       )}
 
       <div className="mt-4 space-y-1 text-xs text-fg-subtle">
-        {query.tripType === "round" && (
-          <p>왕복 가격은 왕복 총액입니다. 표시된 구간은 가는 편이며, 오는 편은 Google 항공편에서 고를 수 있습니다.</p>
-        )}
+        <p>
+          {query.tripType === "round"
+            ? "왕복 가격은 왕복 총액입니다. 표시된 구간은 가는 편이며, ‘오는 편 고르기’에서 오는 편을 고르면 판매처가 나옵니다."
+            : "‘판매처 보기’를 누르면 그 가격에 파는 항공사·여행사와 예약 페이지 이동 버튼이 나옵니다."}{" "}
+          (조회마다 검색 1회 사용)
+        </p>
         <p>
           가격은 {new Date(result.fetchedAt).toLocaleString("ko-KR")} 조회 기준이며 실제 예약 가격과 다를 수 있습니다.
           {result.cached && " (30분 안에 같은 조건으로 검색한 결과를 다시 보여줍니다)"}

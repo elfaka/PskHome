@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { FlightSearchQuery } from "../flights.types.js";
-import { buildSearchParams, createSerpApiClient, parseSearchResponse } from "./serpApiClient.js";
+import { buildSearchParams, createSerpApiClient, parseBookingResponse, parseSearchResponse } from "./serpApiClient.js";
 
 function segment(flightNumber: string, from: string, to: string, dep: string, arr: string, duration = 120) {
   return {
@@ -167,5 +167,122 @@ describe("createSerpApiClient", () => {
     const err = await client.searchFlights(oneway).catch((e: unknown) => e as Error & { code: string });
     expect(err.code).toBe("SERPAPI_UNREACHABLE");
     expect(err.message).not.toContain("secret-key");
+  });
+});
+
+describe("판매처 (booking options)", () => {
+  const bookingBody = {
+    search_metadata: { google_flights_url: "https://www.google.com/travel/flights?b=1" },
+    booking_options: [
+      {
+        together: {
+          book_with: "트립닷컴",
+          airline_logos: ["https://example.com/ke.png"],
+          marketed_as: ["KE 703"],
+          price: 298000,
+          option_title: "이코노미",
+          extensions: ["환불 불가"],
+          baggage_prices: ["위탁 수하물 1개 포함"],
+          booking_request: { url: "https://www.google.com/travel/clk/f", post_data: "u=AAA_bbb-ccc" },
+        },
+      },
+      {
+        together: {
+          book_with: "대한항공",
+          airline: true,
+          price: 320000,
+          booking_request: { url: "https://www.google.com/travel/clk/f", post_data: "u=DDD" },
+        },
+      },
+      // 같은 가격이면 항공사 직판을 먼저
+      { together: { book_with: "마이리얼트립", price: 320000, booking_request: { url: "https://www.google.com/travel/clk/f", post_data: "u=EEE" } } },
+      // 전화 예약만 되는 곳
+      { together: { book_with: "전화여행사", price: 250000, booking_phone: "02-000-0000" } },
+      // 가는 편·오는 편을 따로 사는 경우
+      {
+        separate_tickets: true,
+        departing: { book_with: "제주항공", price: 100000, booking_request: { url: "https://www.google.com/travel/clk/f", post_data: "u=DEP" } },
+        returning: { book_with: "티웨이항공", price: 120000, booking_request: { url: "https://www.google.com/travel/clk/f", post_data: "u=RET" } },
+      },
+      // https 가 아닌 주소는 이동 정보에서 뺀다
+      { together: { book_with: "이상한곳", price: 400000, booking_request: { url: "javascript:alert(1)" } } },
+      { together: {} },
+    ],
+  };
+
+  it("판매처를 가격순으로 정리하고, 같은 가격이면 항공사 직판이 먼저다", () => {
+    const { options, googleFlightsUrl } = parseBookingResponse(bookingBody);
+
+    expect(options.map((o) => o.seller)).toEqual(["제주항공", "전화여행사", "트립닷컴", "대한항공", "마이리얼트립", "이상한곳"]);
+    expect(googleFlightsUrl).toBe("https://www.google.com/travel/flights?b=1");
+  });
+
+  it("이동 요청(url + post_data)과 운임 정보를 그대로 넘긴다", () => {
+    const trip = parseBookingResponse(bookingBody).options.find((o) => o.seller === "트립닷컴")!;
+
+    expect(trip).toMatchObject({
+      isAirline: false,
+      logo: "https://example.com/ke.png",
+      price: 298000,
+      fareName: "이코노미",
+      conditions: ["환불 불가"],
+      baggage: ["위탁 수하물 1개 포함"],
+      request: { url: "https://www.google.com/travel/clk/f", postData: "u=AAA_bbb-ccc" },
+      separateTickets: false,
+    });
+  });
+
+  it("따로 사는 표는 구간별 이동 정보와 합계 가격을 준다", () => {
+    const split = parseBookingResponse(bookingBody).options[0];
+
+    expect(split.separateTickets).toBe(true);
+    expect(split.price).toBe(220000);
+    expect(split.request).toBeNull();
+    expect(split.legs).toEqual([
+      { label: "가는 편", seller: "제주항공", price: 100000, request: { url: "https://www.google.com/travel/clk/f", postData: "u=DEP" } },
+      { label: "오는 편", seller: "티웨이항공", price: 120000, request: { url: "https://www.google.com/travel/clk/f", postData: "u=RET" } },
+    ]);
+  });
+
+  it("전화 예약만 되는 곳은 이동 정보 없이 전화번호를 준다", () => {
+    const phoneOnly = parseBookingResponse(bookingBody).options.find((o) => o.seller === "전화여행사")!;
+    expect(phoneOnly.request).toBeNull();
+    expect(phoneOnly.phone).toBe("02-000-0000");
+  });
+
+  it("https 가 아닌 이동 주소는 버린다", () => {
+    const weird = parseBookingResponse(bookingBody).options.find((o) => o.seller === "이상한곳")!;
+    expect(weird.request).toBeNull();
+  });
+
+  it("검색 결과 항목의 토큰을 함께 꺼낸다", () => {
+    const parsed = parseSearchResponse({
+      best_flights: [{ ...sample.best_flights[0], booking_token: "bk-1", departure_token: "dep-1" }],
+    });
+    expect(parsed.options[0]).toMatchObject({ bookingToken: "bk-1", departureToken: "dep-1" });
+  });
+
+  it("판매처 조회는 처음 검색 조건에 booking_token 을 더해 보낸다", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(bookingBody), { status: 200 }));
+    const client = createSerpApiClient({ apiKey: "k", baseUrl: "https://serp.test", fetch: fetchMock });
+
+    const result = await client.getBookingOptions(oneway, "bk+/=1");
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(url.searchParams.get("booking_token")).toBe("bk+/=1");
+    expect(url.searchParams.get("departure_id")).toBe("ICN");
+    expect(url.searchParams.get("currency")).toBe("KRW");
+    expect(result.options.length).toBeGreaterThan(0);
+  });
+
+  it("오는 편 조회는 departure_token 을 더해 보낸다", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(sample), { status: 200 }));
+    const client = createSerpApiClient({ apiKey: "k", baseUrl: "https://serp.test", fetch: fetchMock });
+
+    await client.getReturnFlights({ ...oneway, tripType: "round", returnDate: "2026-12-05" }, "dep-1");
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(url.searchParams.get("departure_token")).toBe("dep-1");
+    expect(url.searchParams.get("type")).toBe("1");
   });
 });

@@ -1,7 +1,7 @@
 import { Router } from "express";
 
 import { requireAuth } from "../../middleware/requireAuth.js";
-import { getFlightsService } from "./flights.service.js";
+import { getFlightsService, parseToken } from "./flights.service.js";
 
 /**
  * 항공권 최저가 검색 — `/api/flights/**` (로그인 필요)
@@ -18,6 +18,22 @@ flightsRouter.get("/flights/search", async (req, res) => {
   const service = getFlightsService();
   const query = service.parseSearchQuery(req.query as Record<string, unknown>);
   res.json(await service.search(req.user!.id, query));
+});
+
+// 왕복: 고른 가는 편의 오는 편 목록 — 검색 조건 + departureToken
+flightsRouter.get("/flights/returns", async (req, res) => {
+  const service = getFlightsService();
+  const query = service.parseSearchQuery(req.query as Record<string, unknown>);
+  const token = parseToken(req.query.departureToken, "departureToken");
+  res.json(await service.returnFlights(req.user!.id, query, token));
+});
+
+// 판매처 목록 (그 가격에 파는 항공사·여행사와 이동 정보) — 검색 조건 + bookingToken
+flightsRouter.get("/flights/booking", async (req, res) => {
+  const service = getFlightsService();
+  const query = service.parseSearchQuery(req.query as Record<string, unknown>);
+  const token = parseToken(req.query.bookingToken, "bookingToken");
+  res.json(await service.bookingOptions(req.user!.id, query, token));
 });
 
 // 오늘 남은 검색 횟수

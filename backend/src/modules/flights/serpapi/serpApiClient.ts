@@ -1,6 +1,9 @@
 import { env } from "../../../config/env.js";
 import { HttpError } from "../../../lib/httpError.js";
 import type {
+  BookingLeg,
+  BookingOption,
+  BookingRequest,
   FlightOption,
   FlightSearchQuery,
   FlightSegment,
@@ -16,12 +19,23 @@ import type {
  * (직접 크롤링은 봇 차단·약관 문제가 있고, 서버 한 대에서 헤드리스 브라우저를 띄우면 메모리가 모자란다)
  *
  * - 무료 요금제는 월 250회라, 호출을 아끼는 캐시·일일 한도는 `flights.service.ts` 가 맡는다.
- * - 왕복(type=1)은 가는 편 목록과 **왕복 총액**만 온다. 오는 편은 `departure_token` 으로 한 번 더 불러야 해서
- *   호출 수를 아끼려고 부르지 않고, Google 항공편 링크로 넘긴다.
+ * - 판매처(어느 사이트가 그 가격에 파는지)는 검색 결과의 `booking_token` 으로 한 번 더 불러야 나온다.
+ *   호출마다 한도를 쓰므로 사용자가 항공편을 고를 때만 부른다.
+ * - 왕복(type=1)은 가는 편 목록과 **왕복 총액**만 온다. 가는 편의 `departure_token` 으로 오는 편 목록을 받고,
+ *   그 오는 편의 `booking_token` 으로 판매처를 받는다.
+ * - 판매처 이동은 `booking_request.url`(Google 중계 주소)로 `post_data` 를 **그대로** POST 해야 한다.
+ *   브라우저가 폼으로 보내야 사용자가 판매처 페이지에 도착하므로 서버는 값만 전달한다.
  */
 
 export interface SerpApiClient {
   searchFlights(query: FlightSearchQuery): Promise<ParsedFlightSearch>;
+  /** 왕복: 가는 편의 departure_token → 오는 편 목록 (각각 booking_token 을 가진다) */
+  getReturnFlights(query: FlightSearchQuery, departureToken: string): Promise<ParsedFlightSearch>;
+  /** booking_token → 판매처 목록 */
+  getBookingOptions(
+    query: FlightSearchQuery,
+    bookingToken: string
+  ): Promise<{ options: BookingOption[]; googleFlightsUrl: string | null }>;
 }
 
 export interface SerpApiClientOptions {
@@ -98,7 +112,86 @@ export function parseOption(v: unknown, best: boolean): FlightOption | null {
     segments,
     layovers,
     best,
+    bookingToken: str(o.booking_token),
+    departureToken: str(o.departure_token),
   };
+}
+
+/** 판매처 이동 주소는 https 만 받는다 (응답이 이상해도 엉뚱한 스킴으로 보내지 않게) */
+function parseBookingRequest(v: unknown): BookingRequest | null {
+  const r = obj(v);
+  const url = str(r.url);
+  if (!url) return null;
+  try {
+    if (new URL(url).protocol !== "https:") return null;
+  } catch {
+    return null;
+  }
+  return { url, postData: str(r.post_data) };
+}
+
+function parseLeg(v: unknown, label: BookingLeg["label"]): BookingLeg | null {
+  if (v == null || typeof v !== "object") return null;
+  const l = obj(v);
+  return {
+    label,
+    seller: str(l.book_with) ?? "판매처 미상",
+    price: num(l.price),
+    request: parseBookingRequest(l.booking_request),
+  };
+}
+
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((s): s is string => typeof s === "string") : []);
+
+/** booking_options[] 항목 하나 → BookingOption. 판매처 정보가 없으면 null */
+export function parseBookingOption(v: unknown): BookingOption | null {
+  const o = obj(v);
+  const separateTickets = o.separate_tickets === true;
+  const legs = separateTickets
+    ? [parseLeg(o.departing, "가는 편"), parseLeg(o.returning, "오는 편")].filter((l): l is BookingLeg => l != null)
+    : [];
+
+  // 한 곳에서 다 파는 경우 together, 따로 사는 경우 together(합계) 가 없을 수도 있어 가는 편 정보를 쓴다
+  const base = o.together != null ? obj(o.together) : obj(o.departing);
+  const seller = str(base.book_with);
+  if (!seller) return null;
+
+  const legPrices = legs.map((l) => l.price);
+  const legTotal = legPrices.length > 0 && legPrices.every((p) => p != null) ? legPrices.reduce((a, b) => a! + b!, 0) : null;
+  const logos = strings(base.airline_logos);
+
+  return {
+    seller,
+    isAirline: base.airline === true,
+    logo: logos[0] ?? null,
+    // together 가 없으면 base 는 가는 편이라 그 가격을 쓰면 안 된다 (구간 합계를 쓴다)
+    price: (o.together != null ? num(base.price) : null) ?? legTotal,
+    fareName: str(base.option_title),
+    conditions: strings(base.extensions),
+    baggage: strings(base.baggage_prices),
+    request: separateTickets ? null : parseBookingRequest(base.booking_request),
+    phone: str(base.booking_phone),
+    separateTickets,
+    legs,
+  };
+}
+
+/** 판매처 응답 → 가격 오름차순 목록 (가격 없는 곳은 뒤, 같은 가격이면 항공사 직판 먼저) */
+export function parseBookingResponse(body: unknown): { options: BookingOption[]; googleFlightsUrl: string | null } {
+  const b = obj(body);
+  const error = str(b.error);
+  const googleFlightsUrl = str(obj(b.search_metadata).google_flights_url);
+  if (error) {
+    if (NO_RESULTS_PATTERN.test(error)) return { options: [], googleFlightsUrl };
+    throw new HttpError(503, "SERPAPI_ERROR", `판매처를 불러오지 못했습니다: ${error}`);
+  }
+
+  const rank = (o: BookingOption) => o.price ?? Number.POSITIVE_INFINITY;
+  const options = (Array.isArray(b.booking_options) ? b.booking_options.map(parseBookingOption) : [])
+    .filter((o): o is BookingOption => o != null)
+    .sort((a, b) => rank(a) - rank(b) || Number(b.isAirline) - Number(a.isAirline));
+
+  return { options, googleFlightsUrl };
 }
 
 function parsePriceInsights(v: unknown): PriceInsights | null {
@@ -161,8 +254,14 @@ export function parseSearchResponse(body: unknown): ParsedFlightSearch {
   };
 }
 
-/** 검색 조건 → SerpApi 쿼리스트링 (api_key 제외) */
-export function buildSearchParams(query: FlightSearchQuery): URLSearchParams {
+/**
+ * 검색 조건 → SerpApi 쿼리스트링 (api_key 제외).
+ * 오는 편·판매처 조회도 처음 검색과 같은 조건에 토큰만 더해 보낸다 (SerpApi 가 그렇게 요구한다).
+ */
+export function buildSearchParams(
+  query: FlightSearchQuery,
+  token: { departure_token?: string; booking_token?: string } = {}
+): URLSearchParams {
   const params = new URLSearchParams({
     engine: "google_flights",
     departure_id: query.from,
@@ -177,6 +276,8 @@ export function buildSearchParams(query: FlightSearchQuery): URLSearchParams {
   if (query.tripType === "round" && query.returnDate) {
     params.set("return_date", query.returnDate);
   }
+  if (token.departure_token) params.set("departure_token", token.departure_token);
+  if (token.booking_token) params.set("booking_token", token.booking_token);
   return params;
 }
 
@@ -184,36 +285,42 @@ export function createSerpApiClient(options: SerpApiClientOptions): SerpApiClien
   const doFetch = options.fetch ?? fetch;
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
 
+  /** SerpApi 를 불러 본문을 돌려준다. 결과 없음 오류는 본문 그대로 넘겨 파서가 빈 결과로 바꾸게 한다 */
+  async function request(params: URLSearchParams): Promise<unknown> {
+    params.set("api_key", options.apiKey);
+
+    let res: Response;
+    try {
+      res = await doFetch(`${baseUrl}/search.json?${params}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new HttpError(503, "SERPAPI_UNREACHABLE", `SerpApi 에 연결하지 못했습니다: ${reason}`);
+    }
+
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      // 본문이 JSON 이 아니면 아래에서 상태코드로 처리한다
+    }
+
+    if (!res.ok) {
+      // 401(잘못된 키)·429(월 한도 소진) 등. 메시지는 SerpApi 가 준 것을 그대로 전달한다.
+      // 502/504 는 Cloudflare 가 본문을 바꿔 버리므로 503 으로 내린다.
+      const error = str(obj(body).error);
+      if (error && NO_RESULTS_PATTERN.test(error)) return body;
+      throw new HttpError(503, "SERPAPI_ERROR", `항공권 검색에 실패했습니다 (${res.status}): ${error ?? "알 수 없는 오류"}`);
+    }
+
+    return body;
+  }
+
   return {
-    async searchFlights(query) {
-      const params = buildSearchParams(query);
-      params.set("api_key", options.apiKey);
-
-      let res: Response;
-      try {
-        res = await doFetch(`${baseUrl}/search.json?${params}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
-        throw new HttpError(503, "SERPAPI_UNREACHABLE", `SerpApi 에 연결하지 못했습니다: ${reason}`);
-      }
-
-      let body: unknown = null;
-      try {
-        body = await res.json();
-      } catch {
-        // 본문이 JSON 이 아니면 아래에서 상태코드로 처리한다
-      }
-
-      if (!res.ok) {
-        // 401(잘못된 키)·429(월 한도 소진) 등. 메시지는 SerpApi 가 준 것을 그대로 전달한다.
-        // 502/504 는 Cloudflare 가 본문을 바꿔 버리므로 503 으로 내린다.
-        const error = str(obj(body).error);
-        if (error && NO_RESULTS_PATTERN.test(error)) return parseSearchResponse(body);
-        throw new HttpError(503, "SERPAPI_ERROR", `항공권 검색에 실패했습니다 (${res.status}): ${error ?? "알 수 없는 오류"}`);
-      }
-
-      return parseSearchResponse(body);
-    },
+    searchFlights: async (query) => parseSearchResponse(await request(buildSearchParams(query))),
+    getReturnFlights: async (query, departureToken) =>
+      parseSearchResponse(await request(buildSearchParams(query, { departure_token: departureToken }))),
+    getBookingOptions: async (query, bookingToken) =>
+      parseBookingResponse(await request(buildSearchParams(query, { booking_token: bookingToken }))),
   };
 }
 

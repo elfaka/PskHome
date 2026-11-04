@@ -184,6 +184,7 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 - **`modules/flights/`** — 항공권 최저가 검색. SerpApi Google Flights 엔진(`serpapi/serpApiClient.ts`)으로 조회해
   가격순으로 돌려준다. 항공사·OTA 화면을 직접 크롤링하지 않는다. `/api/flights/**` 는 **로그인 필요**
   (SerpApi 무료 한도 월 250회 보호). 같은 조건 30분 캐시 + 사용자당 하루 `FLIGHTS_DAILY_LIMIT` 회.
+  결과마다 그 가격에 파는 판매처(항공사·여행사) 목록과 예약 페이지 이동을 제공한다 (`/booking`, 왕복은 `/returns` 를 거친다).
 - **`modules/survey/`** — Google Forms/Drive 연동. `passport-google-oauth20` 세션 로그인.
   OAuth2 엔드포인트: `/api/oauth2/**`, `/api/login/oauth2/**`.
   로그인 성공 시 `APP_LOGIN_SUCCESS_REDIRECT` 로 리다이렉트. 로그인 시작에 `?returnTo=/경로` 를 주면

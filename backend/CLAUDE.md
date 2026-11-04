@@ -161,13 +161,25 @@ passport 0.6+ 는 `req.logIn` 때 세션을 새로 만들므로 `returnTo` 는 �
 | 파일 | 역할 |
 |---|---|
 | `serpapi/serpApiClient.ts` | SerpApi Google Flights 엔진 호출·응답 정리. best/other 를 합쳐 중복 제거 후 가격순 |
-| `flights.service.ts` | 검색 조건 검증(규칙 표는 파일 상단), 30분 캐시, 사용자별 일일 한도(`DailyLimiter`) |
-| `flights.router.ts` | `GET /api/flights/search`, `GET /api/flights/quota` — 둘 다 `requireAuth` |
+| `flights.service.ts` | 검색 조건·토큰 검증(규칙 표는 파일 상단), 30분 캐시, 사용자별 일일 한도(`DailyLimiter`) |
+| `flights.router.ts` | `GET /api/flights/search`, `/returns`(왕복 오는 편), `/booking`(판매처), `/quota` — 모두 `requireAuth` |
+
+**판매처(그 가격에 파는 사이트)로 보내는 흐름**
+
+```
+편도: search ─ booking_token ─▶ booking (판매처 목록)
+왕복: search ─ departure_token ─▶ returns (오는 편) ─ booking_token ─▶ booking
+```
+
+- `returns`·`booking` 은 처음 검색 조건 + 토큰을 그대로 SerpApi 에 다시 보낸다. 각각 한도 1회를 쓰고 30분 캐시한다.
+- 판매처 이동 정보는 `booking_request.url`(Google 중계 주소 `https://www.google.com/travel/clk/f`) + `post_data`(`u=...`)다.
+  **`post_data` 를 그 주소로 POST 해야** 판매처 예약 페이지로 넘어간다. 서버는 값을 바꾸지 않고 전달만 하고,
+  프론트가 숨은 폼으로 새 탭에 전송한다 (`frontend/src/components/flights/booking.ts`). https 가 아닌 주소는 버린다.
+- `separate_tickets` 인 판매처는 가는 편·오는 편을 따로 산다. `legs` 에 구간별 이동 정보가 있다.
 
 - **항공사·OTA 화면을 직접 크롤링하지 않는다.** 봇 차단·약관 문제가 있고, 서버 한 대에서 헤드리스 브라우저를 띄우면
   빌드 때처럼 OOM 위험이 있다.
-- 통화는 KRW, 언어 ko, 국가 kr 로 고정한다. 왕복 결과의 가격은 왕복 총액이고, 오는 편은 추가 호출이 필요해 조회하지 않는다
-  (Google 항공편 링크로 넘긴다).
+- 통화는 KRW, 언어 ko, 국가 kr 로 고정한다. 왕복 결과의 가격은 왕복 총액이다.
 - SerpApi 의 "결과 없음" 오류는 빈 결과로, 그 밖의 오류(401 잘못된 키, 429 월 한도 소진)는 503 `SERPAPI_ERROR` 로 돌려준다.
 - 일일 한도는 SerpApi 를 실제로 부를 때만 쓰고, 호출이 실패하면 돌려준다. 한도 초과는 429 `DAILY_LIMIT_EXCEEDED`.
   캐시·한도는 프로세스 메모리라 재배포하면 초기화된다.

@@ -59,6 +59,48 @@ export interface FlightOption {
   layovers: Layover[];
   /** Google 이 "추천 항공편"으로 고른 항목인지 */
   best: boolean;
+  /** 판매처(예약처) 조회용 토큰 — 편도 결과, 왕복의 오는 편 결과에 있다 */
+  bookingToken: string | null;
+  /** 왕복 가는 편 결과에만 있다. 이 토큰으로 오는 편 목록을 불러온다 */
+  departureToken: string | null;
+}
+
+/**
+ * 판매처로 이동하는 요청.
+ * `postData` 가 있으면 `url`(Google 중계 주소)로 POST 해야 판매처로 넘어간다. 없으면 `url` 로 바로 이동한다.
+ */
+export interface BookingRequest {
+  url: string;
+  postData: string | null;
+}
+
+/** 가는 편·오는 편을 따로 사야 하는 경우의 한 구간 */
+export interface BookingLeg {
+  label: "가는 편" | "오는 편";
+  seller: string;
+  price: number | null;
+  request: BookingRequest | null;
+}
+
+/** 판매처 한 곳 (항공사 공식 사이트 또는 여행사) */
+export interface BookingOption {
+  seller: string;
+  /** 항공사 직판인지 */
+  isAirline: boolean;
+  logo: string | null;
+  /** 원화. 구간별로 따로 사면 합계 */
+  price: number | null;
+  /** 운임 이름 (예: "이코노미 스탠다드") */
+  fareName: string | null;
+  /** 환불·변경 조건 등 */
+  conditions: string[];
+  baggage: string[];
+  request: BookingRequest | null;
+  /** 온라인 예약 링크가 없고 전화로만 예약할 때 */
+  phone: string | null;
+  /** 가는 편·오는 편을 각각 다른 곳에서 사야 하는지. true 면 `legs` 로 나눠 이동한다 */
+  separateTickets: boolean;
+  legs: BookingLeg[];
 }
 
 export interface PriceInsights {
@@ -73,6 +115,21 @@ export interface ParsedFlightSearch {
   options: FlightOption[];
   priceInsights: PriceInsights | null;
   googleFlightsUrl: string | null;
+}
+
+/** 왕복에서 가는 편을 고른 뒤의 오는 편 목록 */
+export interface ReturnFlightsResult {
+  options: FlightOption[];
+  remainingSearches: number;
+  cached: boolean;
+}
+
+/** 고른 여정의 판매처 목록 (가격 오름차순) */
+export interface BookingOptionsResult {
+  options: BookingOption[];
+  googleFlightsUrl: string | null;
+  remainingSearches: number;
+  cached: boolean;
 }
 
 export interface FlightSearchResult extends ParsedFlightSearch {
