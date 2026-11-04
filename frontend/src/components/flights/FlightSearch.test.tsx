@@ -238,3 +238,105 @@ describe("parsePostData", () => {
     ]);
   });
 });
+
+describe("공항 드롭다운", () => {
+  const optionsOf = (listbox: HTMLElement) =>
+    within(listbox)
+      .getAllByRole("option")
+      .map((o) => o.textContent ?? "");
+
+  it("도착지를 누르면 인기 순(도쿄·오사카·후쿠오카…)으로 펼쳐지고, 고른 출발지는 빠진다", async () => {
+    const user = userEvent.setup();
+    render(<FlightSearch />);
+
+    await user.click(await screen.findByLabelText("도착지"));
+    const options = optionsOf(screen.getByRole("listbox"));
+
+    expect(options.slice(0, 4).map((t) => t.match(/[A-Z]{3}$/)?.[0])).toEqual(["NRT", "HND", "KIX", "FUK"]);
+    expect(options[0]).toMatch(/^1도쿄/);
+    // 출발지 기본값 ICN 은 도착지 목록에 없다
+    expect(options.some((t) => t.endsWith("ICN"))).toBe(false);
+  });
+
+  it("출발지 목록은 국내 공항(인천·김포·김해·제주…)이 먼저다", async () => {
+    const user = userEvent.setup();
+    render(<FlightSearch />);
+
+    await user.click(await screen.findByLabelText("출발지"));
+    const codes = optionsOf(screen.getByRole("listbox")).map((t) => t.match(/[A-Z]{3}$/)?.[0]);
+
+    expect(codes.slice(0, 4)).toEqual(["ICN", "GMP", "PUS", "CJU"]);
+  });
+
+  it("목록에서 고르면 입력칸에 공항 이름이 들어가고 그 코드로 검색한다", async () => {
+    let seen: string | null = null;
+    server.use(
+      http.get("/api/flights/search", ({ request }) => {
+        seen = new URL(request.url).searchParams.get("to");
+        return HttpResponse.json({ ...mockEmptyResult });
+      })
+    );
+    const user = userEvent.setup();
+    render(<FlightSearch />);
+
+    await user.click(await screen.findByLabelText("도착지"));
+    await user.click(screen.getByRole("option", { name: /다낭/ }));
+
+    expect(screen.getByLabelText("도착지")).toHaveValue("다낭 다낭국제공항 (DAD)");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "최저가 검색" }));
+    await screen.findByRole("region", { name: "검색 결과" });
+    expect(seen).toBe("DAD");
+  });
+
+  it("글자를 치면 걸러지고, ↓·Enter 로 고를 수 있다", async () => {
+    const user = userEvent.setup();
+    render(<FlightSearch />);
+
+    const input = await screen.findByLabelText("도착지");
+    await user.click(input);
+    await user.keyboard("베트남");
+    const codes = optionsOf(screen.getByRole("listbox")).map((t) => t.match(/[A-Z]{3}$/)?.[0]);
+    // 인기 순 그대로: 다낭 → 나트랑 → 푸꾸옥 → 하노이 → 호찌민
+    expect(codes).toEqual(["DAD", "CXR", "PQC", "HAN", "SGN"]);
+
+    await user.keyboard("{ArrowDown}{Enter}");
+    expect(input).toHaveValue("나트랑 깜라인국제공항 (CXR)");
+  });
+
+  it("목록에 없는 공항은 IATA 코드로 직접 입력해 고른다", async () => {
+    const user = userEvent.setup();
+    render(<FlightSearch />);
+
+    const input = await screen.findByLabelText("도착지");
+    await user.click(input);
+    await user.keyboard("ulb");
+    await user.click(screen.getByRole("option", { name: /ULB 직접 입력/ }));
+
+    expect(input).toHaveValue("ULB");
+  });
+
+  it("바꾸기 버튼은 출발지와 도착지를 서로 바꾼다", async () => {
+    const user = userEvent.setup();
+    render(<FlightSearch />);
+
+    await user.click(await screen.findByLabelText("도착지"));
+    await user.click(screen.getByRole("option", { name: /오사카/ }));
+    await user.click(screen.getByRole("button", { name: "출발지와 도착지 바꾸기" }));
+
+    expect(screen.getByLabelText("출발지")).toHaveValue("오사카 간사이국제공항 (KIX)");
+    expect(screen.getByLabelText("도착지")).toHaveValue("서울 인천국제공항 (ICN)");
+  });
+});
+
+const mockEmptyResult = {
+  query: { from: "ICN", to: "DAD", date: "2026-12-01", tripType: "oneway", adults: 1 },
+  currency: "KRW",
+  lowestPrice: null,
+  options: [],
+  priceInsights: null,
+  googleFlightsUrl: null,
+  fetchedAt: "2026-11-04T01:00:00.000Z",
+  remainingSearches: 29,
+  cached: false,
+};

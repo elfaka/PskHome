@@ -78,7 +78,7 @@ src/
 │   ├── pspost/PostForm.tsx
 │   ├── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
 │   ├── stocksim/    (StockSimulator 레이아웃, CandleChart/ChartPanel, OrderbookPanel, OrderPanel, AnalysisPanel ...)
-│   ├── flights/     (FlightSearch 로그인 확인·폼, FlightResults 결과 목록, airports.ts 자동완성 목록, format.ts)
+│   ├── flights/     (FlightSearch 로그인 확인·폼, AirportSelect 공항 드롭다운, FlightResults 결과 목록, BookingPanel 판매처, airports.ts 인기 순 공항 목록, format.ts)
 │   └── wedding/     (WeddingInvitation, introMachine, scene/* 첫 화면, sections/*, ui/*)
 ├── data/         # 화면이 공유하는 정적 데이터 (projects.ts, profile.ts, wedding.ts)
 ├── lib/          # 공용 유틸 (errorMessage, cn 등) — lib/wedding/ 은 청첩장 전용 순수 로직
@@ -236,7 +236,9 @@ export async function fetchData(id: number) {
 - `FlightSearch` 가 `/api/auth/me` 로 로그인 여부를 확인한다. 비로그인이면 폼 대신 로그인 안내를 보여준다.
 - 로그인 버튼은 `FLIGHTS_LOGIN_URL`(`/api/oauth2/authorization/google?returnTo=%2Fflights`)로 이동해
   로그인 후 설문 목록이 아니라 `/flights` 로 돌아온다. 같은 Google 로그인이라 Drive·Forms 읽기 권한 동의 화면이 함께 뜬다.
-- 공항 입력은 `<datalist>` 자동완성(`airports.ts`) + IATA 코드 직접 입력. 목록에 없는 도시 이름은 요청 전에 막는다.
+- 공항 입력은 드롭다운 콤보박스(`AirportSelect.tsx`). 누르면 **인기 순**으로 펼쳐지고(순위 번호 표시), 글자를 치면 거른다.
+  순서는 `airports.ts` 의 `AIRPORTS` 배열 순서다(한국인 여행객 기준). 출발지 목록은 국내 공항(이용객 순)을 앞으로 올린 `ORIGIN_AIRPORTS`.
+  반대편에서 고른 공항은 목록에서 뺀다. 목록에 없는 공항은 IATA 코드 3자리를 치면 "직접 입력" 항목으로 고른다.
 - 결과 카드의 "판매처 보기"(왕복은 "오는 편 고르기" → "이 편 선택")를 눌렀을 때만 판매처를 불러온다 — 한 번에 한도 1회.
   패널(`BookingPanel.tsx`)은 열릴 때 마운트되며 그때 한 번 부른다. 새로 검색하면 결과 목록을 key 로 다시 그려 패널을 닫는다.
 - 판매처 이동은 `booking.ts` 의 `openBooking` — `postData` 가 있으면 이름 붙인 빈 탭을 먼저 열고(`window.open`) 숨은 폼을 그 탭으로 **POST**,

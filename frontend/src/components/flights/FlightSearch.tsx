@@ -21,7 +21,8 @@ import { cardClass } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/errorMessage";
 
-import { AIRPORTS, airportLabel, toAirportCode } from "./airports";
+import AirportSelect from "./AirportSelect";
+import { DESTINATION_AIRPORTS, ORIGIN_AIRPORTS } from "./airports";
 import FlightResults from "./FlightResults";
 import { kstDatePlus } from "./format";
 
@@ -104,10 +105,11 @@ export default function FlightSearch() {
     e.preventDefault();
     setError(null);
 
-    const fromCode = toAirportCode(from);
-    const toCode = toAirportCode(to);
+    // 드롭다운이 고른 값은 이미 IATA 코드다
+    const fromCode = from;
+    const toCode = to;
     if (!fromCode || !toCode) {
-      setError("출발지와 도착지를 공항 목록에서 고르거나 IATA 코드 3자리(예: ICN)로 입력하세요.");
+      setError("출발지와 도착지를 목록에서 고르세요. 목록에 없으면 IATA 코드 3자리(예: ICN)를 입력하면 됩니다.");
       return;
     }
     if (fromCode === toCode) {
@@ -186,13 +188,13 @@ export default function FlightSearch() {
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_1fr]">
               <Field label="출발지" htmlFor="flight-from">
-                <Input
+                <AirportSelect
                   id="flight-from"
-                  list="flight-airports"
                   value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  placeholder="도시, 공항 또는 ICN"
-                  autoComplete="off"
+                  onChange={setFrom}
+                  airports={ORIGIN_AIRPORTS}
+                  exclude={to}
+                  placeholder="출발 공항 선택"
                 />
               </Field>
               <Button
@@ -204,22 +206,16 @@ export default function FlightSearch() {
                 ⇄
               </Button>
               <Field label="도착지" htmlFor="flight-to">
-                <Input
+                <AirportSelect
                   id="flight-to"
-                  list="flight-airports"
                   value={to}
-                  onChange={(e) => setTo(e.target.value)}
-                  placeholder="도시, 공항 또는 NRT"
-                  autoComplete="off"
+                  onChange={setTo}
+                  airports={DESTINATION_AIRPORTS}
+                  exclude={from}
+                  placeholder="도착 공항 선택"
                 />
               </Field>
             </div>
-
-            <datalist id="flight-airports">
-              {AIRPORTS.map((a) => (
-                <option key={a.code} value={airportLabel(a)} />
-              ))}
-            </datalist>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Field label="출발일" htmlFor="flight-date">
