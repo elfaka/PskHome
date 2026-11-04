@@ -53,6 +53,9 @@ src/app/
 ├── stocksim/                                    # 주식 모의투자 (layout: metadata + SiteShell)
 │   ├── page.tsx                                 # /stocksim
 │   └── [...slug]/page.tsx                       # 그 외 → /stocksim 으로 리다이렉트
+├── flights/                                     # 항공권 최저가 검색 (layout: metadata + SiteShell, 로그인 필요)
+│   ├── page.tsx                                 # /flights
+│   └── [...slug]/page.tsx                       # 그 외 → /flights 로 리다이렉트
 └── wedding/                                     # 모바일 청첩장 — SiteShell 없음, 사이트 테마와 분리
     ├── layout.tsx                               # metadata(noindex), 폰트, .wedding-root
     ├── page.tsx                                 # /wedding
@@ -75,6 +78,7 @@ src/
 │   ├── pspost/PostForm.tsx
 │   ├── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
 │   ├── stocksim/    (StockSimulator 레이아웃, CandleChart/ChartPanel, OrderbookPanel, OrderPanel, AnalysisPanel ...)
+│   ├── flights/     (FlightSearch 로그인 확인·폼, FlightResults 결과 목록, airports.ts 자동완성 목록, format.ts)
 │   └── wedding/     (WeddingInvitation, introMachine, scene/* 첫 화면, sections/*, ui/*)
 ├── data/         # 화면이 공유하는 정적 데이터 (projects.ts, profile.ts, wedding.ts)
 ├── lib/          # 공용 유틸 (errorMessage, cn 등) — lib/wedding/ 은 청첩장 전용 순수 로직
@@ -212,6 +216,7 @@ export async function fetchData(id: number) {
 - `src/api/pspost.ts` — PS 게시글 CRUD (`listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`)
 - `src/api/jsonPrettierApi.ts` — JSON 포맷 (`formatJson`)
 - `src/api/stockSim.ts` — 주식 모의투자 (검색·시세·차트·호가·체결·개요·분석·수급·시장 지수·공포탐욕·포트폴리오·주문)
+- `src/api/flights.ts` — 항공권 최저가 검색 (`searchFlights`, `getFlightQuota`, `getMe`, `FLIGHTS_LOGIN_URL`)
 
 **에러 메시지**는 `@/lib/errorMessage` 의 `errorMessage(e, fallback)` 로 뽑는다.
 백엔드 실패 응답 형태(`{ error: { code, message } }`)를 알고 있으므로 화면마다 파싱하지 않는다.
@@ -225,6 +230,14 @@ export async function fetchData(id: number) {
 - 로그인 시작은 `window.location.href = "/api/oauth2/authorization/google"` 이다.
   **`router.push` 로 바꾸면 안 된다** — Next 페이지가 아니라 백엔드 엔드포인트로의
   브라우저 리다이렉트이기 때문이다.
+
+## 인증 (`/flights`)
+
+- `FlightSearch` 가 `/api/auth/me` 로 로그인 여부를 확인한다. 비로그인이면 폼 대신 로그인 안내를 보여준다.
+- 로그인 버튼은 `FLIGHTS_LOGIN_URL`(`/api/oauth2/authorization/google?returnTo=%2Fflights`)로 이동해
+  로그인 후 설문 목록이 아니라 `/flights` 로 돌아온다. 같은 Google 로그인이라 Drive·Forms 읽기 권한 동의 화면이 함께 뜬다.
+- 공항 입력은 `<datalist>` 자동완성(`airports.ts`) + IATA 코드 직접 입력. 목록에 없는 도시 이름은 요청 전에 막는다.
+- MSW 기본 핸들러는 `/api/auth/me` 를 **로그인 상태**로 돌려준다. 비로그인 화면은 테스트에서 `server.use` 로 바꾼다.
 
 ## 환경 설정
 

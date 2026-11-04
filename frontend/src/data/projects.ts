@@ -72,6 +72,16 @@ export const PROJECTS: ProjectInfo[] = [
     tags: ["Toss Securities Open API", "Express", "Next.js", "Finance"],
     link: { href: "/stocksim", internal: true },
   },
+  {
+    id: 6,
+    title: "항공권 최저가 검색",
+    subtitle: "Flight Fare Finder (SerpApi Google Flights)",
+    description:
+      "출발지·도착지·출발일(왕복이면 귀국일)을 넣으면 Google 항공편의 실시간 결과를 가격이 낮은 순서로 보여줍니다. 직항 필터와 평소 가격 수준을 함께 볼 수 있고, Google 로그인한 사용자만 하루 정해진 횟수까지 검색할 수 있습니다.",
+    status: "in-progress",
+    tags: ["SerpApi", "Google Flights", "Express", "Next.js"],
+    link: { href: "/flights", internal: true },
+  },
 ];
 
 /**

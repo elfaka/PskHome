@@ -181,13 +181,17 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
   코스피·코스닥 지수와 자체 계산 공포·탐욕 지수(`market.service.ts`) 포함.
   매매는 서버에서 가상 체결해 포트폴리오를 express-session 에 둔다. `/api/stocksim/**` 는 공개.
   **토스 주문 API 는 실제 계좌에 체결되므로 호출하지 않는다.**
+- **`modules/flights/`** — 항공권 최저가 검색. SerpApi Google Flights 엔진(`serpapi/serpApiClient.ts`)으로 조회해
+  가격순으로 돌려준다. 항공사·OTA 화면을 직접 크롤링하지 않는다. `/api/flights/**` 는 **로그인 필요**
+  (SerpApi 무료 한도 월 250회 보호). 같은 조건 30분 캐시 + 사용자당 하루 `FLIGHTS_DAILY_LIMIT` 회.
 - **`modules/survey/`** — Google Forms/Drive 연동. `passport-google-oauth20` 세션 로그인.
   OAuth2 엔드포인트: `/api/oauth2/**`, `/api/login/oauth2/**`.
-  로그인 성공 시 `APP_LOGIN_SUCCESS_REDIRECT` 로 리다이렉트.
+  로그인 성공 시 `APP_LOGIN_SUCCESS_REDIRECT` 로 리다이렉트. 로그인 시작에 `?returnTo=/경로` 를 주면
+  같은 출처의 그 경로로 돌아간다 (사이트 내부 경로만 허용).
 - **`app.ts`** — 미들웨어/라우터 조립. **공개/인증 경계가 여기서 결정된다.**
   인증이 필요한 라우터만 `middleware/requireAuth.ts` 를 붙인다.
   공개: `/api/ping`, `/api/auth/me`, `/api/auth/logout`, `/api/json/**`, `/api/posts/**`, `/api/stocksim/**`, OAuth2 flow.
-  인증 필요: `/api/forms/**`.
+  인증 필요: `/api/forms/**`, `/api/flights/**`.
 
 **설정:** 프로파일 대신 `.env` + `config/env.ts`(zod 스키마) 하나로 관리한다.
 시크릿은 전부 optional 이라, 없더라도 앱은 기동되고 해당 엔드포인트만 실패한다.
@@ -197,11 +201,12 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 
 ### 프론트엔드 (`frontend/src/`)
 
-Next.js App Router SPA. 최상위 라우트 5개:
+Next.js App Router SPA. 최상위 라우트 6개:
 - `/`, `/about`, `/project`, `/pspost/**` → `app/(home)/`
 - `/googleform/**` → `app/googleform/`
 - `/jsonprettier` → `app/jsonprettier/`
 - `/stocksim` → `app/stocksim/` (주식 모의투자. 증권사 WTS 형태, 이 화면만 전체 폭)
+- `/flights` → `app/flights/` (항공권 최저가 검색. 로그인 필요)
 - `/wedding` → `app/wedding/` (모바일 청첩장. 백엔드 호출 없음, 사이트 테마와 분리)
 
 라우트 페이지는 얇게 유지하고 화면 구현은 `src/components/` 에 둔다.
@@ -209,4 +214,4 @@ Next.js App Router SPA. 최상위 라우트 5개:
 개발 서버는 `next.config.ts` 의 `rewrites` 로 `/api` 를 `http://localhost:8080` 에 프록시한다.
 프로덕션 빌드는 standalone Node 서버로 실행한다.
 
-API 호출은 `src/api/` 폴더에 기능별로 구성(`pspost.ts`, `jsonPrettierApi.ts`, `stockSim.ts`, `client.ts`).
+API 호출은 `src/api/` 폴더에 기능별로 구성(`pspost.ts`, `jsonPrettierApi.ts`, `stockSim.ts`, `flights.ts`, `client.ts`).

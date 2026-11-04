@@ -446,4 +446,78 @@ export const handlers = [
       totalReturnRate: 0,
     })
   ),
+
+  // --- 로그인 상태 (기본은 로그인됨. 비로그인 화면은 테스트에서 server.use 로 바꾼다) ---
+  http.get("/api/auth/me", () => HttpResponse.json({ authenticated: true, name: "테스터" })),
+
+  // --- 항공권 ---
+  http.get("/api/flights/quota", () => HttpResponse.json({ remainingSearches: 30 })),
+
+  http.get("/api/flights/search", ({ request }) => {
+    const q = new URL(request.url).searchParams;
+    const query = {
+      from: q.get("from"),
+      to: q.get("to"),
+      date: q.get("date"),
+      tripType: q.get("tripType") ?? "oneway",
+      adults: Number(q.get("adults") ?? 1),
+      ...(q.get("returnDate") ? { returnDate: q.get("returnDate") } : {}),
+    };
+    return HttpResponse.json({ ...mockFlightResult, query });
+  }),
 ];
+
+function mockSegment(flightNumber: string, airline: string, from: string, to: string, dep: string, arr: string) {
+  return {
+    airline,
+    airlineLogo: null,
+    flightNumber,
+    departureAirport: { id: from, name: `${from} 공항` },
+    departureTime: dep,
+    arrivalAirport: { id: to, name: `${to} 공항` },
+    arrivalTime: arr,
+    durationMinutes: 120,
+    airplane: null,
+    travelClass: "이코노미",
+  };
+}
+
+export const mockFlightResult = {
+  query: { from: "ICN", to: "NRT", date: "2026-12-01", tripType: "oneway", adults: 1 },
+  currency: "KRW",
+  lowestPrice: 180_000,
+  options: [
+    {
+      id: "7C 1101|7C 1151",
+      price: 180_000,
+      totalDurationMinutes: 300,
+      stops: 1,
+      airlines: ["제주항공"],
+      departureTime: "2026-12-01 06:00",
+      arrivalTime: "2026-12-01 11:00",
+      segments: [
+        mockSegment("7C 1101", "제주항공", "ICN", "PUS", "2026-12-01 06:00", "2026-12-01 07:00"),
+        mockSegment("7C 1151", "제주항공", "PUS", "NRT", "2026-12-01 09:00", "2026-12-01 11:00"),
+      ],
+      layovers: [{ id: "PUS", name: "김해국제공항", durationMinutes: 120, overnight: false }],
+      best: false,
+    },
+    {
+      id: "KE 703",
+      price: 320_000,
+      totalDurationMinutes: 140,
+      stops: 0,
+      airlines: ["대한항공"],
+      departureTime: "2026-12-01 23:00",
+      arrivalTime: "2026-12-02 01:20",
+      segments: [mockSegment("KE 703", "대한항공", "ICN", "NRT", "2026-12-01 23:00", "2026-12-02 01:20")],
+      layovers: [],
+      best: true,
+    },
+  ],
+  priceInsights: { lowestPrice: 180_000, priceLevel: "low", typicalRange: [200_000, 400_000] },
+  googleFlightsUrl: "https://www.google.com/travel/flights?q=test",
+  fetchedAt: "2026-11-04T01:00:00.000Z",
+  remainingSearches: 29,
+  cached: false,
+};
