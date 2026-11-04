@@ -5,6 +5,27 @@ import { GOOGLE_SCOPES, passport } from "../../config/passport.js";
 import { HttpError } from "../../lib/httpError.js";
 
 /**
+ * 로그인 뒤 돌아갈 경로 (`?returnTo=/flights`).
+ * 사이트 안의 경로(`/` 로 시작)만 받는다. `//evil.com`, 역슬래시, 공백이 섞인 값은 오픈 리다이렉트가 되므로 버린다.
+ */
+export function safeReturnPath(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length > 512) return null;
+  if (!raw.startsWith("/") || raw.startsWith("//") || /[\\\s]/.test(raw)) return null;
+  return raw;
+}
+
+/** 로그인 성공 후 이동할 URL. 돌아갈 경로가 있으면 `APP_LOGIN_SUCCESS_REDIRECT` 와 같은 출처(origin)에 붙인다 */
+export function loginSuccessUrl(returnTo: string | null | undefined): string {
+  const fallback = env.APP_LOGIN_SUCCESS_REDIRECT;
+  const path = safeReturnPath(returnTo);
+  if (!path) return fallback;
+
+  const origin = new URL(fallback).origin;
+  const target = new URL(path, origin);
+  return target.origin === origin ? target.toString() : fallback;
+}
+
+/**
  * 인증/로그인 — 기존 `survey/controller/AuthController.java` + `config/SecurityConfig` 의
  * oauth2Login / logout 설정을 합친 라우터.
  *
@@ -34,6 +55,11 @@ export function createAuthRouter(googleLoginEnabled: boolean): Router {
       return;
     }
 
+    // 돌아갈 경로는 세션에 잠깐 둔다. Google 을 다녀오는 동안 쿼리스트링은 사라진다.
+    const returnTo = safeReturnPath(req.query.returnTo);
+    if (returnTo) req.session.returnTo = returnTo;
+    else delete req.session.returnTo;
+
     passport.authenticate("google", { scope: GOOGLE_SCOPES })(req, res, next);
   });
 
@@ -58,14 +84,18 @@ export function createAuthRouter(googleLoginEnabled: boolean): Router {
           return;
         }
 
+        // passport 0.6+ 는 로그인할 때 세션을 새로 만든다(세션 고정 공격 방지) — 그 전에 꺼내 둔다.
+        const returnTo = req.session.returnTo;
+
         req.logIn(user, (loginErr) => {
           if (loginErr) {
             next(loginErr);
             return;
           }
 
-          // 기존 `defaultSuccessUrl(url, true)` 와 동일하게 **항상** 이 URL 로 보낸다.
-          res.redirect(env.APP_LOGIN_SUCCESS_REDIRECT);
+          // 기존 `defaultSuccessUrl(url, true)` 와 같이 기본은 APP_LOGIN_SUCCESS_REDIRECT.
+          // 로그인 시작 때 returnTo 를 줬으면 같은 출처의 그 경로로 보낸다 (예: /flights).
+          res.redirect(loginSuccessUrl(returnTo));
         });
       }
     )(req, res, next);

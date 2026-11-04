@@ -42,3 +42,28 @@ describe("auth routes", () => {
     expect(res.status).not.toBe(404);
   });
 });
+
+describe("login returnTo", () => {
+  it.each(["/flights", "/flights?from=ICN", "/googleform/forms"])("사이트 내부 경로 %s 는 받는다", async (path) => {
+    const { safeReturnPath } = await import("./auth.router.js");
+    expect(safeReturnPath(path)).toBe(path);
+  });
+
+  it.each(["//evil.com", "https://evil.com", "/\\evil.com", "flights", "/a b", "", undefined, ["/flights"]])(
+    "오픈 리다이렉트가 될 수 있는 %o 는 버린다",
+    async (raw) => {
+      const { safeReturnPath } = await import("./auth.router.js");
+      expect(safeReturnPath(raw)).toBeNull();
+    }
+  );
+
+  it("돌아갈 경로는 APP_LOGIN_SUCCESS_REDIRECT 와 같은 출처에 붙이고, 없으면 기본 URL", async () => {
+    const { loginSuccessUrl } = await import("./auth.router.js");
+    const { env } = await import("../../config/env.js");
+    const origin = new URL(env.APP_LOGIN_SUCCESS_REDIRECT).origin;
+
+    expect(loginSuccessUrl("/flights")).toBe(`${origin}/flights`);
+    expect(loginSuccessUrl(undefined)).toBe(env.APP_LOGIN_SUCCESS_REDIRECT);
+    expect(loginSuccessUrl("//evil.com")).toBe(env.APP_LOGIN_SUCCESS_REDIRECT);
+  });
+});

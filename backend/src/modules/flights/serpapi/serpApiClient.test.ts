@@ -1,0 +1,171 @@
+import { describe, expect, it, vi } from "vitest";
+
+import type { FlightSearchQuery } from "../flights.types.js";
+import { buildSearchParams, createSerpApiClient, parseSearchResponse } from "./serpApiClient.js";
+
+function segment(flightNumber: string, from: string, to: string, dep: string, arr: string, duration = 120) {
+  return {
+    departure_airport: { name: `${from} 공항`, id: from, time: dep },
+    arrival_airport: { name: `${to} 공항`, id: to, time: arr },
+    duration,
+    airplane: "Airbus A321",
+    airline: flightNumber.startsWith("KE") ? "대한항공" : "제주항공",
+    airline_logo: "https://example.com/logo.png",
+    travel_class: "이코노미",
+    flight_number: flightNumber,
+  };
+}
+
+const sample = {
+  search_metadata: { status: "Success", google_flights_url: "https://www.google.com/travel/flights?q=x" },
+  best_flights: [
+    {
+      flights: [segment("KE 703", "ICN", "NRT", "2026-12-01 09:00", "2026-12-01 11:20", 140)],
+      layovers: [],
+      total_duration: 140,
+      price: 320000,
+      type: "편도",
+    },
+  ],
+  other_flights: [
+    {
+      flights: [
+        segment("7C 1101", "ICN", "PUS", "2026-12-01 06:00", "2026-12-01 07:00", 60),
+        segment("7C 1151", "PUS", "NRT", "2026-12-01 09:00", "2026-12-01 11:00", 120),
+      ],
+      layovers: [{ duration: 120, name: "김해국제공항", id: "PUS" }],
+      total_duration: 300,
+      price: 180000,
+    },
+    // best 와 같은 여정이 더 비싸게 한 번 더 나온 경우
+    {
+      flights: [segment("KE 703", "ICN", "NRT", "2026-12-01 09:00", "2026-12-01 11:20", 140)],
+      total_duration: 140,
+      price: 350000,
+    },
+    { flights: [segment("KE 705", "ICN", "NRT", "2026-12-01 13:00", "2026-12-01 15:20")], total_duration: 140 },
+    { flights: [] },
+  ],
+  price_insights: { lowest_price: 180000, price_level: "low", typical_price_range: [200000, 400000] },
+};
+
+const oneway: FlightSearchQuery = { from: "ICN", to: "NRT", date: "2026-12-01", tripType: "oneway", adults: 1 };
+
+describe("parseSearchResponse", () => {
+  it("best·other 를 합쳐 가격순으로 정렬하고, 가격 없는 항목은 맨 뒤에 둔다", () => {
+    const parsed = parseSearchResponse(sample);
+
+    expect(parsed.options.map((o) => o.price)).toEqual([180000, 320000, null]);
+    expect(parsed.googleFlightsUrl).toBe("https://www.google.com/travel/flights?q=x");
+    expect(parsed.priceInsights).toEqual({ lowestPrice: 180000, priceLevel: "low", typicalRange: [200000, 400000] });
+  });
+
+  it("같은 여정은 하나만 남기고 싼 가격과 best 표시를 유지한다", () => {
+    const parsed = parseSearchResponse(sample);
+    const ke703 = parsed.options.filter((o) => o.segments[0].flightNumber === "KE 703");
+
+    expect(ke703).toHaveLength(1);
+    expect(ke703[0].price).toBe(320000);
+    expect(ke703[0].best).toBe(true);
+  });
+
+  it("경유 횟수·전체 출발/도착 시각·항공사를 구간에서 계산한다", () => {
+    const transfer = parseSearchResponse(sample).options[0];
+
+    expect(transfer.stops).toBe(1);
+    expect(transfer.departureTime).toBe("2026-12-01 06:00");
+    expect(transfer.arrivalTime).toBe("2026-12-01 11:00");
+    expect(transfer.airlines).toEqual(["제주항공"]);
+    expect(transfer.layovers).toEqual([{ id: "PUS", name: "김해국제공항", durationMinutes: 120, overnight: false }]);
+  });
+
+  it("결과 없음 오류는 빈 결과로 돌려준다", () => {
+    const parsed = parseSearchResponse({ error: "Google Flights hasn't returned any results for this query." });
+
+    expect(parsed.options).toEqual([]);
+    expect(parsed.priceInsights).toBeNull();
+  });
+
+  it("그 밖의 오류는 503 SERPAPI_ERROR", () => {
+    expect(() => parseSearchResponse({ error: "Invalid API key." })).toThrowError(
+      expect.objectContaining({ status: 503, code: "SERPAPI_ERROR" })
+    );
+  });
+});
+
+describe("buildSearchParams", () => {
+  it("편도는 type=2, 귀국일 없이 원화·한국어로 요청한다", () => {
+    const p = buildSearchParams(oneway);
+
+    expect(p.get("engine")).toBe("google_flights");
+    expect(p.get("type")).toBe("2");
+    expect(p.get("return_date")).toBeNull();
+    expect(p.get("currency")).toBe("KRW");
+    expect(p.get("hl")).toBe("ko");
+    expect(p.get("api_key")).toBeNull();
+  });
+
+  it("왕복은 type=1 + return_date", () => {
+    const p = buildSearchParams({ ...oneway, tripType: "round", returnDate: "2026-12-05", adults: 2 });
+
+    expect(p.get("type")).toBe("1");
+    expect(p.get("return_date")).toBe("2026-12-05");
+    expect(p.get("adults")).toBe("2");
+  });
+});
+
+describe("createSerpApiClient", () => {
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+  it("api_key 를 붙여 search.json 을 부르고 결과를 정리한다", async () => {
+    const fetchMock = vi.fn(async () => json(200, sample));
+    const client = createSerpApiClient({ apiKey: "k-123", baseUrl: "https://serp.test/", fetch: fetchMock });
+
+    const parsed = await client.searchFlights(oneway);
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(url.origin + url.pathname).toBe("https://serp.test/search.json");
+    expect(url.searchParams.get("api_key")).toBe("k-123");
+    expect(url.searchParams.get("departure_id")).toBe("ICN");
+    expect(parsed.options).toHaveLength(3);
+  });
+
+  it("한도 소진(429) 등 오류 상태는 SerpApi 메시지를 담아 503 으로 바꾼다", async () => {
+    const client = createSerpApiClient({
+      apiKey: "k",
+      baseUrl: "https://serp.test",
+      fetch: async () => json(429, { error: "Your account has run out of searches." }),
+    });
+
+    await expect(client.searchFlights(oneway)).rejects.toMatchObject({
+      status: 503,
+      code: "SERPAPI_ERROR",
+      message: expect.stringContaining("run out of searches"),
+    });
+  });
+
+  it("오류 상태라도 결과 없음이면 빈 결과", async () => {
+    const client = createSerpApiClient({
+      apiKey: "k",
+      baseUrl: "https://serp.test",
+      fetch: async () => json(400, { error: "Google Flights hasn't returned any results for this query." }),
+    });
+
+    await expect(client.searchFlights(oneway)).resolves.toMatchObject({ options: [] });
+  });
+
+  it("연결 실패는 503 SERPAPI_UNREACHABLE 이고 메시지에 키가 남지 않는다", async () => {
+    const client = createSerpApiClient({
+      apiKey: "secret-key",
+      baseUrl: "https://serp.test",
+      fetch: async () => {
+        throw new TypeError("fetch failed");
+      },
+    });
+
+    const err = await client.searchFlights(oneway).catch((e: unknown) => e as Error & { code: string });
+    expect(err.code).toBe("SERPAPI_UNREACHABLE");
+    expect(err.message).not.toContain("secret-key");
+  });
+});

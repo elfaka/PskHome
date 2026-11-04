@@ -9,6 +9,8 @@ import type { PortfolioState } from "../modules/stocksim/stockSim.types.js";
 declare module "express-session" {
   interface SessionData {
     stocksim?: PortfolioState;
+    /** 로그인 뒤 돌아갈 사이트 내부 경로 (`/api/oauth2/authorization/google?returnTo=`) */
+    returnTo?: string;
   }
 }
 

@@ -28,6 +28,12 @@ export class TtlCache<T> {
     return pending;
   }
 
+  /** 지금 `get` 을 부르면 `load` 없이 값을 얻을 수 있는지 (만료 전 값이 있거나 같은 키 요청이 진행 중) */
+  has(key: string): boolean {
+    const hit = this.entries.get(key);
+    return (hit != null && Date.now() - hit.at < this.ttlMs) || this.inflight.has(key);
+  }
+
   clear(): void {
     this.entries.clear();
     this.inflight.clear();

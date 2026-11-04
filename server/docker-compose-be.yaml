@@ -37,5 +37,8 @@ services:
 
       # OpenDART (모의투자 재무 지표). 없으면 PER·PBR 등만 빠진다.
       DART_API_KEY: ${DART_API_KEY}
+
+      # SerpApi (항공권 최저가 검색, Google Flights 엔진). 없으면 /api/flights 검색만 503.
+      SERPAPI_API_KEY: ${SERPAPI_API_KEY}
     ports:
       - 8080:8080

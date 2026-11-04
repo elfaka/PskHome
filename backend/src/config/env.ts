@@ -53,6 +53,13 @@ const envSchema = z.object({
 
   // --- Cboe 공개 데이터 (모의투자 VIX 지수, 키 불필요) ---
   CBOE_API_BASE_URL: z.string().default("https://cdn-api.cboe.com/api/global"),
+
+  // --- SerpApi (항공권 최저가 검색, Google Flights 엔진) ---
+  // https://serpapi.com 에서 발급. 무료는 월 250회. 없으면 /api/flights 검색만 503.
+  SERPAPI_API_KEY: z.string().optional(),
+  SERPAPI_BASE_URL: z.string().default("https://serpapi.com"),
+  // 로그인 사용자 1명이 하루(KST)에 SerpApi 를 실제로 부를 수 있는 횟수 (캐시 적중은 세지 않는다)
+  FLIGHTS_DAILY_LIMIT: z.coerce.number().int().positive().default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;
