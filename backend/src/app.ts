@@ -3,7 +3,6 @@ import express from "express";
 import { configurePassport, passport } from "./config/passport.js";
 import { createSessionMiddleware } from "./config/session.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
-import { flightsRouter } from "./modules/flights/flights.router.js";
 import { jsonPrettierRouter } from "./modules/jsonprettier/jsonPrettier.router.js";
 import { pingRouter } from "./modules/ping/ping.router.js";
 import { psPostRouter } from "./modules/pspost/psPost.router.js";
@@ -49,7 +48,6 @@ export function createApp(): express.Express {
 
   // --- 인증 필요 ---
   api.use(formsRouter);
-  api.use(flightsRouter);
 
   app.use("/api", api);
 

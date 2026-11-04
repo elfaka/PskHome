@@ -11,7 +11,6 @@
 | JSON Prettier | `/jsonprettier` | JSON 포맷/압축/키 정렬/ASCII 이스케이프 |
 | Google 설문 분석 | `/googleform` | Google Forms 연동 설문 분석 |
 | 주식 모의투자 | `/stocksim` | 토스증권 실시세로 가상 매수·매도 |
-| 항공권 최저가 | `/flights` | 출발지·도착지·출발일로 Google 항공편 결과를 가격순 조회 (SerpApi, 로그인 필요) |
 
 ## 기술 스택
 
@@ -82,7 +81,6 @@ backend/src/
     ├── jsonprettier/                # router / service / types
     ├── pspost/                      # router / service / types
     ├── stocksim/                    # 모의투자: 시세(toss/)·재무(dart/)·지표·추천·지수·공포탐욕·가상 매매
-    ├── flights/                     # 항공권 최저가: SerpApi(serpapi/)·검증·캐시·일일 한도 (로그인 필요)
     └── survey/                      # auth.router, forms.router,
                                      # forms.service, analyze.service, google/
 
@@ -101,22 +99,19 @@ frontend/src/
 │   ├── (home)/                      #   /, /about, /project, /pspost/**
 │   ├── googleform/                  #   /googleform/**
 │   ├── jsonprettier/                #   /jsonprettier
-│   ├── stocksim/                    #   /stocksim (주식 모의투자)
-│   └── flights/                     #   /flights (항공권 최저가 검색)
+│   └── stocksim/                    #   /stocksim (주식 모의투자)
 ├── api/
 │   ├── client.ts                    # axios 인스턴스 (withCredentials)
 │   ├── pspost.ts                    # PS Post API 함수
 │   ├── jsonPrettierApi.ts           # JSON Prettier API 함수
-│   ├── stockSim.ts                  # 주식 모의투자 API 함수
-│   └── flights.ts                   # 항공권 최저가 검색 API 함수
+│   └── stockSim.ts                  # 주식 모의투자 API 함수
 ├── components/
 │   ├── ui/                          # 디자인 프리미티브 (Button, Card, Field ...)
 │   ├── theme/                       # 라이트/다크 테마
 │   ├── layout/                      # SiteShell, SiteHeader, SiteFooter
 │   ├── pspost/PostForm.tsx          # 작성/수정 공용 폼
 │   ├── googleform/                  # GoogleFormShell, FormsList, Login, analyze/*
-│   ├── stocksim/                    # StockSimulator 와 하위 패널
-│   └── flights/                     # FlightSearch(폼·로그인 확인), FlightResults
+│   └── stocksim/                    # StockSimulator 와 하위 패널
 ├── lib/
 │   ├── errorMessage.ts              # 공용 에러 메시지 추출
 │   └── cn.ts                        # 조건부 클래스 합성
@@ -141,8 +136,6 @@ frontend/src/
 | `APP_LOGIN_SUCCESS_REDIRECT` | `http://localhost:5173/googleform/forms` | |
 | `TOSS_CLIENT_ID` / `TOSS_CLIENT_SECRET` | (없음) | 토스증권 Open API (모의투자 시세). 호출 IP 를 WTS 허용 IP 에 등록 |
 | `DART_API_KEY` | (없음) | OpenDART (모의투자 재무 지표 PER·EPS·PBR 등) |
-| `SERPAPI_API_KEY` | (없음) | SerpApi Google Flights (항공권 최저가 검색, 무료 월 250회) |
-| `FLIGHTS_DAILY_LIMIT` | `30` | 로그인 사용자 1명의 하루 항공권 검색 횟수 |
 
 ### 프론트엔드
 
@@ -154,7 +147,7 @@ frontend/src/
 
 `SSH_HOST_NAME`, `SSH_USER_NAME`, `SSH_PRIVATE_KEY`, `SSH_PORT`,
 `MYSQL_ROOT_PASSWORD`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-`TOSS_CLIENT_ID`, `TOSS_CLIENT_SECRET`, `DART_API_KEY`, `SERPAPI_API_KEY`
+`TOSS_CLIENT_ID`, `TOSS_CLIENT_SECRET`, `DART_API_KEY`
 
 ## 테스트 실행
 
@@ -170,7 +163,7 @@ cd frontend && npm run test
 
 - **공개 (인증 불필요):** `/api/ping`, `/api/auth/me`, `/api/auth/logout`,
   `/api/json/**`, `/api/posts/**`, `/api/stocksim/**`, `/api/oauth2/**`, `/api/login/oauth2/**`
-- **인증 필요:** `/api/forms/**`, `/api/flights/**` (Google OAuth2 세션)
+- **인증 필요:** `/api/forms/**` (Google OAuth2 세션)
 - **미인증 응답:** 302 리다이렉트가 아니라 401 JSON
 
 ## 배포

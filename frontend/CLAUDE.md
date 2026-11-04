@@ -53,9 +53,6 @@ src/app/
 ├── stocksim/                                    # 주식 모의투자 (layout: metadata + SiteShell)
 │   ├── page.tsx                                 # /stocksim
 │   └── [...slug]/page.tsx                       # 그 외 → /stocksim 으로 리다이렉트
-├── flights/                                     # 항공권 최저가 검색 (layout: metadata + SiteShell, 로그인 필요)
-│   ├── page.tsx                                 # /flights
-│   └── [...slug]/page.tsx                       # 그 외 → /flights 로 리다이렉트
 └── wedding/                                     # 모바일 청첩장 — SiteShell 없음, 사이트 테마와 분리
     ├── layout.tsx                               # metadata(noindex), 폰트, .wedding-root
     ├── page.tsx                                 # /wedding
@@ -78,7 +75,6 @@ src/
 │   ├── pspost/PostForm.tsx
 │   ├── googleform/  (GoogleFormShell, FormsList, Login, analyze/*)
 │   ├── stocksim/    (StockSimulator 레이아웃, CandleChart/ChartPanel, OrderbookPanel, OrderPanel, AnalysisPanel ...)
-│   ├── flights/     (FlightSearch 로그인 확인·폼, AirportSelect 공항 드롭다운, FlightResults 결과 목록, BookingPanel 판매처, airports.ts 인기 순 공항 목록, format.ts)
 │   └── wedding/     (WeddingInvitation, introMachine, scene/* 첫 화면, sections/*, ui/*)
 ├── data/         # 화면이 공유하는 정적 데이터 (projects.ts, profile.ts, wedding.ts)
 ├── lib/          # 공용 유틸 (errorMessage, cn 등) — lib/wedding/ 은 청첩장 전용 순수 로직
@@ -216,7 +212,6 @@ export async function fetchData(id: number) {
 - `src/api/pspost.ts` — PS 게시글 CRUD (`listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`)
 - `src/api/jsonPrettierApi.ts` — JSON 포맷 (`formatJson`)
 - `src/api/stockSim.ts` — 주식 모의투자 (검색·시세·차트·호가·체결·개요·분석·수급·시장 지수·공포탐욕·포트폴리오·주문)
-- `src/api/flights.ts` — 항공권 최저가 검색 (`searchFlights`, `getFlightQuota`, `getMe`, `FLIGHTS_LOGIN_URL`)
 
 **에러 메시지**는 `@/lib/errorMessage` 의 `errorMessage(e, fallback)` 로 뽑는다.
 백엔드 실패 응답 형태(`{ error: { code, message } }`)를 알고 있으므로 화면마다 파싱하지 않는다.
@@ -230,22 +225,6 @@ export async function fetchData(id: number) {
 - 로그인 시작은 `window.location.href = "/api/oauth2/authorization/google"` 이다.
   **`router.push` 로 바꾸면 안 된다** — Next 페이지가 아니라 백엔드 엔드포인트로의
   브라우저 리다이렉트이기 때문이다.
-
-## 인증 (`/flights`)
-
-- `FlightSearch` 가 `/api/auth/me` 로 로그인 여부를 확인한다. 비로그인이면 폼 대신 로그인 안내를 보여준다.
-- 로그인 버튼은 `FLIGHTS_LOGIN_URL`(`/api/oauth2/authorization/google?returnTo=%2Fflights`)로 이동해
-  로그인 후 설문 목록이 아니라 `/flights` 로 돌아온다. 같은 Google 로그인이라 Drive·Forms 읽기 권한 동의 화면이 함께 뜬다.
-- 공항 입력은 드롭다운 콤보박스(`AirportSelect.tsx`). 누르면 **인기 순**으로 펼쳐지고(순위 번호 표시), 글자를 치면 거른다.
-  순서는 `airports.ts` 의 `AIRPORTS` 배열 순서다(한국인 여행객 기준). 출발지 목록은 국내 공항(이용객 순)을 앞으로 올린 `ORIGIN_AIRPORTS`.
-  반대편에서 고른 공항은 목록에서 뺀다. 목록에 없는 공항은 IATA 코드 3자리를 치면 "직접 입력" 항목으로 고른다.
-- 결과 카드의 "판매처 보기"(왕복은 "오는 편 고르기" → "이 편 선택")를 눌렀을 때만 판매처를 불러온다 — 한 번에 한도 1회.
-  패널(`BookingPanel.tsx`)은 열릴 때 마운트되며 그때 한 번 부른다. 새로 검색하면 결과 목록을 key 로 다시 그려 패널을 닫는다.
-- 판매처 이동은 `booking.ts` 의 `openBooking` — `postData` 가 있으면 이름 붙인 빈 탭을 먼저 열고(`window.open`) 숨은 폼을 그 탭으로 **POST**,
-  팝업이 막히면 지금 탭으로 보낸다. `target="_blank"` 폼은 앱 내 브라우저 등에서 본문 없는 GET 으로 열려 쓰지 않는다.
-  `postData` 가 없으면 판매처 주소를 `window.open` 으로 바로 연다. 링크(`<a href>`)로 바꾸면 Google 이 판매처로 보내 주지 않는다. 클릭 핸들러 안에서 불러야 팝업 차단을 피한다.
-  jsdom 은 `form.submit` 이 없어 테스트에서 `HTMLFormElement.prototype.submit` 을 spy 한다.
-- MSW 기본 핸들러는 `/api/auth/me` 를 **로그인 상태**로 돌려준다. 비로그인 화면은 테스트에서 `server.use` 로 바꾼다.
 
 ## 환경 설정
 

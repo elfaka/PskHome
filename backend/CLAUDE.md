@@ -43,7 +43,6 @@ src/
     ├── jsonprettier/           # /api/json/**       (공개)
     ├── pspost/                 # /api/posts/**      (공개)
     ├── stocksim/               # /api/stocksim/**   (공개) 모의투자 — 아래 '모의투자 모듈' 참고
-    ├── flights/                # /api/flights/**    (인증) 항공권 최저가 — 아래 '항공권 모듈' 참고
     └── survey/                 # /api/auth/**, /api/oauth2/**, /api/forms/**
 ```
 
@@ -85,7 +84,6 @@ api.use(newModuleRouter);   // 라우터 안에서 router.use("/newmodule", requ
 
 **인증 필요 (`requireAuth`)**
 - `/api/forms/**`
-- `/api/flights/**` (SerpApi 유료 한도 보호)
 
 미인증 요청은 Google 로 리다이렉트하지 않고 **401 JSON** (`{ error: { code: "UNAUTHORIZED" } }`) 을 반환한다.
 
@@ -98,11 +96,7 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | `GET /api/oauth2/authorization/google` | 로그인 시작 (프론트가 `window.location.href` 로 이동) |
 | `GET /api/login/oauth2/code/google` | Google 콜백 (인가코드 수신) |
 
-로그인 성공 시 기본은 `APP_LOGIN_SUCCESS_REDIRECT` 로 리다이렉트한다.
-로그인 시작에 `?returnTo=/flights` 처럼 사이트 내부 경로를 주면 세션에 잠깐 두었다가
-`APP_LOGIN_SUCCESS_REDIRECT` 와 같은 출처(origin)의 그 경로로 보낸다 (`auth.router.ts` 의 `safeReturnPath`).
-`//`·역슬래시·공백이 섞이거나 `/` 로 시작하지 않는 값은 오픈 리다이렉트 방지를 위해 버린다.
-passport 0.6+ 는 `req.logIn` 때 세션을 새로 만들므로 `returnTo` 는 그 전에 꺼내야 한다.
+로그인 성공 시 `APP_LOGIN_SUCCESS_REDIRECT` 로 **항상** 리다이렉트한다.
 
 ## 환경변수
 
@@ -123,9 +117,6 @@ passport 0.6+ 는 `req.logIn` 때 세션을 새로 만들므로 `returnTo` 는 �
 | `DART_API_KEY` | (없음) | OpenDART. 없으면 재무 지표(PER·PBR 등)만 빠지고 나머지는 동작 |
 | `DART_API_BASE_URL` | `https://opendart.fss.or.kr/api` | |
 | `CBOE_API_BASE_URL` | `https://cdn-api.cboe.com/api/global` | Cboe 공개 데이터 (VIX). 키 불필요. 로컬 확인 때 가짜 서버로 바꿀 수 있다 |
-| `SERPAPI_API_KEY` | (없음) | SerpApi (항공권 검색, 무료 월 250회). 없으면 `/api/flights` 검색만 503 |
-| `SERPAPI_BASE_URL` | `https://serpapi.com` | 로컬 확인 때 가짜 서버로 바꿀 수 있다 |
-| `FLIGHTS_DAILY_LIMIT` | `30` | 로그인 사용자 1명의 하루(KST) 검색 횟수. 캐시 적중은 세지 않는다 |
 
 **시크릿은 전부 optional 이다.** 하나가 없다고 프로세스 부팅을 막지 않고,
 해당 시크릿을 쓰는 엔드포인트만 런타임에 실패한다.
@@ -155,35 +146,6 @@ passport 0.6+ 는 `req.logIn` 때 세션을 새로 만들므로 `returnTo` 는 �
 - 토스 토큰은 client 당 1개다. **로컬에서 운영과 같은 키로 서버를 오래 띄워 두면 운영 토큰이 계속 밀려난다** (401 `token-revoked`).
   클라이언트가 한 번은 새로 받아 재시도하지만, 두 프로세스가 번갈아 발급하면 요청마다 토큰을 새로 받게 된다.
   로컬 화면 확인은 가능하면 가짜 토스 서버(`TOSS_API_BASE_URL`)로 한다.
-
-## 항공권 모듈 (`modules/flights/`)
-
-| 파일 | 역할 |
-|---|---|
-| `serpapi/serpApiClient.ts` | SerpApi Google Flights 엔진 호출·응답 정리. best/other 를 합쳐 중복 제거 후 가격순 |
-| `flights.service.ts` | 검색 조건·토큰 검증(규칙 표는 파일 상단), 30분 캐시, 사용자별 일일 한도(`DailyLimiter`) |
-| `flights.router.ts` | `GET /api/flights/search`, `/returns`(왕복 오는 편), `/booking`(판매처), `/quota` — 모두 `requireAuth` |
-
-**판매처(그 가격에 파는 사이트)로 보내는 흐름**
-
-```
-편도: search ─ booking_token ─▶ booking (판매처 목록)
-왕복: search ─ departure_token ─▶ returns (오는 편) ─ booking_token ─▶ booking
-```
-
-- `returns`·`booking` 은 처음 검색 조건 + 토큰을 그대로 SerpApi 에 다시 보낸다. 각각 한도 1회를 쓰고 30분 캐시한다.
-- 판매처 이동 정보는 `booking_request.url`(Google 중계 주소 `https://www.google.com/travel/clk/f`) + `post_data`(`u=...`)다.
-  **`post_data` 를 그 주소로 POST 해야** 판매처 예약 페이지로 넘어간다. 서버는 값을 바꾸지 않고 전달만 하고,
-  프론트가 숨은 폼으로 새 탭에 전송한다 (`frontend/src/components/flights/booking.ts`). https 가 아닌 주소는 버린다.
-- `separate_tickets` 인 판매처는 가는 편·오는 편을 따로 산다. `legs` 에 구간별 이동 정보가 있다.
-
-- **항공사·OTA 화면을 직접 크롤링하지 않는다.** 봇 차단·약관 문제가 있고, 서버 한 대에서 헤드리스 브라우저를 띄우면
-  빌드 때처럼 OOM 위험이 있다.
-- 통화는 KRW, 언어 ko, 국가 kr 로 고정한다. 왕복 결과의 가격은 왕복 총액이다.
-- SerpApi 의 "결과 없음" 오류는 빈 결과로, 그 밖의 오류(401 잘못된 키, 429 월 한도 소진)는 503 `SERPAPI_ERROR` 로 돌려준다.
-- 일일 한도는 SerpApi 를 실제로 부를 때만 쓰고, 호출이 실패하면 돌려준다. 한도 초과는 429 `DAILY_LIMIT_EXCEEDED`.
-  캐시·한도는 프로세스 메모리라 재배포하면 초기화된다.
-- 검증 규칙을 바꾸면 `flights.service.ts` 상단 표와 `flights.service.test.ts` 를 함께 고친다.
 
 ## 데이터베이스
 
@@ -247,8 +209,6 @@ cd backend && npm run test:watch
 - 토스: `vi.mock("./toss/tossClient.js")` + `src/testing/fakeTossClient.ts`
 - DART: `vi.mock("./dart/dartClient.js", () => ({ getDartClient: () => null }))` (클라이언트 자체 테스트는 fetch 주입)
 - Cboe: `vi.mock("./cboe/cboeClient.js", () => ({ getCboeClient: () => fake }))` (시장 요약을 부르는 테스트만 필요)
-- SerpApi: 서비스는 `createFlightsService({ getClient })` 로 가짜를 주입, 라우터는 `vi.mock("./serpapi/serpApiClient.js")`,
-  클라이언트 자체 테스트는 fetch 주입. 로그인된 요청은 `req.user` 를 심는 작은 앱으로 흉내 낸다 (`flights.router.test.ts`)
   (`backend/.env` 에 실제 키가 있어도 테스트가 토스를 부르지 않도록 반드시 mock 한다)
 - 세션: 저장소가 프로세스 메모리라 별도 준비가 필요 없다
 
