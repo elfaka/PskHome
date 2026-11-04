@@ -241,7 +241,7 @@ export async function fetchData(id: number) {
   패널(`BookingPanel.tsx`)은 열릴 때 마운트되며 그때 한 번 부른다. 새로 검색하면 결과 목록을 key 로 다시 그려 패널을 닫는다.
 - 판매처 이동은 `booking.ts` 의 `openBooking` — `postData` 가 있으면 이름 붙인 빈 탭을 먼저 열고(`window.open`) 숨은 폼을 그 탭으로 **POST**,
   팝업이 막히면 지금 탭으로 보낸다. `target="_blank"` 폼은 앱 내 브라우저 등에서 본문 없는 GET 으로 열려 쓰지 않는다.
-  없으면 `window.open`. 링크(`<a href>`)로 바꾸면 Google 이 판매처로 보내 주지 않는다. 클릭 핸들러 안에서 불러야 팝업 차단을 피한다.
+  `postData` 가 없으면 판매처 주소를 `window.open` 으로 바로 연다. 링크(`<a href>`)로 바꾸면 Google 이 판매처로 보내 주지 않는다. 클릭 핸들러 안에서 불러야 팝업 차단을 피한다.
   jsdom 은 `form.submit` 이 없어 테스트에서 `HTMLFormElement.prototype.submit` 을 spy 한다.
 - MSW 기본 핸들러는 `/api/auth/me` 를 **로그인 상태**로 돌려준다. 비로그인 화면은 테스트에서 `server.use` 로 바꾼다.
 
