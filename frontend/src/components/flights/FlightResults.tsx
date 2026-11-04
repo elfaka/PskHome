@@ -106,7 +106,7 @@ function FlightCard({
           variant={open ? "ghost" : "secondary"}
           aria-expanded={open}
           disabled={!canBook}
-          title={canBook ? "검색 1회를 사용합니다" : "이 항공편은 판매처 정보가 없습니다"}
+          title={canBook ? undefined : "이 항공편은 판매처 정보가 없습니다"}
           onClick={() => setOpen((v) => !v)}
         >
           {open ? "닫기" : `${actionLabel} ▾`}

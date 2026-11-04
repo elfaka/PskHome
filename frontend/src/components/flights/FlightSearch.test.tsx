@@ -166,7 +166,7 @@ describe("판매처로 이동", () => {
     expect(screen.getByText("오늘 남은 검색 28회")).toBeInTheDocument();
   });
 
-  it("사이트로 이동은 Google 중계 주소로 post_data 를 POST 하는 폼을 새 탭으로 보낸다", async () => {
+  it("사이트로 이동은 이름 붙인 새 탭을 열고 Google 중계 주소로 post_data 를 POST 한다", async () => {
     const submitted: { action: string; method: string; target: string; fields: [string, string][] }[] = [];
     const submit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(function (this: HTMLFormElement) {
       submitted.push({
@@ -176,7 +176,8 @@ describe("판매처로 이동", () => {
         fields: [...new FormData(this).entries()].map(([k, v]) => [k, String(v)]),
       });
     });
-    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    const fakeTab = { opener: window } as unknown as Window;
+    const open = vi.spyOn(window, "open").mockImplementation(() => fakeTab);
 
     const user = userEvent.setup();
     const list = await searchOneway(user);
@@ -185,11 +186,20 @@ describe("판매처로 이동", () => {
     const rows = within(await within(first).findByRole("region", { name: "판매처" })).getAllByRole("listitem");
 
     await user.click(within(rows[0]).getByRole("button", { name: "사이트로 이동 ↗" }));
+    const tabName = open.mock.calls[0][1] as string;
+    expect(open.mock.calls[0][0]).toBe("about:blank");
+    expect(tabName).toMatch(/^flight-booking-/);
     expect(submitted).toEqual([
-      { action: "https://www.google.com/travel/clk/f", method: "post", target: "_blank", fields: [["u", "AAA_bbb-ccc"]] },
+      { action: "https://www.google.com/travel/clk/f", method: "post", target: tabName, fields: [["u", "AAA_bbb-ccc"]] },
     ]);
-    // 폼은 보낸 뒤 지운다
-    expect(document.querySelector("form[target=_blank]")).toBeNull();
+    // 새 탭이 이 화면을 조작하지 못하게 opener 를 끊고, 폼은 보낸 뒤 지운다
+    expect(fakeTab.opener).toBeNull();
+    expect(document.querySelector("form")?.getAttribute("method")).not.toBe("POST");
+
+    // 팝업이 막히면 지금 탭에서 보낸다
+    open.mockImplementationOnce(() => null);
+    await user.click(within(rows[0]).getByRole("button", { name: "사이트로 이동 ↗" }));
+    expect(submitted[1].target).toBe("_self");
 
     // post_data 가 없는 판매처는 주소로 바로 연다
     await user.click(within(rows[1]).getByRole("button", { name: "사이트로 이동 ↗" }));
