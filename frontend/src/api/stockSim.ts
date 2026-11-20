@@ -163,6 +163,23 @@ export type AnalysisFactor = {
   maxScore: number;
   signal: "positive" | "negative" | "neutral" | "unavailable" | "info";
   reason: string;
+  /** 이 지표가 무엇인지 */
+  description: string;
+  /** 계산에 쓴 실제 값 */
+  values: { label: string; value: string }[];
+  /** 점수 기준표. 점수를 받은 줄이 matched */
+  rules: { condition: string; points: number; matched: boolean }[];
+  /** 해석할 때 주의점 */
+  caution: string | null;
+};
+
+/** 종합 점수 → 등급 구간 */
+export type RatingBand = {
+  rating: Rating;
+  label: string;
+  min: number;
+  /** 예: "+12 ~ +34" */
+  range: string;
 };
 
 export type Analysis = {
@@ -176,6 +193,8 @@ export type Analysis = {
   ratingLabel: string;
   summary: string;
   factors: AnalysisFactor[];
+  /** 등급 구간 (높은 등급부터) */
+  ratingScale: RatingBand[];
   indicators: {
     ma5: number | null;
     ma20: number | null;

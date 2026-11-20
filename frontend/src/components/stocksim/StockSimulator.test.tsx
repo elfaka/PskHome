@@ -94,6 +94,84 @@ describe("StockSimulator", () => {
     expect(screen.getByText(/투자 권유가 아닙니다/)).toBeInTheDocument();
   });
 
+  it("expands a signal factor to show what it measures, the values used, the score rule and a caution", async () => {
+    const user = userEvent.setup();
+    render(<StockSimulator />);
+
+    const rsi = await screen.findByRole("button", { name: /RSI\(14\)/ });
+    expect(rsi).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("table", { name: "RSI(14) 점수 기준" })).not.toBeInTheDocument();
+
+    await user.click(rsi);
+
+    expect(rsi).toHaveAttribute("aria-expanded", "true");
+    const item = within(rsi.closest("li")!);
+    expect(item.getByText(/최근 14일 동안 오른 폭과 내린 폭을 비교해 0~100/)).toBeInTheDocument();
+    expect(item.getByText("28.0")).toBeInTheDocument();
+
+    const rules = screen.getByRole("table", { name: "RSI(14) 점수 기준" });
+    const current = within(rules)
+      .getAllByRole("row")
+      .find((r) => r.getAttribute("aria-current") === "true");
+    expect(current).toHaveTextContent("30 미만 (과매도)");
+    expect(current).toHaveTextContent("+15점");
+    expect(item.getByText(/30 아래에 오래 머물 수 있습니다/)).toBeInTheDocument();
+  });
+
+  it("expands every factor at once and explains factors without data", async () => {
+    const user = userEvent.setup();
+    render(<StockSimulator />);
+
+    await user.click(await screen.findByRole("button", { name: "모두 펼치기" }));
+
+    expect(screen.getAllByRole("table", { name: /점수 기준$/ })).toHaveLength(4);
+    expect(screen.getByText("데이터가 없어 0점으로 계산했습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "모두 접기" })).toBeInTheDocument();
+  });
+
+  it("explains how the total score maps to a rating", async () => {
+    render(<StockSimulator />);
+
+    const bands = await screen.findByRole("table", { name: "등급 구간" });
+    const current = within(bands)
+      .getAllByRole("row")
+      .find((r) => r.getAttribute("aria-current") === "true");
+    expect(current).toHaveTextContent("매수");
+    expect(current).toHaveTextContent("+12 ~ +34");
+    expect(current).toHaveTextContent("현재 +18점");
+    expect(screen.getByText(/점수 기준표에 따라 매수 쪽\(\+\) 또는 매도 쪽\(-\) 점수를 주고/)).toBeInTheDocument();
+  });
+
+  it("shows the signal glossary under the signal panel", async () => {
+    render(<StockSimulator />);
+
+    expect(await screen.findByText("매매 신호 용어 설명", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("골든크로스·데드크로스")).toBeInTheDocument();
+  });
+
+  it("explains investment metric terms next to their values", async () => {
+    const user = userEvent.setup();
+    render(<StockSimulator />);
+
+    await user.click(screenTab("투자 지표"));
+    const value = await screen.findByRole("region", { name: "가치" });
+    const perInfo = within(value).getByRole("button", { name: "PER 설명" });
+    expect(perInfo).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(perInfo);
+    expect(perInfo).toHaveAttribute("aria-expanded", "true");
+    expect(within(value).getByText("PER = 주가 ÷ EPS")).toBeInTheDocument();
+    expect(within(value).getByText(/업종마다 평균이 크게 달라/)).toBeInTheDocument();
+
+    // 재무 지표 표의 항목도 같은 용어 설명을 연다
+    const fin = screen.getByRole("region", { name: "재무 지표 (최근 3년)" });
+    await user.click(within(fin).getByRole("button", { name: "부채비율 설명" }));
+    expect(within(fin).getByText("부채비율 = 부채총계 ÷ 자본총계")).toBeInTheDocument();
+
+    // 탭 아래 전체 용어 설명
+    expect(screen.getByText("투자 지표·재무 지표 용어 설명", { exact: false })).toBeInTheDocument();
+  });
+
   it("shows valuation metrics with three years of financials, and investor flows, in their tabs", async () => {
     const user = userEvent.setup();
     render(<StockSimulator />);

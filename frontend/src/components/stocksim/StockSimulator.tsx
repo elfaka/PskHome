@@ -24,6 +24,7 @@ import { DEFAULT_WATCHLIST, useWatchlist } from "@/lib/stocksim/watchlist";
 import AnalysisPanel from "./AnalysisPanel";
 import ChartPanel from "./ChartPanel";
 import FinancialsPanel from "./FinancialsPanel";
+import { GlossaryList } from "./Glossary";
 import InvestorFlowPanel from "./InvestorFlowPanel";
 import MarketPanel from "./MarketPanel";
 import MarketStrip from "./MarketStrip";
@@ -297,6 +298,7 @@ export default function StockSimulator() {
             <Panel title="재무 지표 (최근 3년)">
               <FinancialsPanel overview={o} />
             </Panel>
+            <GlossaryList group="valuation" className="bg-surface" />
           </div>
         )}
 

@@ -1,10 +1,37 @@
+"use client";
+
+import { useState } from "react";
+
 import type { StockOverview } from "@/api/stockSim";
 import Skeleton from "@/components/ui/Skeleton";
 import { formatKrwCompact, formatNumber, formatPercent } from "@/lib/stocksim/format";
+import { glossaryTerm } from "@/lib/stocksim/glossary";
+
+import { InfoButton, TermExplain } from "./Glossary";
+
+/** 지표 한 줄 — 이름 옆 ⓘ 를 누르면 용어 설명이 아래에 펼쳐진다 */
+function MetricRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  const [open, setOpen] = useState(false);
+  const term = glossaryTerm(label);
+
+  return (
+    <div className="px-3 py-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <dt className="text-sm text-fg-muted">
+          {label}
+          {term && <InfoButton name={label} open={open} onToggle={() => setOpen((o) => !o)} />}
+          {hint && <span className="ml-1.5 text-[11px] text-fg-subtle">{hint}</span>}
+        </dt>
+        <dd className="text-sm font-semibold tabular-nums text-fg">{value}</dd>
+      </div>
+      {open && term && <TermExplain term={term} className="mt-1.5 rounded-control bg-surface-2 px-2.5 py-2" />}
+    </div>
+  );
+}
 
 /**
  * 투자 지표 — 시가총액·52주 범위(토스) + 재무 지표(OpenDART 사업보고서).
- * 재무 지표를 못 구하면 그 이유(키 미설정, ETF 등)를 보여준다.
+ * 재무 지표를 못 구하면 그 이유(키 미설정, ETF 등)를 보여준다. 지표 이름 옆 ⓘ 로 용어 설명을 펼친다.
  */
 export default function ValuationPanel({ overview }: { overview: StockOverview | null }) {
   if (!overview) return <Skeleton className="m-3 h-60" />;
@@ -66,13 +93,7 @@ export default function ValuationPanel({ overview }: { overview: StockOverview |
             <h3 className="border-b border-line px-3 py-2 text-sm font-semibold text-fg">{g.title}</h3>
             <dl className="divide-y divide-line">
               {g.items.map((i) => (
-                <div key={i.label} className="flex items-baseline justify-between gap-3 px-3 py-2">
-                  <dt className="text-sm text-fg-muted">
-                    {i.label}
-                    {i.hint && <span className="ml-1.5 text-[11px] text-fg-subtle">{i.hint}</span>}
-                  </dt>
-                  <dd className="text-sm font-semibold tabular-nums text-fg">{i.value}</dd>
-                </div>
+                <MetricRow key={i.label} label={i.label} value={i.value} hint={i.hint} />
               ))}
             </dl>
           </section>

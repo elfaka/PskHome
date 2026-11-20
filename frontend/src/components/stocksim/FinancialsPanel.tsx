@@ -1,7 +1,14 @@
+"use client";
+
+import { Fragment, useState } from "react";
+
 import type { FinancialYear, StockOverview } from "@/api/stockSim";
 import Skeleton from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 import { changeTone, formatKrwCompact, formatNumber, formatPercent, formatRate, TONE_TEXT } from "@/lib/stocksim/format";
+import { glossaryTerm } from "@/lib/stocksim/glossary";
+
+import { InfoButton, TermExplain } from "./Glossary";
 
 type Row = {
   label: string;
@@ -100,9 +107,11 @@ function TrendBars({ years }: { years: FinancialYear[] }) {
 
 /**
  * 재무 지표 — 최근 3개 사업연도 실적·재무상태·비율·주당 지표와 전년 대비 증감.
- * OpenDART 사업보고서의 당기·전기·전전기 값으로 만든다.
+ * OpenDART 사업보고서의 당기·전기·전전기 값으로 만든다. 항목 이름 옆 ⓘ 로 용어 설명을 펼친다.
  */
 export default function FinancialsPanel({ overview }: { overview: StockOverview | null }) {
+  const [openTerm, setOpenTerm] = useState<string | null>(null);
+
   if (!overview) return <Skeleton className="m-3 h-72" />;
 
   const v = overview.valuation;
@@ -139,26 +148,40 @@ export default function FinancialsPanel({ overview }: { overview: StockOverview 
                   {g.title}
                 </td>
               </tr>
-              {g.rows.map((r) => (
-                <tr key={r.label}>
-                  <th scope="row" className="px-3 py-1.5 text-left font-normal text-fg-muted">
-                    {r.label}
-                  </th>
-                  {years.map((y) => {
-                    const change = r.growth?.(y) ?? null;
-                    return (
-                      <td key={y.year} className="px-3 py-1.5 text-right text-fg">
-                        {r.value(y)}
-                        {change != null && (
-                          <span className={cn("block text-[11px]", TONE_TEXT[changeTone(change)])}>
-                            전년 대비 {formatRate(change)}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {g.rows.map((r) => {
+                const term = glossaryTerm(r.label);
+                const open = openTerm === r.label;
+                return (
+                  <Fragment key={r.label}>
+                    <tr>
+                      <th scope="row" className="px-3 py-1.5 text-left font-normal text-fg-muted">
+                        {r.label}
+                        {term && <InfoButton name={r.label} open={open} onToggle={() => setOpenTerm(open ? null : r.label)} />}
+                      </th>
+                      {years.map((y) => {
+                        const change = r.growth?.(y) ?? null;
+                        return (
+                          <td key={y.year} className="px-3 py-1.5 text-right text-fg">
+                            {r.value(y)}
+                            {change != null && (
+                              <span className={cn("block text-[11px]", TONE_TEXT[changeTone(change)])}>
+                                전년 대비 {formatRate(change)}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    {open && term && (
+                      <tr>
+                        <td colSpan={years.length + 1} className="px-3 pb-2">
+                          <TermExplain term={term} className="rounded-control bg-surface-2 px-2.5 py-2" />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           ))}
         </table>

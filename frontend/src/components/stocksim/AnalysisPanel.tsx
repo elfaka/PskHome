@@ -1,11 +1,15 @@
 "use client";
 
-import { getAnalysis, type AnalysisFactor, type FactorCategory, type Rating } from "@/api/stockSim";
+import { useState } from "react";
+
+import { getAnalysis, type Analysis, type AnalysisFactor, type FactorCategory, type Rating } from "@/api/stockSim";
 import Badge from "@/components/ui/Badge";
 import Skeleton from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 import { formatClock, formatNumber, formatRate } from "@/lib/stocksim/format";
 import { usePolling } from "@/lib/stocksim/usePolling";
+
+import { GlossaryList } from "./Glossary";
 
 const REFRESH_MS = 60_000;
 
@@ -73,12 +77,123 @@ function FactorBar({ factor }: { factor: AnalysisFactor }) {
   );
 }
 
+const signed = (n: number) => `${n > 0 ? "+" : ""}${n}`;
+
+/** 항목을 펼치면 보이는 상세 — 무엇인지, 계산에 쓴 값, 점수 기준표(받은 줄 강조), 주의점 */
+function FactorDetail({ factor }: { factor: AnalysisFactor }) {
+  return (
+    <div className="mt-2 space-y-3 rounded-control bg-surface-2 p-3 text-xs leading-5">
+      <section>
+        <h4 className="mb-0.5 font-semibold text-fg">무엇을 보나요</h4>
+        <p className="text-fg-muted">{factor.description}</p>
+      </section>
+
+      {factor.values.length > 0 && (
+        <section>
+          <h4 className="mb-1 font-semibold text-fg">계산에 쓴 값</h4>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-1">
+            {factor.values.map((v) => (
+              <div key={v.label} className="flex min-w-0 justify-between gap-2">
+                <dt className="truncate text-fg-subtle">{v.label}</dt>
+                <dd className="font-medium whitespace-nowrap tabular-nums text-fg">{v.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
+      {factor.rules.length > 0 && (
+        <section>
+          <h4 className="mb-1 font-semibold text-fg">점수 기준</h4>
+          <table aria-label={`${factor.label} 점수 기준`} className="w-full">
+            <tbody>
+              {factor.rules.map((r) => (
+                <tr
+                  key={r.condition}
+                  aria-current={r.matched ? "true" : undefined}
+                  className={cn(r.matched ? "bg-accent-soft font-semibold text-accent-soft-fg" : "text-fg-muted")}
+                >
+                  <td className="rounded-l-control px-2 py-0.5">
+                    {r.condition}
+                    {r.matched && <span className="ml-1.5 text-[10px]">← 현재</span>}
+                  </td>
+                  <td className="rounded-r-control px-2 py-0.5 text-right tabular-nums">{signed(r.points)}점</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {factor.signal === "unavailable" && <p className="mt-1 text-fg-subtle">데이터가 없어 0점으로 계산했습니다.</p>}
+        </section>
+      )}
+
+      {factor.caution && (
+        <p className="rounded-control border border-warning/40 px-2 py-1.5 text-warning-soft-fg">
+          <span className="font-semibold">주의</span> {factor.caution}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** 종합 점수를 어떻게 계산하는지 — 항목 점수 합 → 구간별 등급 */
+function ScoreMethod({ analysis }: { analysis: Analysis }) {
+  const scored = analysis.factors.filter((f) => f.maxScore > 0);
+  const maxTotal = scored.reduce((s, f) => s + f.maxScore, 0);
+
+  return (
+    <details className="group rounded-card border border-line">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-fg">
+        점수는 이렇게 계산합니다
+        <span aria-hidden className="text-xs text-fg-subtle transition group-open:rotate-180">
+          ▼
+        </span>
+      </summary>
+      <div className="space-y-3 border-t border-line px-3 py-3 text-xs leading-5 text-fg-muted">
+        <p>
+          추세·모멘텀·가격 위치·수급·가치 5개 분류의 {scored.length}개 항목마다 점수 기준표에 따라 매수 쪽(+) 또는 매도 쪽(-) 점수를 주고
+          모두 더합니다 (항목 최대 점수 합 ±{maxTotal}). 데이터가 없는 항목은 0점입니다. 합계는 -100~+100 으로 자른 뒤 아래 구간으로 등급을
+          정합니다. 각 항목을 누르면 계산에 쓴 값과 기준표를 볼 수 있습니다.
+        </p>
+        <table aria-label="등급 구간" className="w-full max-w-sm">
+          <tbody>
+            {analysis.ratingScale.map((band) => (
+              <tr
+                key={band.rating}
+                aria-current={band.rating === analysis.rating ? "true" : undefined}
+                className={cn(band.rating === analysis.rating && "bg-accent-soft font-semibold text-accent-soft-fg")}
+              >
+                <td className="rounded-l-control px-2 py-0.5">
+                  <span className={cn("inline-block rounded-full px-2 text-[11px]", RATING_CLASS[band.rating])}>{band.label}</span>
+                </td>
+                <td className="px-2 py-0.5 tabular-nums">{band.range}</td>
+                <td className="rounded-r-control px-2 py-0.5 text-right">
+                  {band.rating === analysis.rating ? `현재 ${signed(analysis.score)}점` : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
 /**
  * 매수·매도 추천 — 종합 점수와 등급, 항목별 점수와 사유.
+ * 항목을 누르면 무엇을 보는 지표인지·계산에 쓴 값·점수 기준표·주의점이 펼쳐진다.
  * 규칙 기반 교육용 신호라는 안내를 항상 함께 보여준다.
  */
 export default function AnalysisPanel({ symbol }: { symbol: string }) {
   const { data: a, error } = usePolling(symbol, () => getAnalysis(symbol), REFRESH_MS, "분석을 불러오지 못했습니다.");
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
+
+  const toggle = (key: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
 
   if (error && !a) {
     return (
@@ -89,6 +204,7 @@ export default function AnalysisPanel({ symbol }: { symbol: string }) {
   }
   if (!a) return <Skeleton className="m-3 h-80" />;
 
+  const allOpen = a.factors.length > 0 && a.factors.every((f) => open.has(f.key));
   const ind = a.indicators;
   const snapshot: { label: string; value: string }[] = [
     { label: "RSI(14)", value: ind.rsi14 == null ? "-" : ind.rsi14.toFixed(1) },
@@ -135,7 +251,20 @@ export default function AnalysisPanel({ symbol }: { symbol: string }) {
         ))}
       </dl>
 
-      <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+      <ScoreMethod analysis={a} />
+
+      <div className="flex items-center justify-between gap-2 text-xs text-fg-subtle">
+        <span>항목을 누르면 계산 근거와 점수 기준을 볼 수 있습니다.</span>
+        <button
+          type="button"
+          onClick={() => setOpen(allOpen ? new Set() : new Set(a.factors.map((f) => f.key)))}
+          className="shrink-0 rounded-control px-2 py-1 font-medium text-fg-muted transition hover:bg-surface-hover hover:text-fg"
+        >
+          {allOpen ? "모두 접기" : "모두 펼치기"}
+        </button>
+      </div>
+
+      <div className="grid items-start gap-3 md:grid-cols-2 2xl:grid-cols-3">
         {CATEGORIES.map((cat) => {
           const factors = a.factors.filter((f) => f.category === cat);
           if (factors.length === 0) return null;
@@ -155,23 +284,43 @@ export default function AnalysisPanel({ symbol }: { symbol: string }) {
                 </span>
               </h3>
               <ul className="divide-y divide-line">
-                {factors.map((f) => (
-                  <li key={f.key} className="space-y-1 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-fg">{f.label}</span>
-                      <ScorePill factor={f} />
-                    </div>
-                    <FactorBar factor={f} />
-                    <p className={cn("text-xs leading-5", f.signal === "unavailable" ? "text-fg-subtle" : "text-fg-muted")}>
-                      {f.reason}
-                    </p>
-                  </li>
-                ))}
+                {factors.map((f) => {
+                  const expanded = open.has(f.key);
+                  return (
+                    <li key={f.key} className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => toggle(f.key)}
+                        aria-expanded={expanded}
+                        className="block w-full space-y-1 text-left"
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="flex items-center gap-1.5 text-sm font-medium text-fg">
+                            <span aria-hidden className={cn("text-[10px] text-fg-subtle transition", expanded && "rotate-90")}>
+                              ▶
+                            </span>
+                            {f.label}
+                          </span>
+                          <ScorePill factor={f} />
+                        </span>
+                        <FactorBar factor={f} />
+                        <span
+                          className={cn("block text-xs leading-5", f.signal === "unavailable" ? "text-fg-subtle" : "text-fg-muted")}
+                        >
+                          {f.reason}
+                        </span>
+                      </button>
+                      {expanded && <FactorDetail factor={f} />}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           );
         })}
       </div>
+
+      <GlossaryList group="signal" />
 
       <p className="rounded-control bg-warning-soft px-3 py-2 text-xs leading-5 text-warning-soft-fg">
         {a.disclaimer} · {formatClock(a.asOf)} 기준, 1분마다 다시 계산합니다.
