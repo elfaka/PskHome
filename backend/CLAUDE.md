@@ -133,12 +133,14 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | `indicators.ts` | 이동평균·EMA·RSI·MACD·볼린저·최대낙폭·봉 묶기(5/15분, 주, 월) — 순수 함수 |
 | `valuation.ts` | DART 값 + 발행주식수 + 현재가 → EPS·BPS·PER·PBR·ROE·배당수익률 |
 | `overview.service.ts` | 종목 헤더용 개요 (부분 실패해도 나머지는 보여준다) |
-| `analysis.service.ts` | 규칙 기반 매수·매도 점수표. 항목마다 점수·사유, 합계로 5단계 등급 |
+| `analysis.service.ts` | 규칙 기반 매수·매도 점수표. 항목마다 점수·사유·계산값, 합계로 5단계 등급 |
+| `analysis.guide.ts` | 매매 신호 항목별 설명·점수 기준표·주의점 (화면 상세 설명용) |
 | `market.service.ts` | 코스피·코스닥 지수(토스 시장 지표 API), 시장 투자자별 매매대금, 자체 계산 공포·탐욕 지수 |
 | `stockSim.service.ts` | 가상 매매 규칙 (시장가, 체결가=서버가 조회한 현재가) |
 
 - 추천은 교육용 신호다. 응답의 `disclaimer` 를 화면에 항상 보여준다.
-- 지표·점수 규칙을 바꾸면 `analysis.service.ts` 상단 표와 `analysis.service.test.ts` 를 함께 고친다.
+- 지표·점수 규칙을 바꾸면 `analysis.service.ts` 상단 표, 항목 설명·점수 기준표(`analysis.guide.ts`), `analysis.service.test.ts` 를 함께 고친다.
+  테스트가 "기준표에서 matched 인 줄의 점수 = 실제 점수"를 검사하므로 기준표만 어긋나도 실패한다.
 - 재무 지표는 실패해도 예외를 던지지 않고 `valuationNote` 에 이유를 남긴다 (키 미설정, ETF 등).
 - 공포·탐욕 지수는 공식 지수가 아니다. 항목·구간을 바꾸면 `market.service.ts` 상단 표와 `market.service.test.ts` 를 함께 고친다.
   계산하지 못하면 `fearGreed: null` + `fearGreedNote` 로 이유를 주고 지수는 그대로 보여준다.

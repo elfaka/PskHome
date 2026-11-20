@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
-import { buildAnalysis, ratingOf, type AnalysisInput } from "./analysis.service.js";
+import { FACTOR_GUIDE } from "./analysis.guide.js";
+import { buildAnalysis, RATING_SCALE, ratingOf, type AnalysisInput } from "./analysis.service.js";
 import type { CandlePoint, InvestorFlowDay, Valuation } from "./stockSim.types.js";
 
 const NOW = new Date("2026-10-30T06:30:00.000Z");
@@ -47,6 +48,7 @@ const valuation = (overrides: Partial<Valuation> = {}): Valuation => ({
   debtRatio: 0.4,
   dividendPerShare: 100,
   dividendYield: 0.01,
+  history: [],
   ...overrides,
 });
 
@@ -74,6 +76,76 @@ describe("ratingOf", () => {
     expect(ratingOf(-11)).toBe("NEUTRAL");
     expect(ratingOf(-12)).toBe("SELL");
     expect(ratingOf(-35)).toBe("STRONG_SELL");
+  });
+});
+
+describe("RATING_SCALE", () => {
+  it("matches ratingOf at every band edge", () => {
+    for (const band of RATING_SCALE) {
+      expect(ratingOf(band.min)).toBe(band.rating);
+    }
+    // 각 구간 최저점 바로 아래는 한 단계 낮은 등급
+    for (const [i, band] of RATING_SCALE.slice(0, -1).entries()) {
+      expect(ratingOf(band.min - 1)).toBe(RATING_SCALE[i + 1].rating);
+    }
+  });
+});
+
+describe("factor explanations", () => {
+  /** 오르다 내리는 흐름 — 여러 항목이 서로 다른 점수를 받도록 */
+  const closes = [...Array.from({ length: 200 }, (_, i) => 1000 + i * 3), ...Array.from({ length: 60 }, (_, i) => 1600 - i * 6)];
+  const cases: [string, Partial<AnalysisInput>][] = [
+    ["no flows or valuation", {}],
+    ["buying with cheap valuation", { flows: flows(800, 30, 0.01), valuation: valuation({ per: 6, pbr: 0.6, roe: 0.2 }) }],
+    ["selling with expensive valuation", { flows: flows(-800, -30, 0.12), valuation: valuation({ per: 40, pbr: 5, roe: -0.1 }) }],
+  ];
+
+  it.each(cases)("marks exactly the score row as matched (%s)", (_, extra) => {
+    const a = analyze(closes, extra);
+
+    for (const f of a.factors) {
+      expect(f.description, f.key).not.toBe("");
+      const matched = f.rules.filter((r) => r.matched);
+      if (f.signal === "unavailable" || f.signal === "info") {
+        expect(matched, f.key).toHaveLength(0);
+      } else {
+        expect(matched, f.key).toHaveLength(1);
+        expect(matched[0].points, f.key).toBe(f.score);
+        expect(f.values.length, f.key).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("keeps every rule table within the factor max score", () => {
+    const a = analyze(closes, { flows: flows(100, 100), valuation: valuation() });
+    for (const f of a.factors) {
+      for (const r of f.rules) expect(Math.abs(r.points), f.key).toBeLessThanOrEqual(f.maxScore);
+      expect(FACTOR_GUIDE[f.key], f.key).toBeDefined();
+    }
+  });
+
+  it("tells a loss-making PER apart from a very high PER (both -8)", () => {
+    const loss = factorOf(analyze(closes, { valuation: valuation({ eps: -500, per: null }) }), "per");
+    expect(loss.rules.find((r) => r.matched)?.condition).toContain("적자");
+
+    const high = factorOf(analyze(closes, { valuation: valuation({ per: 40 }) }), "per");
+    expect(high.rules.find((r) => r.matched)?.condition).toBe("35배 이상");
+  });
+
+  it("lists the values the score was computed from", () => {
+    const a = analyze(closes, { flows: flows(800, 30, 0.01), valuation: valuation({ per: 6 }) });
+
+    expect(factorOf(a, "rsi").values.map((v) => v.label)).toEqual(["RSI(14)"]);
+    expect(factorOf(a, "bollinger").values.map((v) => v.label)).toContain("%B");
+    expect(factorOf(a, "per").values).toContainEqual({ label: "PER", value: "6.0배" });
+    expect(factorOf(a, "foreigner").values[0].value).toBe("+16,000주");
+    expect(a.ratingScale).toBe(RATING_SCALE);
+  });
+
+  it("shows no values for factors without data", () => {
+    const a = analyze(closes);
+    expect(factorOf(a, "per").values).toEqual([]);
+    expect(factorOf(a, "per").rules.length).toBeGreaterThan(0);
   });
 });
 

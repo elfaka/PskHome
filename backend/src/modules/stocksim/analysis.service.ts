@@ -1,3 +1,4 @@
+import { FACTOR_GUIDE } from "./analysis.guide.js";
 import { bollinger, last, macd, maxDrawdown, rsi, sma } from "./indicators.js";
 import * as marketData from "./marketData.service.js";
 import { range52w, sessionBars } from "./overview.service.js";
@@ -7,6 +8,7 @@ import type {
   CandlePoint,
   InvestorFlowDay,
   Rating,
+  RatingBand,
   Valuation,
 } from "./stockSim.types.js";
 import { getValuation } from "./valuation.js";
@@ -26,6 +28,9 @@ import { getValuation } from "./valuation.js";
  * | 가치 | PER(8), PBR(6), ROE(6) |
  *
  * 합계를 -100~100 으로 자르고 5단계로 나눈다. 데이터가 없는 항목은 0점으로 두고 "데이터 없음"을 적는다.
+ *
+ * 항목마다 화면 설명용으로 무엇인지(description)·계산에 쓴 값(values)·점수 기준표(rules)·주의점(caution)을 붙인다.
+ * 설명과 기준표 문구는 analysis.guide.ts 에 있다.
  */
 
 export const DISCLAIMER =
@@ -39,6 +44,15 @@ const RATING_LABEL: Record<Rating, string> = {
   STRONG_SELL: "강력 매도",
 };
 
+/** 등급 구간표 (화면 설명용). ratingOf 와 같은 기준이다 — 점수는 정수라 -11 이상 = -12 초과. */
+export const RATING_SCALE: RatingBand[] = [
+  { rating: "STRONG_BUY", label: RATING_LABEL.STRONG_BUY, min: 35, range: "+35 이상" },
+  { rating: "BUY", label: RATING_LABEL.BUY, min: 12, range: "+12 ~ +34" },
+  { rating: "NEUTRAL", label: RATING_LABEL.NEUTRAL, min: -11, range: "-11 ~ +11" },
+  { rating: "SELL", label: RATING_LABEL.SELL, min: -34, range: "-34 ~ -12" },
+  { rating: "STRONG_SELL", label: RATING_LABEL.STRONG_SELL, min: -100, range: "-35 이하" },
+];
+
 export function ratingOf(score: number): Rating {
   if (score >= 35) return "STRONG_BUY";
   if (score >= 12) return "BUY";
@@ -50,6 +64,39 @@ export function ratingOf(score: number): Rating {
 const won = (v: number) => `${Math.round(v).toLocaleString("ko-KR")}원`;
 const pct = (v: number, digits = 1) => `${(v * 100).toFixed(digits)}%`;
 const shares = (v: number) => `${Math.round(v).toLocaleString("ko-KR")}주`;
+const signedPct = (v: number, digits = 1) => `${v >= 0 ? "+" : ""}${pct(v, digits)}`;
+const decimal = (v: number, digits = 1) => v.toLocaleString("ko-KR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+/** 조·억 단위 금액 */
+function bigWon(v: number | null): string {
+  if (v == null) return "-";
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(1)}조원`;
+  return `${sign}${Math.round(abs / 1e8).toLocaleString("ko-KR")}억원`;
+}
+
+type FactorValue = AnalysisFactor["values"][number];
+/** 설명을 붙이기 전의 항목 */
+type RawFactor = Omit<AnalysisFactor, "description" | "values" | "rules" | "caution">;
+const kv = (label: string, value: string): FactorValue => ({ label, value });
+
+/**
+ * 항목에 설명·값·기준표를 붙인다. 기준표에서 점수와 같은 줄을 matched 로 표시하고,
+ * 같은 점수가 두 줄이면(PER 적자 / 35배 이상) ruleId 로 고른다. 데이터 없음·참고 항목은 어느 줄도 아니다.
+ */
+function withGuide(f: RawFactor, values: FactorValue[], ruleId?: string): AnalysisFactor {
+  const guide = FACTOR_GUIDE[f.key];
+  const scored = f.signal !== "unavailable" && f.signal !== "info";
+  const hit = scored ? guide?.rules.find((r) => r.points === f.score && (ruleId == null || r.id === ruleId)) : undefined;
+
+  return {
+    ...f,
+    description: guide?.description ?? "",
+    values: f.signal === "unavailable" ? [] : values,
+    rules: (guide?.rules ?? []).map((r) => ({ condition: r.condition, points: r.points, matched: r === hit })),
+    caution: guide?.caution ?? null,
+  };
+}
 
 function factor(
   key: string,
@@ -58,7 +105,7 @@ function factor(
   maxScore: number,
   score: number,
   reason: string
-): AnalysisFactor {
+): RawFactor {
   return {
     key,
     category,
@@ -76,7 +123,7 @@ function unavailable(
   label: string,
   maxScore: number,
   reason: string
-): AnalysisFactor {
+): RawFactor {
   return { key, category, label, score: 0, maxScore, signal: "unavailable", reason };
 }
 
@@ -126,11 +173,21 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
   const return1y = yearCandles.length > 1 ? price / yearCandles[0].close - 1 : null;
   const mdd = yearCloses.length > 1 ? maxDrawdown(yearCloses) : null;
 
-  const factors: AnalysisFactor[] = [];
+  const factors: RawFactor[] = [];
+  /** 항목별 계산에 쓴 값 (화면 설명용) */
+  const shown: Record<string, FactorValue[]> = {};
+  let perRule: string | undefined;
 
   // --- 추세 -----------------------------------------------------------------
   if (ma5 != null && ma20 != null && ma60 != null && ma120 != null) {
     const values = `5일 ${won(ma5)} · 20일 ${won(ma20)} · 60일 ${won(ma60)} · 120일 ${won(ma120)}`;
+    shown["ma-alignment"] = [
+      kv("현재가", won(price)),
+      kv("5일 이동평균", won(ma5)),
+      kv("20일 이동평균", won(ma20)),
+      kv("60일 이동평균", won(ma60)),
+      kv("120일 이동평균", won(ma120)),
+    ];
     if (ma5 > ma20 && ma20 > ma60 && ma60 > ma120) {
       factors.push(factor("ma-alignment", "trend", "이동평균 배열", 10, 10, `정배열(단기>장기)로 상승 추세가 이어지고 있습니다. ${values}`));
     } else if (ma5 < ma20 && ma20 < ma60 && ma60 < ma120) {
@@ -144,6 +201,7 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
 
   if (ma120 != null) {
     const gap = price / ma120 - 1;
+    shown.ma120 = [kv("현재가", won(price)), kv("120일 이동평균", won(ma120)), kv("괴리율", signedPct(gap))];
     factors.push(
       gap >= 0
         ? factor("ma120", "trend", "120일선 대비", 8, 8, `현재가가 120일 이동평균(${won(ma120)})보다 ${pct(gap)} 위에 있어 장기 추세가 살아 있습니다.`)
@@ -171,6 +229,15 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
       }
     }
 
+    if (ma60 != null) {
+      const when = daysAgo === 0 ? "오늘" : `${daysAgo}거래일 전`;
+      shown["ma-cross"] = [
+        kv("20일 이동평균", ma20 == null ? "-" : won(ma20)),
+        kv("60일 이동평균", won(ma60)),
+        kv("최근 10거래일 교차", cross === "golden" ? `골든크로스 (${when})` : cross === "dead" ? `데드크로스 (${when})` : "없음"),
+      ];
+    }
+
     if (ma60 == null) {
       factors.push(unavailable("ma-cross", "trend", "20·60일선 교차", 10, "60거래일 이상의 데이터가 없습니다."));
     } else if (cross === "golden") {
@@ -185,6 +252,7 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
   // --- 모멘텀 ---------------------------------------------------------------
   if (rsi14 != null) {
     const r = rsi14.toFixed(1);
+    shown.rsi = [kv("RSI(14)", r)];
     let score = 0;
     let reason = `RSI ${r} 로 중립 구간(45~55)입니다.`;
     if (rsi14 < 30) [score, reason] = [15, `RSI ${r} 로 과매도 구간(30 미만)입니다. 단기 반등 가능성이 있습니다.`];
@@ -198,6 +266,11 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
 
   if (macdNow?.histogram != null) {
     const hist = macdNow.histogram;
+    shown.macd = [
+      kv("MACD", macdNow.macd == null ? "-" : decimal(macdNow.macd)),
+      kv("시그널", macdNow.signal == null ? "-" : decimal(macdNow.signal)),
+      kv("MACD - 시그널", decimal(hist)),
+    ];
     let score = hist > 0 ? 8 : hist < 0 ? -8 : 0;
     let reason =
       hist > 0
@@ -230,6 +303,13 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
   // --- 위치 -----------------------------------------------------------------
   if (bandNow.upper != null && bandNow.lower != null && bandNow.upper > bandNow.lower) {
     const pb = (price - bandNow.lower) / (bandNow.upper - bandNow.lower);
+    shown.bollinger = [
+      kv("상단", won(bandNow.upper)),
+      kv("중심선 (20일 평균)", bandNow.middle == null ? "-" : won(bandNow.middle)),
+      kv("하단", won(bandNow.lower)),
+      kv("현재가", won(price)),
+      kv("%B", pb.toFixed(2)),
+    ];
     const range = `하단 ${won(bandNow.lower)} ~ 상단 ${won(bandNow.upper)}`;
     let score = 0;
     let reason = `볼린저밴드 중간 영역에 있습니다 (${range}).`;
@@ -244,6 +324,12 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
 
   if (high52w != null && low52w != null && high52w > low52w) {
     const pos = (price - low52w) / (high52w - low52w);
+    shown.range52w = [
+      kv("52주 최고", won(high52w)),
+      kv("52주 최저", won(low52w)),
+      kv("현재가", won(price)),
+      kv("범위 안 위치", pct(pos, 0)),
+    ];
     const range = `최저 ${won(low52w)} ~ 최고 ${won(high52w)}`;
     let score = 0;
     let reason = `52주 범위의 ${pct(pos, 0)} 지점입니다 (${range}).`;
@@ -255,6 +341,7 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
   }
 
   if (return1y != null && mdd != null) {
+    shown.return1y = [kv("1년 수익률", signedPct(return1y)), kv("최대낙폭 (1년)", pct(mdd))];
     factors.push({
       key: "return1y",
       category: "position",
@@ -281,6 +368,11 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
     const net = input.flows.reduce((s, d) => s + pick(d), 0);
     const days = net / avgVolume;
     const who = label.replace(" 수급", "");
+    shown[key] = [
+      kv(`${who} 순매수 합계 (${input.flows.length}거래일)`, `${net > 0 ? "+" : ""}${shares(net)}`),
+      kv("하루 평균 거래량 (20일)", shares(avgVolume)),
+      kv("평균 거래량 대비", `${days > 0 ? "+" : ""}${days.toFixed(2)}배`),
+    ];
     const base = `최근 ${input.flows.length}거래일 ${who} 순${net >= 0 ? "매수" : "매도"} ${shares(Math.abs(net))} (하루 평균 거래량의 ${Math.abs(days).toFixed(2)}배)`;
     let score = 0;
     if (days > 0.5) score = 8;
@@ -296,6 +388,10 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
       factors.push(unavailable("short", "flow", "공매도 비중", 6, "공매도 데이터가 없습니다."));
     } else {
       const avg = rates.reduce((a, b) => a + b, 0) / rates.length;
+      shown.short = [
+        kv(`평균 공매도 비중 (${rates.length}거래일)`, pct(avg, 2)),
+        kv("가장 높았던 날", pct(Math.max(...rates), 2)),
+      ];
       let score = 0;
       let reason = `최근 ${rates.length}거래일 평균 공매도 비중 ${pct(avg, 2)} 로 보통 수준입니다.`;
       if (avg > 0.1) [score, reason] = [-6, `최근 ${rates.length}거래일 평균 공매도 비중이 ${pct(avg, 2)} 로 높아 하락 압력이 큽니다.`];
@@ -310,9 +406,12 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
   const noValuation = input.valuationNote ?? "재무 지표가 없습니다.";
 
   if (v?.eps != null && v.eps <= 0) {
+    perRule = "loss";
+    shown.per = [kv("EPS (주당순이익)", won(v.eps)), kv("현재가", won(price)), kv("기준", v.basis)];
     factors.push(factor("per", "valuation", "PER", 8, -8, `주당순이익이 ${won(v.eps)} 로 적자라 PER 을 계산할 수 없습니다 (${v.basis}).`));
   } else if (v?.per != null) {
     const per = v.per.toFixed(1);
+    shown.per = [kv("PER", `${per}배`), kv("현재가", won(price)), kv("EPS (주당순이익)", won(v.eps ?? 0)), kv("기준", v.basis)];
     let score = 0;
     let reason = `PER ${per}배로 보통 수준입니다 (EPS ${won(v.eps ?? 0)}, ${v.basis}).`;
     if (v.per < 8) [score, reason] = [8, `PER ${per}배로 이익 대비 주가가 낮습니다 (EPS ${won(v.eps ?? 0)}, ${v.basis}).`];
@@ -326,6 +425,7 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
 
   if (v?.pbr != null) {
     const pbr = v.pbr.toFixed(2);
+    shown.pbr = [kv("PBR", `${pbr}배`), kv("현재가", won(price)), kv("BPS (주당순자산)", won(v.bps ?? 0)), kv("기준", v.basis)];
     let score = 0;
     let reason = `PBR ${pbr}배로 보통 수준입니다 (BPS ${won(v.bps ?? 0)}).`;
     if (v.pbr < 0.7) [score, reason] = [6, `PBR ${pbr}배로 순자산보다 크게 싸게 거래됩니다 (BPS ${won(v.bps ?? 0)}).`];
@@ -339,6 +439,7 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
 
   if (v?.roe != null) {
     const roe = pct(v.roe);
+    shown.roe = [kv("ROE", roe), kv("당기순이익", bigWon(v.netIncome)), kv("자본총계", bigWon(v.totalEquity)), kv("기준", v.basis)];
     let score = 0;
     let reason = `ROE ${roe} 로 수익성이 보통입니다.`;
     if (v.roe >= 0.15) [score, reason] = [6, `ROE ${roe} 로 자본 대비 수익성이 높습니다.`];
@@ -350,12 +451,13 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
   }
 
   // --- 종합 -----------------------------------------------------------------
-  const raw = factors.reduce((s, f) => s + f.score, 0);
+  const detailed = factors.map((f) => withGuide(f, shown[f.key] ?? [], f.key === "per" ? perRule : undefined));
+  const raw = detailed.reduce((s, f) => s + f.score, 0);
   const score = Math.max(-100, Math.min(100, raw));
   const rating = ratingOf(score);
 
   const strongest = (sign: 1 | -1) =>
-    factors
+    detailed
       .filter((f) => Math.sign(f.score) === sign)
       .sort((a, b) => Math.abs(b.score) - Math.abs(a.score))
       .slice(0, 2)
@@ -379,7 +481,8 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
     rating,
     ratingLabel: RATING_LABEL[rating],
     summary,
-    factors,
+    factors: detailed,
+    ratingScale: RATING_SCALE,
     indicators: {
       ma5,
       ma20,

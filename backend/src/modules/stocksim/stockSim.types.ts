@@ -268,6 +268,24 @@ export interface AnalysisFactor {
   /** unavailable = 데이터가 없어 0점 처리 / info = 참고용(점수 없음) */
   signal: "positive" | "negative" | "neutral" | "unavailable" | "info";
   reason: string;
+  /** 이 지표가 무엇인지 (항목마다 고정) */
+  description: string;
+  /** 계산에 쓴 실제 값 */
+  values: { label: string; value: string }[];
+  /** 점수 기준표. 점수를 받은 줄이 matched (데이터 없음·참고 항목은 없음) */
+  rules: { condition: string; points: number; matched: boolean }[];
+  /** 해석할 때 주의점 */
+  caution: string | null;
+}
+
+/** 종합 점수 → 등급 구간 */
+export interface RatingBand {
+  rating: Rating;
+  label: string;
+  /** 이 등급의 최저 점수 (이 값 이상) */
+  min: number;
+  /** 예: "+12 ~ +34" */
+  range: string;
 }
 
 export interface Analysis {
@@ -281,6 +299,8 @@ export interface Analysis {
   ratingLabel: string;
   summary: string;
   factors: AnalysisFactor[];
+  /** 등급 구간 (높은 등급부터) */
+  ratingScale: RatingBand[];
   indicators: {
     ma5: number | null;
     ma20: number | null;
