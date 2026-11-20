@@ -124,7 +124,14 @@ describe("StockSimulator", () => {
 
     await user.click(await screen.findByRole("button", { name: "모두 펼치기" }));
 
-    expect(screen.getAllByRole("table", { name: /점수 기준$/ })).toHaveLength(4);
+    expect(screen.getAllByRole("table", { name: /점수 기준$/ })).toHaveLength(5);
+    // 새 분류(성장)도 보이고, 같은 점수가 두 줄이면 받은 줄만 강조한다
+    const growth = screen.getByRole("region", { name: "성장 분석" });
+    const current = within(within(growth).getByRole("table", { name: "영업이익 성장 점수 기준" }))
+      .getAllByRole("row")
+      .filter((r) => r.getAttribute("aria-current") === "true");
+    expect(current).toHaveLength(1);
+    expect(current[0]).toHaveTextContent("흑자 전환");
     expect(screen.getByText("데이터가 없어 0점으로 계산했습니다.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "모두 접기" })).toBeInTheDocument();
   });

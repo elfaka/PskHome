@@ -153,7 +153,7 @@ export type StockOverview = {
 
 export type Rating = "STRONG_BUY" | "BUY" | "NEUTRAL" | "SELL" | "STRONG_SELL";
 
-export type FactorCategory = "trend" | "momentum" | "position" | "flow" | "valuation";
+export type FactorCategory = "trend" | "momentum" | "position" | "flow" | "valuation" | "quality" | "growth";
 
 export type AnalysisFactor = {
   key: string;

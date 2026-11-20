@@ -28,9 +28,11 @@ const CATEGORY_LABEL: Record<FactorCategory, string> = {
   position: "가격 위치",
   flow: "수급",
   valuation: "가치",
+  quality: "퀄리티",
+  growth: "성장",
 };
 
-const CATEGORIES: FactorCategory[] = ["trend", "momentum", "position", "flow", "valuation"];
+const CATEGORIES: FactorCategory[] = ["trend", "momentum", "position", "flow", "valuation", "quality", "growth"];
 
 /** -100 ~ 100 점수 게이지. 왼쪽 파랑(매도) ~ 오른쪽 빨강(매수). */
 function ScoreGauge({ score }: { score: number }) {
@@ -150,7 +152,7 @@ function ScoreMethod({ analysis }: { analysis: Analysis }) {
       </summary>
       <div className="space-y-3 border-t border-line px-3 py-3 text-xs leading-5 text-fg-muted">
         <p>
-          추세·모멘텀·가격 위치·수급·가치 5개 분류의 {scored.length}개 항목마다 점수 기준표에 따라 매수 쪽(+) 또는 매도 쪽(-) 점수를 주고
+          {CATEGORIES.map((c) => CATEGORY_LABEL[c]).join("·")} {CATEGORIES.length}개 분류의 {scored.length}개 항목마다 점수 기준표에 따라 매수 쪽(+) 또는 매도 쪽(-) 점수를 주고
           모두 더합니다 (항목 최대 점수 합 ±{maxTotal}). 데이터가 없는 항목은 0점입니다. 합계는 -100~+100 으로 자른 뒤 아래 구간으로 등급을
           정합니다. 각 항목을 누르면 계산에 쓴 값과 기준표를 볼 수 있습니다.
         </p>

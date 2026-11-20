@@ -426,6 +426,22 @@ export const handlers = [
           rules: [{ condition: "평균 2% 미만 (낮음)", points: 2, matched: false }],
           caution: null,
         },
+        {
+          key: "op-growth",
+          category: "growth",
+          label: "영업이익 성장",
+          score: 8,
+          maxScore: 8,
+          signal: "positive",
+          reason: "영업이익이 6,567억원에서 3.3조원으로 흑자 전환했습니다.",
+          description: "최근 사업연도 영업이익이 전년보다 얼마나 늘었는지입니다.",
+          values: [{ label: "전년 대비", value: "+398.3%" }],
+          rules: [
+            { condition: "+30% 이상", points: 8, matched: false },
+            { condition: "흑자 전환 (전년 적자 → 올해 흑자)", points: 8, matched: true },
+          ],
+          caution: "업황을 크게 타는 업종은 이익이 가장 많이 늘었을 때가 고점인 경우가 많습니다.",
+        },
       ],
       ratingScale: [
         { rating: "STRONG_BUY", label: "강력 매수", min: 35, range: "+35 이상" },
