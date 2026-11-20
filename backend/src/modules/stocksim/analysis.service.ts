@@ -22,10 +22,12 @@ import { getValuation } from "./valuation.js";
  * | 분류 | 항목 (최대 점수) |
  * |---|---|
  * | 추세 | 이동평균 배열(10), 120일선 대비(8), 20·60일선 교차(10) |
- * | 모멘텀 | RSI(15), MACD(12) |
- * | 위치 | 볼린저밴드(10), 52주 범위(6), 1년 수익률·최대낙폭(참고) |
+ * | 모멘텀 | RSI(15), MACD(12), 12개월 수익률·12-1(8) |
+ * | 위치 | 볼린저밴드(10), 52주 범위(6, 고가 근처가 +), 1년 수익률·최대낙폭(참고) |
  * | 수급 | 외국인(8), 기관(8), 공매도 비중(6) |
- * | 가치 | PER(8), PBR(6), ROE(6) |
+ * | 가치 | PER(8), PBR(6) — 영업이익이 전년보다 10% 넘게 줄면 가점 없음(가치 함정 보정) |
+ * | 퀄리티 | ROE(6), 영업이익률(4), 부채비율(3) |
+ * | 성장 | 매출 성장(6), 영업이익 성장(8) — 최근 사업연도 전년 대비 |
  *
  * 합계를 -100~100 으로 자르고 5단계로 나눈다. 데이터가 없는 항목은 0점으로 두고 "데이터 없음"을 적는다.
  *
@@ -176,7 +178,8 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
   const factors: RawFactor[] = [];
   /** 항목별 계산에 쓴 값 (화면 설명용) */
   const shown: Record<string, FactorValue[]> = {};
-  let perRule: string | undefined;
+  /** 같은 점수가 두 줄인 기준표에서 받은 줄 (항목 key → 기준표 id) */
+  const ruleIds: Record<string, string> = {};
 
   // --- 추세 -----------------------------------------------------------------
   if (ma5 != null && ma20 != null && ma60 != null && ma120 != null) {
@@ -300,6 +303,23 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
     factors.push(unavailable("macd", "momentum", "MACD(12,26,9)", 12, "35거래일 이상의 데이터가 없습니다."));
   }
 
+  // 12-1 모멘텀: 252거래일(약 1년) 전 → 21거래일(약 1개월) 전 수익률. 최근 1개월의 단기 되돌림은 뺀다.
+  if (closes.length > 252) {
+    const from = closes[closes.length - 1 - 252];
+    const to = closes[closes.length - 1 - 21];
+    const ret = to / from - 1;
+    shown.momentum12 = [kv("약 12개월 전 종가", won(from)), kv("약 1개월 전 종가", won(to)), kv("12-1 수익률", signedPct(ret))];
+    let score = 0;
+    let reason = `최근 1개월을 뺀 12개월 수익률이 ${signedPct(ret)} 로 뚜렷한 방향이 없습니다.`;
+    if (ret >= 0.3) [score, reason] = [8, `최근 1개월을 뺀 12개월 수익률이 ${signedPct(ret)} 로 중기 상승 모멘텀이 강합니다.`];
+    else if (ret >= 0.1) [score, reason] = [4, `최근 1개월을 뺀 12개월 수익률이 ${signedPct(ret)} 로 중기 흐름이 상승 쪽입니다.`];
+    else if (ret <= -0.3) [score, reason] = [-8, `최근 1개월을 뺀 12개월 수익률이 ${signedPct(ret)} 로 중기 하락세가 강합니다.`];
+    else if (ret <= -0.1) [score, reason] = [-4, `최근 1개월을 뺀 12개월 수익률이 ${signedPct(ret)} 로 중기 흐름이 하락 쪽입니다.`];
+    factors.push(factor("momentum12", "momentum", "12개월 수익률 (12-1)", 8, score, reason));
+  } else {
+    factors.push(unavailable("momentum12", "momentum", "12개월 수익률 (12-1)", 8, "253거래일 이상의 데이터가 없습니다."));
+  }
+
   // --- 위치 -----------------------------------------------------------------
   if (bandNow.upper != null && bandNow.lower != null && bandNow.upper > bandNow.lower) {
     const pb = (price - bandNow.lower) / (bandNow.upper - bandNow.lower);
@@ -333,8 +353,9 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
     const range = `최저 ${won(low52w)} ~ 최고 ${won(high52w)}`;
     let score = 0;
     let reason = `52주 범위의 ${pct(pos, 0)} 지점입니다 (${range}).`;
-    if (pos <= 0.2) [score, reason] = [6, `52주 저점 부근(범위의 ${pct(pos, 0)})으로 가격 부담이 적습니다 (${range}).`];
-    else if (pos >= 0.9) [score, reason] = [-4, `52주 고점 부근(범위의 ${pct(pos, 0)})이라 추격 매수에 주의가 필요합니다 (${range}).`];
+    if (pos >= 0.9) [score, reason] = [6, `52주 고가 부근(범위의 ${pct(pos, 0)})으로 강세가 이어지고 있습니다 (${range}).`];
+    else if (pos >= 0.7) [score, reason] = [3, `52주 범위 위쪽(${pct(pos, 0)})에 있어 강세 쪽입니다 (${range}).`];
+    else if (pos <= 0.2) [score, reason] = [-4, `52주 저가 부근(범위의 ${pct(pos, 0)})으로 약세가 이어지고 있습니다 (${range}).`];
     factors.push(factor("range52w", "position", "52주 범위 위치", 6, score, reason));
   } else {
     factors.push(unavailable("range52w", "position", "52주 범위 위치", 6, "1년치 가격 데이터가 없습니다."));
@@ -405,8 +426,21 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
   const v = input.valuation;
   const noValuation = input.valuationNote ?? "재무 지표가 없습니다.";
 
+  // 최근 사업연도와 그 전년 (성장·가치 함정 판단용)
+  const latestYear = v?.history?.at(-1);
+  const thisYear = latestYear != null && latestYear.year === v?.bsnsYear ? latestYear : undefined;
+  const prevYearRow = v?.history?.at(-2);
+  const lastYear = thisYear != null && prevYearRow?.year === thisYear.year - 1 ? prevYearRow : undefined;
+  const oiGrowth = thisYear?.operatingIncomeGrowth ?? null;
+  // 이익이 줄고 있는데 싸 보이는 종목은 저평가 가점을 주지 않는다.
+  const valueTrap = oiGrowth != null && oiGrowth < -0.1;
+  const trapNote = valueTrap
+    ? ` 다만 영업이익이 전년보다 ${pct(-(oiGrowth ?? 0))} 줄어 저평가 가점을 주지 않습니다 (가치 함정 주의).`
+    : "";
+  const trapValue = valueTrap ? [kv("영업이익 전년 대비", signedPct(oiGrowth ?? 0))] : [];
+
   if (v?.eps != null && v.eps <= 0) {
-    perRule = "loss";
+    ruleIds.per = "loss";
     shown.per = [kv("EPS (주당순이익)", won(v.eps)), kv("현재가", won(price)), kv("기준", v.basis)];
     factors.push(factor("per", "valuation", "PER", 8, -8, `주당순이익이 ${won(v.eps)} 로 적자라 PER 을 계산할 수 없습니다 (${v.basis}).`));
   } else if (v?.per != null) {
@@ -418,6 +452,11 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
     else if (v.per < 12) [score, reason] = [5, `PER ${per}배로 다소 저평가 구간입니다 (EPS ${won(v.eps ?? 0)}, ${v.basis}).`];
     else if (v.per >= 35) [score, reason] = [-8, `PER ${per}배로 이익 대비 주가가 높습니다 (EPS ${won(v.eps ?? 0)}, ${v.basis}).`];
     else if (v.per >= 20) [score, reason] = [-4, `PER ${per}배로 다소 고평가 구간입니다 (EPS ${won(v.eps ?? 0)}, ${v.basis}).`];
+    if (valueTrap && score > 0) {
+      [score, reason] = [0, reason + trapNote];
+      ruleIds.per = "trap";
+      shown.per.push(...trapValue);
+    }
     factors.push(factor("per", "valuation", "PER", 8, score, reason));
   } else {
     factors.push(unavailable("per", "valuation", "PER", 8, noValuation));
@@ -432,11 +471,17 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
     else if (v.pbr < 1) [score, reason] = [4, `PBR ${pbr}배로 순자산 가치보다 낮습니다 (BPS ${won(v.bps ?? 0)}).`];
     else if (v.pbr >= 4) [score, reason] = [-6, `PBR ${pbr}배로 순자산 대비 주가가 높습니다 (BPS ${won(v.bps ?? 0)}).`];
     else if (v.pbr >= 2) [score, reason] = [-3, `PBR ${pbr}배로 다소 높습니다 (BPS ${won(v.bps ?? 0)}).`];
+    if (valueTrap && score > 0) {
+      [score, reason] = [0, reason + trapNote];
+      ruleIds.pbr = "trap";
+      shown.pbr.push(...trapValue);
+    }
     factors.push(factor("pbr", "valuation", "PBR", 6, score, reason));
   } else {
     factors.push(unavailable("pbr", "valuation", "PBR", 6, noValuation));
   }
 
+  // --- 퀄리티 ---------------------------------------------------------------
   if (v?.roe != null) {
     const roe = pct(v.roe);
     shown.roe = [kv("ROE", roe), kv("당기순이익", bigWon(v.netIncome)), kv("자본총계", bigWon(v.totalEquity)), kv("기준", v.basis)];
@@ -445,13 +490,99 @@ export function buildAnalysis(input: AnalysisInput): Analysis {
     if (v.roe >= 0.15) [score, reason] = [6, `ROE ${roe} 로 자본 대비 수익성이 높습니다.`];
     else if (v.roe >= 0.08) [score, reason] = [3, `ROE ${roe} 로 수익성이 양호합니다.`];
     else if (v.roe < 0) [score, reason] = [-6, `ROE ${roe} 로 순손실을 냈습니다.`];
-    factors.push(factor("roe", "valuation", "ROE", 6, score, reason));
+    factors.push(factor("roe", "quality", "ROE", 6, score, reason));
   } else {
-    factors.push(unavailable("roe", "valuation", "ROE", 6, noValuation));
+    factors.push(unavailable("roe", "quality", "ROE", 6, noValuation));
+  }
+
+  if (v?.operatingMargin != null) {
+    const margin = pct(v.operatingMargin);
+    shown["op-margin"] = [
+      kv("영업이익률", margin),
+      kv("영업이익", bigWon(v.operatingIncome)),
+      kv("매출액", bigWon(v.revenue)),
+      kv("기준", v.basis),
+    ];
+    let score = 0;
+    let reason = `영업이익률 ${margin} 로 보통 수준입니다.`;
+    if (v.operatingMargin >= 0.2) [score, reason] = [4, `영업이익률 ${margin} 로 본업 수익성이 매우 높습니다.`];
+    else if (v.operatingMargin >= 0.1) [score, reason] = [2, `영업이익률 ${margin} 로 본업 수익성이 양호합니다.`];
+    else if (v.operatingMargin < 0) [score, reason] = [-4, `영업이익률 ${margin} 로 본업에서 손실을 냈습니다.`];
+    factors.push(factor("op-margin", "quality", "영업이익률", 4, score, reason));
+  } else {
+    factors.push(unavailable("op-margin", "quality", "영업이익률", 4, noValuation));
+  }
+
+  if (v?.debtRatio != null) {
+    const ratio = pct(v.debtRatio, 0);
+    shown["debt-ratio"] = [
+      kv("부채비율", ratio),
+      kv("부채총계", bigWon(v.totalLiabilities)),
+      kv("자본총계", bigWon(v.totalEquity)),
+      kv("기준", v.basis),
+    ];
+    let score = 0;
+    let reason = `부채비율 ${ratio} 로 보통 수준입니다.`;
+    if (v.debtRatio < 0.5) [score, reason] = [3, `부채비율 ${ratio} 로 재무구조가 매우 안정적입니다.`];
+    else if (v.debtRatio < 1) [score, reason] = [1, `부채비율 ${ratio} 로 재무구조가 안정적입니다.`];
+    else if (v.debtRatio >= 2) [score, reason] = [-3, `부채비율 ${ratio} 로 부채 부담이 큽니다.`];
+    factors.push(factor("debt-ratio", "quality", "부채비율", 3, score, reason));
+  } else {
+    factors.push(
+      unavailable("debt-ratio", "quality", "부채비율", 3, v ? "자본총계가 0 이하라 부채비율을 계산할 수 없습니다." : noValuation)
+    );
+  }
+
+  // --- 성장 (최근 사업연도 전년 대비) -----------------------------------------
+  const noGrowth = v ? "전년과 비교할 사업연도 값이 없습니다." : noValuation;
+
+  if (thisYear?.revenueGrowth != null) {
+    const g = thisYear.revenueGrowth;
+    shown["revenue-growth"] = [
+      kv(`${thisYear.year} 매출액`, bigWon(thisYear.revenue)),
+      kv(`${thisYear.year - 1} 매출액`, bigWon(lastYear?.revenue ?? null)),
+      kv("전년 대비", signedPct(g)),
+    ];
+    let score = 0;
+    let reason = `매출이 전년 대비 ${signedPct(g)} 로 큰 변화가 없습니다.`;
+    if (g >= 0.2) [score, reason] = [6, `매출이 전년 대비 ${signedPct(g)} 로 빠르게 늘었습니다.`];
+    else if (g >= 0.05) [score, reason] = [3, `매출이 전년 대비 ${signedPct(g)} 늘었습니다.`];
+    else if (g <= -0.2) [score, reason] = [-6, `매출이 전년 대비 ${signedPct(g)} 로 크게 줄었습니다.`];
+    else if (g <= -0.05) [score, reason] = [-3, `매출이 전년 대비 ${signedPct(g)} 줄었습니다.`];
+    factors.push(factor("revenue-growth", "growth", "매출 성장", 6, score, reason));
+  } else {
+    factors.push(unavailable("revenue-growth", "growth", "매출 성장", 6, noGrowth));
+  }
+
+  if (thisYear?.operatingIncome != null && (thisYear.operatingIncome <= 0 || lastYear?.operatingIncome != null)) {
+    const now = thisYear.operatingIncome;
+    const before = lastYear?.operatingIncome ?? null;
+    shown["op-growth"] = [
+      kv(`${thisYear.year} 영업이익`, bigWon(now)),
+      kv(`${thisYear.year - 1} 영업이익`, bigWon(before)),
+      ...(oiGrowth != null ? [kv("전년 대비", signedPct(oiGrowth))] : []),
+    ];
+    let score = 0;
+    let reason = `영업이익이 전년 대비 ${signedPct(oiGrowth ?? 0)} 로 큰 변화가 없습니다.`;
+    if (now <= 0) {
+      [score, reason] = [-8, `${thisYear.year} 년 영업이익이 ${bigWon(now)} 로 적자입니다.`];
+      ruleIds["op-growth"] = "loss";
+    } else if (before != null && before <= 0) {
+      [score, reason] = [8, `영업이익이 ${bigWon(before)} 에서 ${bigWon(now)} 로 흑자 전환했습니다.`];
+      ruleIds["op-growth"] = "turnaround";
+    } else if (oiGrowth != null) {
+      if (oiGrowth >= 0.3) [score, reason] = [8, `영업이익이 전년 대비 ${signedPct(oiGrowth)} 로 크게 늘었습니다.`];
+      else if (oiGrowth >= 0.1) [score, reason] = [4, `영업이익이 전년 대비 ${signedPct(oiGrowth)} 늘었습니다.`];
+      else if (oiGrowth <= -0.3) [score, reason] = [-8, `영업이익이 전년 대비 ${signedPct(oiGrowth)} 로 크게 줄었습니다.`];
+      else if (oiGrowth <= -0.1) [score, reason] = [-4, `영업이익이 전년 대비 ${signedPct(oiGrowth)} 줄었습니다.`];
+    }
+    factors.push(factor("op-growth", "growth", "영업이익 성장", 8, score, reason));
+  } else {
+    factors.push(unavailable("op-growth", "growth", "영업이익 성장", 8, noGrowth));
   }
 
   // --- 종합 -----------------------------------------------------------------
-  const detailed = factors.map((f) => withGuide(f, shown[f.key] ?? [], f.key === "per" ? perRule : undefined));
+  const detailed = factors.map((f) => withGuide(f, shown[f.key] ?? [], ruleIds[f.key]));
   const raw = detailed.reduce((s, f) => s + f.score, 0);
   const score = Math.max(-100, Math.min(100, raw));
   const rating = ratingOf(score);

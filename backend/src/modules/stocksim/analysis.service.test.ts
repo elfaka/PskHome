@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 import { FACTOR_GUIDE } from "./analysis.guide.js";
 import { buildAnalysis, RATING_SCALE, ratingOf, type AnalysisInput } from "./analysis.service.js";
-import type { CandlePoint, InvestorFlowDay, Valuation } from "./stockSim.types.js";
+import type { CandlePoint, FinancialYear, InvestorFlowDay, Valuation } from "./stockSim.types.js";
 
 const NOW = new Date("2026-10-30T06:30:00.000Z");
 
@@ -52,6 +52,29 @@ const valuation = (overrides: Partial<Valuation> = {}): Valuation => ({
   ...overrides,
 });
 
+/** 사업연도 한 줄. 증감률은 직접 넣는다 (valuation.ts 의 계산과 같은 값이라고 가정) */
+function year(y: number, revenue: number, operatingIncome: number, growth: Partial<FinancialYear> = {}): FinancialYear {
+  return {
+    year: y,
+    revenue,
+    operatingIncome,
+    netIncome: operatingIncome,
+    totalAssets: 1000,
+    totalLiabilities: 200,
+    totalEquity: 500,
+    eps: null,
+    dividendPerShare: null,
+    operatingMargin: operatingIncome / revenue,
+    netMargin: operatingIncome / revenue,
+    roe: 0.1,
+    debtRatio: 0.4,
+    revenueGrowth: null,
+    operatingIncomeGrowth: null,
+    netIncomeGrowth: null,
+    ...growth,
+  };
+}
+
 function analyze(closes: number[], extra: Partial<AnalysisInput> = {}) {
   return buildAnalysis({
     symbol: "005930",
@@ -98,6 +121,31 @@ describe("factor explanations", () => {
     ["no flows or valuation", {}],
     ["buying with cheap valuation", { flows: flows(800, 30, 0.01), valuation: valuation({ per: 6, pbr: 0.6, roe: 0.2 }) }],
     ["selling with expensive valuation", { flows: flows(-800, -30, 0.12), valuation: valuation({ per: 40, pbr: 5, roe: -0.1 }) }],
+    [
+      "growing, profitable company",
+      {
+        valuation: valuation({
+          operatingMargin: 0.25,
+          debtRatio: 0.3,
+          history: [year(2024, 100, 10), year(2025, 130, 15, { revenueGrowth: 0.3, operatingIncomeGrowth: 0.5 })],
+        }),
+      },
+    ],
+    [
+      "value trap",
+      {
+        valuation: valuation({
+          per: 6,
+          pbr: 0.6,
+          history: [year(2024, 100, 20), year(2025, 90, 10, { revenueGrowth: -0.1, operatingIncomeGrowth: -0.5 })],
+        }),
+      },
+    ],
+    [
+      "turnaround",
+      { valuation: valuation({ history: [year(2024, 100, -5), year(2025, 110, 10, { operatingIncomeGrowth: 3 })] }) },
+    ],
+    ["operating loss", { valuation: valuation({ history: [year(2024, 100, 5), year(2025, 90, -3)] }) }],
   ];
 
   it.each(cases)("marks exactly the score row as matched (%s)", (_, extra) => {
@@ -149,6 +197,96 @@ describe("factor explanations", () => {
   });
 });
 
+describe("quant factors", () => {
+  const rising = Array.from({ length: 300 }, (_, i) => 1000 + i * 5);
+
+  it("scores revenue and operating income growth from the latest annual report", () => {
+    const a = analyze(rising, {
+      valuation: valuation({
+        history: [year(2024, 100, 10), year(2025, 130, 15, { revenueGrowth: 0.3, operatingIncomeGrowth: 0.5 })],
+      }),
+    });
+
+    expect(factorOf(a, "revenue-growth")).toMatchObject({ category: "growth", score: 6 });
+    expect(factorOf(a, "op-growth")).toMatchObject({ category: "growth", score: 8 });
+    expect(factorOf(a, "op-growth").rules.find((r) => r.matched)?.condition).toBe("+30% 이상");
+    expect(factorOf(a, "revenue-growth").values).toContainEqual({ label: "전년 대비", value: "+30.0%" });
+  });
+
+  it("tells a turnaround and an operating loss apart from ordinary growth", () => {
+    const turnaround = factorOf(
+      analyze(rising, { valuation: valuation({ history: [year(2024, 100, -5), year(2025, 110, 10, { operatingIncomeGrowth: 3 })] }) }),
+      "op-growth"
+    );
+    expect(turnaround.score).toBe(8);
+    expect(turnaround.rules.find((r) => r.matched)?.condition).toContain("흑자 전환");
+
+    const loss = factorOf(analyze(rising, { valuation: valuation({ history: [year(2024, 100, 5), year(2025, 90, -3)] }) }), "op-growth");
+    expect(loss.score).toBe(-8);
+    expect(loss.rules.find((r) => r.matched)?.condition).toBe("올해 영업 적자");
+  });
+
+  it("skips growth when the latest year is not the report year or has no prior year", () => {
+    const stale = analyze(rising, { valuation: valuation({ bsnsYear: 2025, history: [year(2023, 100, 10), year(2024, 120, 12)] }) });
+    expect(factorOf(stale, "revenue-growth").signal).toBe("unavailable");
+
+    const single = analyze(rising, { valuation: valuation({ history: [year(2025, 100, 10)] }) });
+    expect(factorOf(single, "op-growth").signal).toBe("unavailable");
+    expect(factorOf(single, "op-growth").reason).toContain("전년과 비교할");
+  });
+
+  it("drops the cheap-valuation bonus when operating income fell more than 10% (value trap)", () => {
+    const trap = valuation({
+      per: 6,
+      pbr: 0.6,
+      history: [year(2024, 100, 20), year(2025, 90, 10, { revenueGrowth: -0.1, operatingIncomeGrowth: -0.5 })],
+    });
+    const a = analyze(rising, { valuation: trap });
+
+    for (const key of ["per", "pbr"]) {
+      const f = factorOf(a, key);
+      expect(f.score, key).toBe(0);
+      expect(f.reason, key).toContain("가치 함정");
+      expect(f.rules.find((r) => r.matched)?.condition, key).toContain("가치 함정 보정");
+      expect(f.values, key).toContainEqual({ label: "영업이익 전년 대비", value: "-50.0%" });
+    }
+
+    // 감점은 그대로 둔다
+    const expensive = analyze(rising, { valuation: { ...trap, per: 40, pbr: 5 } });
+    expect(factorOf(expensive, "per").score).toBe(-8);
+    expect(factorOf(expensive, "pbr").score).toBe(-6);
+
+    // 이익 감소가 10% 이내면 보정하지 않는다
+    const mild = analyze(rising, {
+      valuation: valuation({ per: 6, history: [year(2024, 100, 20), year(2025, 100, 19, { operatingIncomeGrowth: -0.05 })] }),
+    });
+    expect(factorOf(mild, "per").score).toBe(8);
+  });
+
+  it("scores 12-1 momentum from a year ago to a month ago", () => {
+    const a = analyze(rising);
+    const m = factorOf(a, "momentum12");
+
+    // 252거래일 전 1000+47*5=1235 → 21거래일 전 1000+278*5=2390 : +93.5%
+    expect(m).toMatchObject({ category: "momentum", score: 8 });
+    expect(m.values).toContainEqual({ label: "12-1 수익률", value: "+93.5%" });
+
+    const short = analyze(rising.slice(0, 250));
+    expect(factorOf(short, "momentum12").signal).toBe("unavailable");
+  });
+
+  it("scores operating margin and debt ratio as quality, together with ROE", () => {
+    const a = analyze(rising, { valuation: valuation({ operatingMargin: 0.25, debtRatio: 2.5 }) });
+
+    expect(factorOf(a, "op-margin")).toMatchObject({ category: "quality", score: 4 });
+    expect(factorOf(a, "debt-ratio")).toMatchObject({ category: "quality", score: -3 });
+    expect(factorOf(a, "roe").category).toBe("quality");
+
+    const negativeEquity = analyze(rising, { valuation: valuation({ debtRatio: null }) });
+    expect(factorOf(negativeEquity, "debt-ratio").reason).toContain("자본총계가 0 이하");
+  });
+});
+
 describe("buildAnalysis", () => {
   it("reads a steady uptrend as bullish trend but overbought momentum", () => {
     const a = analyze(Array.from({ length: 250 }, (_, i) => 1000 + i * 10));
@@ -157,7 +295,8 @@ describe("buildAnalysis", () => {
     expect(factorOf(a, "ma120").score).toBe(8);
     expect(factorOf(a, "rsi")).toMatchObject({ score: -15 });
     expect(factorOf(a, "rsi").reason).toContain("과매수");
-    expect(factorOf(a, "range52w").score).toBe(-4);
+    // 52주 고가 근처는 강세로 본다 (52주 고가 모멘텀)
+    expect(factorOf(a, "range52w").score).toBe(6);
   });
 
   it("reads a steady downtrend as bearish trend but oversold momentum", () => {
@@ -166,7 +305,7 @@ describe("buildAnalysis", () => {
     expect(factorOf(a, "ma-alignment").score).toBe(-10);
     expect(factorOf(a, "ma120").score).toBe(-8);
     expect(factorOf(a, "rsi").score).toBe(15);
-    expect(factorOf(a, "range52w").score).toBe(6);
+    expect(factorOf(a, "range52w").score).toBe(-4);
   });
 
   it("detects a recent golden cross of the 20 and 60 day averages", () => {
