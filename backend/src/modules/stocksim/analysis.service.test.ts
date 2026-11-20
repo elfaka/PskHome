@@ -93,12 +93,14 @@ const factorOf = (a: ReturnType<typeof analyze>, key: string) => a.factors.find(
 
 describe("ratingOf", () => {
   it("maps scores to five levels", () => {
-    expect(ratingOf(35)).toBe("STRONG_BUY");
-    expect(ratingOf(12)).toBe("BUY");
-    expect(ratingOf(11)).toBe("NEUTRAL");
-    expect(ratingOf(-11)).toBe("NEUTRAL");
-    expect(ratingOf(-12)).toBe("SELL");
-    expect(ratingOf(-35)).toBe("STRONG_SELL");
+    expect(ratingOf(45)).toBe("STRONG_BUY");
+    expect(ratingOf(44)).toBe("BUY");
+    expect(ratingOf(18)).toBe("BUY");
+    expect(ratingOf(17)).toBe("NEUTRAL");
+    expect(ratingOf(-17)).toBe("NEUTRAL");
+    expect(ratingOf(-18)).toBe("SELL");
+    expect(ratingOf(-44)).toBe("SELL");
+    expect(ratingOf(-45)).toBe("STRONG_SELL");
   });
 });
 

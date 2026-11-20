@@ -444,11 +444,11 @@ export const handlers = [
         },
       ],
       ratingScale: [
-        { rating: "STRONG_BUY", label: "강력 매수", min: 35, range: "+35 이상" },
-        { rating: "BUY", label: "매수", min: 12, range: "+12 ~ +34" },
-        { rating: "NEUTRAL", label: "중립", min: -11, range: "-11 ~ +11" },
-        { rating: "SELL", label: "매도", min: -34, range: "-34 ~ -12" },
-        { rating: "STRONG_SELL", label: "강력 매도", min: -100, range: "-35 이하" },
+        { rating: "STRONG_BUY", label: "강력 매수", min: 45, range: "+45 이상" },
+        { rating: "BUY", label: "매수", min: 18, range: "+18 ~ +44" },
+        { rating: "NEUTRAL", label: "중립", min: -17, range: "-17 ~ +17" },
+        { rating: "SELL", label: "매도", min: -44, range: "-44 ~ -18" },
+        { rating: "STRONG_SELL", label: "강력 매도", min: -100, range: "-45 이하" },
       ],
       indicators: {
         ma5: 76_000,

@@ -46,20 +46,25 @@ const RATING_LABEL: Record<Rating, string> = {
   STRONG_SELL: "강력 매도",
 };
 
-/** 등급 구간표 (화면 설명용). ratingOf 와 같은 기준이다 — 점수는 정수라 -11 이상 = -12 초과. */
+/**
+ * 등급 구간표 (화면 설명용). ratingOf 와 같은 기준이다 — 점수는 정수라 -17 이상 = -18 초과.
+ *
+ * 항목 최대 점수 합이 ±142 라서(성장·퀄리티 추가 전 ±113) 예전 구간(±35, ±12)으로는 매수가 너무 쉽게 나왔다.
+ * 강력은 최대 합의 약 30%, 매수·매도는 약 13% 로 둔다.
+ */
 export const RATING_SCALE: RatingBand[] = [
-  { rating: "STRONG_BUY", label: RATING_LABEL.STRONG_BUY, min: 35, range: "+35 이상" },
-  { rating: "BUY", label: RATING_LABEL.BUY, min: 12, range: "+12 ~ +34" },
-  { rating: "NEUTRAL", label: RATING_LABEL.NEUTRAL, min: -11, range: "-11 ~ +11" },
-  { rating: "SELL", label: RATING_LABEL.SELL, min: -34, range: "-34 ~ -12" },
-  { rating: "STRONG_SELL", label: RATING_LABEL.STRONG_SELL, min: -100, range: "-35 이하" },
+  { rating: "STRONG_BUY", label: RATING_LABEL.STRONG_BUY, min: 45, range: "+45 이상" },
+  { rating: "BUY", label: RATING_LABEL.BUY, min: 18, range: "+18 ~ +44" },
+  { rating: "NEUTRAL", label: RATING_LABEL.NEUTRAL, min: -17, range: "-17 ~ +17" },
+  { rating: "SELL", label: RATING_LABEL.SELL, min: -44, range: "-44 ~ -18" },
+  { rating: "STRONG_SELL", label: RATING_LABEL.STRONG_SELL, min: -100, range: "-45 이하" },
 ];
 
 export function ratingOf(score: number): Rating {
-  if (score >= 35) return "STRONG_BUY";
-  if (score >= 12) return "BUY";
-  if (score > -12) return "NEUTRAL";
-  if (score > -35) return "SELL";
+  if (score >= 45) return "STRONG_BUY";
+  if (score >= 18) return "BUY";
+  if (score > -18) return "NEUTRAL";
+  if (score > -45) return "SELL";
   return "STRONG_SELL";
 }
 

@@ -144,7 +144,7 @@ describe("StockSimulator", () => {
       .getAllByRole("row")
       .find((r) => r.getAttribute("aria-current") === "true");
     expect(current).toHaveTextContent("매수");
-    expect(current).toHaveTextContent("+12 ~ +34");
+    expect(current).toHaveTextContent("+18 ~ +44");
     expect(current).toHaveTextContent("현재 +18점");
     expect(screen.getByText(/점수 기준표에 따라 매수 쪽\(\+\) 또는 매도 쪽\(-\) 점수를 주고/)).toBeInTheDocument();
   });
