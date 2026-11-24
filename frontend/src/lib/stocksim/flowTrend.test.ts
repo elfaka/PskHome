@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cumulative, flowTurn } from "./flowTrend";
+import { cumulative, flowConsensus, flowTurn, recentDirection } from "./flowTrend";
 
 describe("flowTrend", () => {
   it("accumulates from the oldest value", () => {
@@ -22,5 +22,21 @@ describe("flowTrend", () => {
   it("returns null without enough data or movement", () => {
     expect(flowTurn([5])).toBeNull();
     expect(flowTurn([7, 7, 7])).toBeNull();
+  });
+});
+
+describe("flowConsensus / recentDirection", () => {
+  it("calls it a two-way buy or sell only when both point the same way", () => {
+    expect(flowConsensus(100, 5)).toBe("bothBuy");
+    expect(flowConsensus(-100, -5)).toBe("bothSell");
+    expect(flowConsensus(100, -5)).toBe("mixed");
+    expect(flowConsensus(0, 5)).toBe("mixed");
+  });
+
+  it("compares the last two records", () => {
+    expect(recentDirection([10, 30, 20])).toBe("down");
+    expect(recentDirection([10, 30])).toBe("up");
+    expect(recentDirection([30, 30])).toBe("flat");
+    expect(recentDirection([30])).toBeNull();
   });
 });

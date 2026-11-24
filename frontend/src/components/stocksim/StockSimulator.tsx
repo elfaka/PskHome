@@ -27,6 +27,7 @@ import FinancialsPanel from "./FinancialsPanel";
 import { GlossaryList } from "./Glossary";
 import InvestorFlowPanel from "./InvestorFlowPanel";
 import InvestorRankingPanel from "./InvestorRankingPanel";
+import TodayFlowCard from "./TodayFlowCard";
 import MarketPanel from "./MarketPanel";
 import MarketStrip from "./MarketStrip";
 import OrderbookPanel from "./OrderbookPanel";
@@ -117,6 +118,8 @@ export default function StockSimulator() {
 
   const o = overview.data;
   const held = holdings.find((h) => h.symbol === selected.symbol);
+  /** 투자자 수급은 국내 종목만 있다 (개요를 받기 전에는 그리지 않는다) */
+  const domestic = o?.symbol === selected.symbol && o.currency === "KRW";
 
   /** 탭을 바꾸면 새 화면을 처음부터 보이게 맨 위로 올린다 (상단 바는 고정이라 그대로 보인다). */
   const setTab = (next: SimTab) => {
@@ -255,6 +258,11 @@ export default function StockSimulator() {
             <div className={cn("flex min-w-0 flex-col gap-2", paneOnly("chart"))}>
               <Panel>
                 <StockStats overview={o} />
+                {domestic && (
+                  <div className="border-t border-line">
+                    <TodayFlowCard symbol={selected.symbol} volume={o?.volume ?? null} />
+                  </div>
+                )}
                 <div className="border-t border-line">
                   <ChartPanel symbol={selected.symbol} livePrice={o?.price ?? null} liveTime={o?.priceTime ?? null} />
                 </div>
@@ -306,6 +314,11 @@ export default function StockSimulator() {
         {tab === "investors" && (
           <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_24rem]">
             <Panel title="투자자 동향">
+              {domestic && (
+                <div className="border-b border-line">
+                  <TodayFlowCard symbol={selected.symbol} volume={o?.volume ?? null} />
+                </div>
+              )}
               <InvestorFlowPanel symbol={selected.symbol} />
             </Panel>
             <Panel title="투자자별 순매수·순매도 상위" className="xl:self-start">

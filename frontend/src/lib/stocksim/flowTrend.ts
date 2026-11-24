@@ -36,3 +36,19 @@ export function flowTurn(values: number[]): FlowTurn | null {
   if (trough === lastIndex) return { kind: "low", index: peak, change: last - values[peak] };
   return { kind: "belowPeak", index: peak, change: last - values[peak] };
 }
+
+export type FlowConsensus = "bothBuy" | "bothSell" | "mixed";
+
+/** 외국인·기관이 같은 방향인지 — 둘 다 순매수면 쌍끌이 매수, 둘 다 순매도면 쌍끌이 매도 */
+export function flowConsensus(foreigner: number, institution: number): FlowConsensus {
+  if (foreigner > 0 && institution > 0) return "bothBuy";
+  if (foreigner < 0 && institution < 0) return "bothSell";
+  return "mixed";
+}
+
+/** 마지막 두 기록 비교. 기록이 2개 미만이면 null */
+export function recentDirection(values: number[]): "up" | "down" | "flat" | null {
+  if (values.length < 2) return null;
+  const diff = values[values.length - 1] - values[values.length - 2];
+  return diff > 0 ? "up" : diff < 0 ? "down" : "flat";
+}

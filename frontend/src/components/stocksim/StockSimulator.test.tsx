@@ -203,6 +203,31 @@ describe("StockSimulator", () => {
     expect(screen.getByRole("figure", { name: "일별 순매수 추이" })).toBeInTheDocument();
   });
 
+  it("sums up today's foreign and institutional flow above the chart", async () => {
+    render(<StockSimulator />);
+
+    const card = await screen.findByRole("region", { name: "오늘 수급" });
+    expect(await within(card).findByText("쌍끌이 매수")).toBeInTheDocument();
+    expect(within(card).getByText("13:30 잠정")).toBeInTheDocument();
+
+    const [foreign, inst] = within(card).getAllByRole("listitem");
+    expect(foreign).toHaveTextContent("외국인순매수 +2만주거래량의 0.2%▼ 줄어드는 중 · 10:30 고점 대비 -3만");
+    expect(inst).toHaveTextContent("기관순매수 +900주거래량의 0.1% 미만▲ 늘어나는 중 · 오늘 최고");
+  });
+
+  it("says when there is no provisional figure today in the flow summary", async () => {
+    server.use(
+      http.get("/api/stocksim/stocks/:symbol/investors/intraday", () =>
+        HttpResponse.json({ symbol: "005930", date: "2026-11-01", latestDate: "2026-10-29", points: [], collecting: false })
+      )
+    );
+    render(<StockSimulator />);
+
+    const card = await screen.findByRole("region", { name: "오늘 수급" });
+    expect(await within(card).findByText("오늘 잠정치 없음 · 마지막 기록 10/29")).toBeInTheDocument();
+    expect(within(card).queryByText(/쌍끌이/)).not.toBeInTheDocument();
+  });
+
   it("shows intraday and cumulative investor flows with where they turned", async () => {
     window.history.replaceState(null, "", "/stocksim?tab=investors");
     render(<StockSimulator />);
