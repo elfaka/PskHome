@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { HttpError } from "../../lib/httpError.js";
 import { getAnalysis } from "./analysis.service.js";
+import { getIntradayFlows, getInvestorRankings, parseRankingInvestor } from "./investorFlow.service.js";
 import { getIndexChart, getMarketInvestors, getMarketOverview } from "./market.service.js";
 import * as marketData from "./marketData.service.js";
 import { getOverview } from "./overview.service.js";
@@ -65,9 +66,19 @@ stockSimRouter.get("/stocksim/stocks/:symbol/analysis", async (req, res) => {
   res.json(await getAnalysis(req.params.symbol));
 });
 
-// 최근 20거래일 투자자별 순매수·공매도 비중 (최신순)
+// 최근 60거래일 투자자별 순매수·공매도 비중 (최신순)
 stockSimRouter.get("/stocksim/stocks/:symbol/investors", async (req, res) => {
   res.json(await marketData.getInvestorFlows(req.params.symbol));
+});
+
+// 오늘 외국인·기관 순매수 흐름 (서버가 모은 장중 잠정치 스냅샷)
+stockSimRouter.get("/stocksim/stocks/:symbol/investors/intraday", async (req, res) => {
+  res.json(await getIntradayFlows(req.params.symbol));
+});
+
+// 투자자별 순매수·순매도 상위 종목 (?investor=foreigner|institution|individual)
+stockSimRouter.get("/stocksim/rankings/investors", async (req, res) => {
+  res.json(await getInvestorRankings(parseRankingInvestor(req.query.investor)));
 });
 
 // 코스피·코스닥 지수 + VIX + 공포·탐욕 지수

@@ -139,7 +139,7 @@ describe("stocksim routes", () => {
     const res = await request(app).get("/api/stocksim/stocks/005930/investors");
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(20);
+    expect(res.body).toHaveLength(60);
     expect(res.body[0]).toMatchObject({
       foreigner: 200,
       institution: 100,
@@ -178,6 +178,9 @@ describe("stocksim routes", () => {
     // DART 키가 없으면 가치 항목은 0점 + 사유
     const per = res.body.factors.find((f: { key: string }) => f.key === "per");
     expect(per).toMatchObject({ score: 0, signal: "unavailable" });
+    // 투자자 동향은 60일을 받지만 수급 점수는 최근 20거래일로 본다
+    const foreigner = res.body.factors.find((f: { key: string }) => f.key === "foreigner");
+    expect(foreigner.reason).toContain("최근 20거래일");
   });
 
   it("GET /api/stocksim/search finds KOSPI and KOSDAQ stocks by name or code", async () => {

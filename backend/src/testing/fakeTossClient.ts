@@ -1,5 +1,5 @@
 import type { TossClient } from "../modules/stocksim/toss/tossClient.js";
-import type { TossCandle, TossStock } from "../modules/stocksim/toss/toss.types.js";
+import type { TossCandle, TossInvestorTradingRanking, TossStock } from "../modules/stocksim/toss/toss.types.js";
 
 /**
  * 테스트용 토스 클라이언트 — 실제 API 대신 메모리의 시세를 돌려준다.
@@ -16,6 +16,27 @@ export interface FakeTossClient extends TossClient {
   minuteCount: number;
   /** 시장 지표 현재가 (KOSPI, KOSDAQ, KR_BOND_10Y) */
   indicatorPrices: Map<string, number>;
+  /** 투자자별 순매수·순매도 상위 (getInvestorTradingRankings 응답) */
+  rankings: TossInvestorTradingRanking;
+}
+
+/** 외국인은 005930·000660 순매수, 005935 순매도. 기관은 데이터 없음, 개인은 반대 */
+function defaultRankings(): TossInvestorTradingRanking {
+  const buy = (rank: number, symbol: string, amount: number) => ({ rank, symbol, currency: "KRW" as const, netBuyAmount: String(amount) });
+  const sell = (rank: number, symbol: string, amount: number) => ({ rank, symbol, currency: "KRW" as const, netSellAmount: String(amount) });
+  return {
+    foreigner: {
+      rankedAt: "2026-10-30T14:30:00+09:00",
+      netBuyRankings: [buy(1, "005930", 120_000_000_000), buy(2, "000660", 80_000_000_000)],
+      netSellRankings: [sell(1, "005935", 30_000_000_000)],
+    },
+    institution: { rankedAt: null, netBuyRankings: [], netSellRankings: [] },
+    individual: {
+      rankedAt: "2026-10-29T18:00:00+09:00",
+      netBuyRankings: [buy(1, "005935", 30_000_000_000)],
+      netSellRankings: [sell(1, "005930", 150_000_000_000)],
+    },
+  };
 }
 
 /** 시장 지표 캔들의 가장 오래된 봉 값과 봉마다 오르는 폭 */
@@ -87,6 +108,7 @@ export function createFakeTossClient(): FakeTossClient {
       ["KOSDAQ", 960],
       ["KR_BOND_10Y", 3.3],
     ]),
+    rankings: defaultRankings(),
     async getPrices(symbols) {
       calls.push({ method: "getPrices", args: [symbols] });
       return symbols
@@ -172,6 +194,7 @@ export function createFakeTossClient(): FakeTossClient {
       return {
         records: dailyTimes(count).map((t) => ({
           date: t.slice(0, 10),
+          updatedAt: t,
           individual: vol(-300),
           foreigner: vol(200),
           institution: vol(100),
@@ -237,6 +260,10 @@ export function createFakeTossClient(): FakeTossClient {
         })),
         nextUntil: null,
       };
+    },
+    async getInvestorTradingRankings(count) {
+      calls.push({ method: "getInvestorTradingRankings", args: [count] });
+      return fake.rankings;
     },
   };
 

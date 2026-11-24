@@ -7,6 +7,7 @@ import type {
   TossIndicatorPrice,
   TossIndicatorSymbol,
   TossInvestorTradingPage,
+  TossInvestorTradingRanking,
   TossListedStock,
   TossMarket,
   TossMarketInvestorPage,
@@ -60,6 +61,8 @@ export interface TossClient {
   ): Promise<TossIndicatorCandlePage>;
   /** 시장 전체 투자자별 매매대금 (일별, 최신순) */
   getMarketInvestorTrading(symbol: "KOSPI" | "KOSDAQ", count: number): Promise<TossMarketInvestorPage>;
+  /** 외국인·기관·개인 순매수·순매도 상위 종목 (각 목록 최대 100) */
+  getInvestorTradingRankings(count: number): Promise<TossInvestorTradingRanking>;
 }
 
 export interface TossClientOptions {
@@ -225,6 +228,8 @@ export function createTossClient(options: TossClientOptions): TossClient {
         interval: "1d",
         count: String(count),
       }),
+    getInvestorTradingRankings: (count) =>
+      get<TossInvestorTradingRanking>("/api/v1/rankings/investor-trading", { count: String(count) }),
   };
 }
 

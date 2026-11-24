@@ -38,6 +38,9 @@ import { getValuation } from "./valuation.js";
 export const DISCLAIMER =
   "규칙 기반으로 계산한 교육용 신호이며 투자 권유가 아닙니다. 실제 투자 판단과 그 결과의 책임은 본인에게 있습니다.";
 
+/** 수급 점수에 쓰는 기간 (투자자 동향 화면은 더 길게 받는다) */
+const FLOW_SCORE_DAYS = 20;
+
 const RATING_LABEL: Record<Rating, string> = {
   STRONG_BUY: "강력 매수",
   BUY: "매수",
@@ -645,7 +648,13 @@ export async function getAnalysis(symbol: string): Promise<Analysis> {
   const [candles, flows, valuation] = await Promise.all([
     marketData.getDailyCandles(stock.symbol),
     // 수급은 국내 종목만 있다. 없어도 나머지 항목으로 추천한다.
-    stock.currency === "KRW" ? marketData.getInvestorFlows(stock.symbol).catch(() => []) : Promise.resolve([]),
+    // 화면용으로 60일을 받지만 점수는 최근 FLOW_SCORE_DAYS(20)거래일로 본다.
+    stock.currency === "KRW"
+      ? marketData
+          .getInvestorFlows(stock.symbol)
+          .then((f) => f.slice(0, FLOW_SCORE_DAYS))
+          .catch(() => [])
+      : Promise.resolve([]),
     getValuation(stock, quote.price),
   ]);
 

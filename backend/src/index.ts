@@ -1,6 +1,7 @@
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 import { disconnectPrisma } from "./lib/prisma.js";
+import { startIntradaySampler } from "./modules/stocksim/investorFlow.service.js";
 
 const app = createApp();
 
@@ -9,6 +10,9 @@ const server = app.listen(env.PORT, () => {
     `[psk-home-be] listening on :${env.PORT} (NODE_ENV=${env.NODE_ENV})`
   );
 });
+
+// 투자자 동향 장중 스냅샷 수집 (오늘 조회된 종목만, 장중에만 토스를 부른다)
+startIntradaySampler();
 
 /**
  * 그레이스풀 셧다운.

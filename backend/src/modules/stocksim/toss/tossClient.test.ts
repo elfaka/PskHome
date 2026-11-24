@@ -176,12 +176,14 @@ describe("createTossClient", () => {
 
     await t.client.getIndicatorCandles("KOSPI", "1d", 200, "2026-06-10T09:00:00+09:00");
     await t.client.getMarketInvestorTrading("KOSDAQ", 20);
+    await t.client.getInvestorTradingRankings(20);
 
-    const [candles, investors] = t.calls.filter((c) => !c.url.endsWith("/oauth2/token"));
+    const [candles, investors, rankings] = t.calls.filter((c) => !c.url.endsWith("/oauth2/token"));
     expect(candles.url).toBe(
       "https://toss.test/api/v1/market-indicators/KOSPI/candles?interval=1d&count=200&before=2026-06-10T09%3A00%3A00%2B09%3A00"
     );
     expect(investors.url).toBe("https://toss.test/api/v1/market-indicators/KOSDAQ/investor-trading?interval=1d&count=20");
+    expect(rankings.url).toBe("https://toss.test/api/v1/rankings/investor-trading?count=20");
   });
 
   it("gives up after one retry when the token keeps being rejected", async () => {
@@ -254,6 +256,7 @@ describe("createTossClient", () => {
       "getIndicatorCandles",
       "getIndicatorPrices",
       "getInvestorTrading",
+      "getInvestorTradingRankings",
       "getMarketInvestorTrading",
       "getOrderbook",
       "getPriceLimits",

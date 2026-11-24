@@ -175,6 +175,52 @@ export interface InvestorFlowDay {
   shortSellingRate: number | null;
 }
 
+/** 장중 잠정치 스냅샷 하나 — 그 시각까지의 당일 누적 순매수(주) */
+export interface IntradayFlowPoint {
+  /** 토스 기록의 갱신 시각 (updatedAt) */
+  at: string;
+  foreigner: number;
+  institution: number;
+}
+
+/**
+ * 당일 외국인·기관 순매수 흐름. 토스는 일별 기록만 주므로 서버가 잠정치를 갱신 시각별로 모은 것이다.
+ * 처음 조회한 때부터 쌓이고, 서버가 다시 시작되면 사라진다.
+ */
+export interface IntradayFlows {
+  symbol: string;
+  /** 오늘 (KST) */
+  date: string;
+  /** 토스의 가장 최근 기록 날짜. 오늘이 아니면 장이 열리지 않았거나 아직 잠정치가 없다 */
+  latestDate: string | null;
+  /** 오래된 순 */
+  points: IntradayFlowPoint[];
+  /** 장중이면 서버가 몇 분마다 계속 모은다 */
+  collecting: boolean;
+}
+
+export type RankingInvestor = "foreigner" | "institution" | "individual";
+
+export interface InvestorRankingItem {
+  rank: number;
+  symbol: string;
+  /** 종목 목록에 없으면 null */
+  name: string | null;
+  /** 순매수(또는 순매도) 거래대금, 원. 항상 양수 */
+  amount: number;
+  price: number | null;
+  changeRate: number | null;
+}
+
+/** 투자자별 순매수·순매도 상위 종목 (최근 영업일 기준) */
+export interface InvestorRankings {
+  investor: RankingInvestor;
+  /** 순위 기준 시각. 데이터가 없으면 null */
+  rankedAt: string | null;
+  netBuy: InvestorRankingItem[];
+  netSell: InvestorRankingItem[];
+}
+
 /** DART 사업보고서 기반 재무 지표 */
 export interface Valuation {
   /** 예: "2025 사업보고서 (연결)" */

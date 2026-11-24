@@ -37,7 +37,8 @@ const SEARCH_LIMIT = 20;
 /** 토스 캔들 한 번 조회 상한 */
 const CANDLE_PAGE = 200;
 const ORDERBOOK_DEPTH = 10;
-const FLOW_DAYS = 20;
+/** 투자자 동향 화면의 일별 기간. 누적 추이에서 꺾인 시점을 보려고 석 달 가까이 받는다 */
+const FLOW_DAYS = 60;
 
 /** 분봉 화면용 1분봉 개수 — 정규장+NXT 로 하루 반 남짓 (5페이지) */
 export const MINUTE_CANDLES = 1000;
@@ -303,7 +304,7 @@ export async function getPriceLimits(rawSymbol: string): Promise<TossPriceLimits
 }
 
 /**
- * 최근 20거래일 투자자별 순매수와 공매도 비중 (최신순). 국내 종목만.
+ * 최근 60거래일 투자자별 순매수와 공매도 비중 (최신순). 국내 종목만.
  * 공매도 조회가 실패해도 매매동향은 보여준다.
  */
 export async function getInvestorFlows(rawSymbol: string): Promise<InvestorFlowDay[]> {
@@ -364,6 +365,12 @@ async function getUniverse(): Promise<StockSearchItem[]> {
     });
 
   return universeLoading;
+}
+
+/** 종목코드 → 종목명 (국내 종목 목록 기준). 목록에 없는 코드는 빠진다. */
+export async function getStockNames(symbols: string[]): Promise<Map<string, string>> {
+  const wanted = new Set(symbols);
+  return new Map((await getUniverse()).filter((s) => wanted.has(s.symbol)).map((s) => [s.symbol, s.name]));
 }
 
 /**

@@ -127,6 +127,8 @@ export interface TossInvestorVolume {
 /** GET /api/v1/stocks/{symbol}/investor-trading 의 일별 기록 */
 export interface TossInvestorTradingRecord {
   date: string;
+  /** 기록 전체의 마지막 갱신 시각. 당일 기록은 장중 잠정치로 계속 바뀐다 */
+  updatedAt: string;
   /** 당일 잠정 기록에서는 null */
   individual: TossInvestorVolume | null;
   foreigner: TossInvestorVolume;
@@ -180,6 +182,36 @@ export interface TossMarketInvestorPage {
   /** 최신순 */
   records: TossMarketInvestorRecord[];
   nextUntil: string | null;
+}
+
+/** GET /api/v1/rankings/investor-trading 의 한 줄. 금액은 원화 정수, 항상 양수 */
+export interface TossNetBuyRankingItem {
+  rank: number;
+  symbol: string;
+  currency: TossCurrency;
+  netBuyAmount: string;
+}
+
+export interface TossNetSellRankingItem {
+  rank: number;
+  symbol: string;
+  currency: TossCurrency;
+  netSellAmount: string;
+}
+
+export interface TossInvestorNetTradingRanking {
+  /** 이 투자자 순위의 마지막 갱신 시각. 데이터가 없으면 null */
+  rankedAt: string | null;
+  netBuyRankings: TossNetBuyRankingItem[];
+  netSellRankings: TossNetSellRankingItem[];
+}
+
+/** GET /api/v1/rankings/investor-trading — 최근 영업일 기준만 (과거 날짜 조회 불가) */
+export interface TossInvestorTradingRanking {
+  foreigner: TossInvestorNetTradingRanking;
+  institution: TossInvestorNetTradingRanking;
+  /** 정규장 종료 전까지 직전 영업일 기준 */
+  individual: TossInvestorNetTradingRanking;
 }
 
 /** GET /api/v1/stocks/{symbol}/short-selling 의 일별 기록 */
