@@ -26,6 +26,7 @@ import ChartPanel from "./ChartPanel";
 import FinancialsPanel from "./FinancialsPanel";
 import { GlossaryList } from "./Glossary";
 import InvestorFlowPanel from "./InvestorFlowPanel";
+import InvestorRankingPanel from "./InvestorRankingPanel";
 import MarketPanel from "./MarketPanel";
 import MarketStrip from "./MarketStrip";
 import OrderbookPanel from "./OrderbookPanel";
@@ -303,9 +304,19 @@ export default function StockSimulator() {
         )}
 
         {tab === "investors" && (
-          <Panel title="투자자 동향">
-            <InvestorFlowPanel symbol={selected.symbol} />
-          </Panel>
+          <div className="grid gap-2 xl:grid-cols-[minmax(0,1fr)_24rem]">
+            <Panel title="투자자 동향">
+              <InvestorFlowPanel symbol={selected.symbol} />
+            </Panel>
+            <Panel title="투자자별 순매수·순매도 상위" className="xl:self-start">
+              <InvestorRankingPanel
+                onSelect={(stock) => {
+                  select(stock);
+                  if (window.scrollY > 0) window.scrollTo({ top: 0 });
+                }}
+              />
+            </Panel>
+          </div>
         )}
 
         {tab === "market" && (

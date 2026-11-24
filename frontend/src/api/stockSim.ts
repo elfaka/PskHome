@@ -83,6 +83,43 @@ export type InvestorFlowDay = {
   shortSellingRate: number | null;
 };
 
+/** 장중 잠정치 스냅샷 — 그 시각까지의 당일 누적 순매수(주) */
+export type IntradayFlowPoint = {
+  at: string;
+  foreigner: number;
+  institution: number;
+};
+
+/** 오늘 외국인·기관 순매수 흐름 (서버가 장중 잠정치를 모은 것) */
+export type IntradayFlows = {
+  symbol: string;
+  date: string;
+  /** 토스의 가장 최근 기록 날짜. 오늘이 아니면 오늘 잠정치가 아직 없다 */
+  latestDate: string | null;
+  /** 오래된 순 */
+  points: IntradayFlowPoint[];
+  collecting: boolean;
+};
+
+export type RankingInvestor = "foreigner" | "institution" | "individual";
+
+export type InvestorRankingItem = {
+  rank: number;
+  symbol: string;
+  name: string | null;
+  /** 순매수(또는 순매도) 거래대금, 원. 항상 양수 */
+  amount: number;
+  price: number | null;
+  changeRate: number | null;
+};
+
+export type InvestorRankings = {
+  investor: RankingInvestor;
+  rankedAt: string | null;
+  netBuy: InvestorRankingItem[];
+  netSell: InvestorRankingItem[];
+};
+
 export type Valuation = {
   basis: string;
   bsnsYear: number;
@@ -399,6 +436,17 @@ export async function getAnalysis(symbol: string) {
 
 export async function getInvestorFlows(symbol: string) {
   const { data } = await api.get<InvestorFlowDay[]>(`/api/stocksim/stocks/${path(symbol)}/investors`);
+  return data;
+}
+
+export async function getIntradayFlows(symbol: string) {
+  const { data } = await api.get<IntradayFlows>(`/api/stocksim/stocks/${path(symbol)}/investors/intraday`);
+  return data;
+}
+
+/** 투자자별 순매수·순매도 상위 종목 (최근 영업일) */
+export async function getInvestorRankings(investor: RankingInvestor) {
+  const { data } = await api.get<InvestorRankings>("/api/stocksim/rankings/investors", { params: { investor } });
   return data;
 }
 

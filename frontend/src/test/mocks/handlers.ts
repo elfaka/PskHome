@@ -483,6 +483,37 @@ export const handlers = [
     )
   ),
 
+  http.get("/api/stocksim/stocks/:symbol/investors/intraday", ({ params }) =>
+    HttpResponse.json({
+      symbol: params.symbol,
+      date: "2026-10-30",
+      latestDate: "2026-10-30",
+      // 외국인은 10:30 에 고점을 찍고 줄었고, 기관은 계속 늘었다
+      points: [
+        { at: "2026-10-30T09:30:00+09:00", foreigner: 1_000, institution: 100 },
+        { at: "2026-10-30T10:30:00+09:00", foreigner: 50_000, institution: 300 },
+        { at: "2026-10-30T13:30:00+09:00", foreigner: 20_000, institution: 900 },
+      ],
+      collecting: true,
+    })
+  ),
+
+  http.get("/api/stocksim/rankings/investors", ({ request }) => {
+    const investor = new URL(request.url).searchParams.get("investor") ?? "foreigner";
+    if (investor === "institution") {
+      return HttpResponse.json({ investor, rankedAt: null, netBuy: [], netSell: [] });
+    }
+    return HttpResponse.json({
+      investor,
+      rankedAt: "2026-10-30T14:30:00+09:00",
+      netBuy: [
+        { rank: 1, symbol: "000660", name: "SK하이닉스", amount: 120_000_000_000, price: 200_000, changeRate: 0.031 },
+        { rank: 2, symbol: "005930", name: "삼성전자", amount: 80_000_000_000, price: 77_000, changeRate: 0.013 },
+      ],
+      netSell: [{ rank: 1, symbol: "035720", name: "카카오", amount: 30_000_000_000, price: 40_000, changeRate: -0.02 }],
+    });
+  }),
+
   http.get("/api/stocksim/orderbook/:symbol", () =>
     HttpResponse.json({
       timestamp: "2026-10-30T05:00:00.000Z",

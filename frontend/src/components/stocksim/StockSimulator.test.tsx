@@ -203,6 +203,59 @@ describe("StockSimulator", () => {
     expect(screen.getByRole("figure", { name: "일별 순매수 추이" })).toBeInTheDocument();
   });
 
+  it("shows intraday and cumulative investor flows with where they turned", async () => {
+    window.history.replaceState(null, "", "/stocksim?tab=investors");
+    render(<StockSimulator />);
+
+    const intraday = await screen.findByRole("region", { name: "오늘 장중 수급" });
+    expect(await within(intraday).findByRole("figure", { name: "오늘 장중 순매수 흐름" })).toBeInTheDocument();
+    // 외국인은 10:30 고점 뒤 줄었고, 기관은 계속 늘었다
+    expect(within(intraday).getByText("10:30 고점 +5만 이후 -3만 줄어 현재 +2만")).toBeInTheDocument();
+    expect(within(intraday).getByText("계속 증가 — 지금이 최고 +900 (09:30 저점보다 +800)")).toBeInTheDocument();
+    expect(within(intraday).getByText("시각별 기록 3개")).toBeInTheDocument();
+
+    const daily = screen.getByRole("region", { name: "일별 누적 순매수" });
+    expect(within(daily).getByRole("figure", { name: "일별 누적 순매수 추이" })).toBeInTheDocument();
+    expect(within(daily).getByText("계속 증가 — 지금이 최고 +3,500 (10/26 저점보다 +2,800)")).toBeInTheDocument();
+  });
+
+  it("explains when there is no provisional figure for today yet", async () => {
+    server.use(
+      http.get("/api/stocksim/stocks/:symbol/investors/intraday", () =>
+        HttpResponse.json({ symbol: "005930", date: "2026-11-01", latestDate: "2026-10-30", points: [], collecting: false })
+      )
+    );
+    window.history.replaceState(null, "", "/stocksim?tab=investors");
+    render(<StockSimulator />);
+
+    const intraday = await screen.findByRole("region", { name: "오늘 장중 수급" });
+    expect(await within(intraday).findByText(/오늘 잠정치가 아직 없습니다.*마지막 기록 2026-10-30/)).toBeInTheDocument();
+  });
+
+  it("lists the stocks investors net bought and sold, and opens one", async () => {
+    window.history.replaceState(null, "", "/stocksim?tab=investors");
+    const user = userEvent.setup();
+    render(<StockSimulator />);
+
+    const buys = await screen.findByRole("region", { name: "외국인 순매수 상위" });
+    expect(within(buys).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "1SK하이닉스200,000원+3.10%+1,200억",
+      "2삼성전자77,000원+1.30%+800억",
+    ]);
+    expect(within(screen.getByRole("region", { name: "외국인 순매도 상위" })).getByText("-300억")).toBeInTheDocument();
+
+    await user.click(within(screen.getByRole("tablist", { name: "투자자" })).getByRole("tab", { name: "기관" }));
+    expect(await screen.findByRole("region", { name: "기관 순매수 상위" })).toHaveTextContent("데이터가 없습니다.");
+    expect(screen.getByText(/순위 데이터가 없습니다/)).toBeInTheDocument();
+
+    await user.click(within(screen.getByRole("tablist", { name: "투자자" })).getByRole("tab", { name: "외국인" }));
+    await user.click(await within(await screen.findByRole("region", { name: "외국인 순매수 상위" })).findByRole("button", { name: /SK하이닉스/ }));
+
+    const header = screen.getByRole("region", { name: "종목 시세" });
+    expect(await within(header).findByText("SK하이닉스")).toBeInTheDocument();
+    expect(screenTab("투자자 동향")).toHaveAttribute("aria-selected", "true");
+  });
+
   it("shows KOSPI, KOSDAQ and the fear & greed index in the market strip", async () => {
     render(<StockSimulator />);
 
