@@ -139,6 +139,7 @@ export function createTossClient(options: TossClientOptions): TossClient {
         );
       }
       if (res.status === 429) {
+        console.warn("[toss] 429 rate limited: /oauth2/token");
         throw new HttpError(503, "TOSS_RATE_LIMITED", "토스 API 요청 한도를 넘었습니다. 잠시 후 다시 시도하세요.");
       }
       throw new HttpError(UPSTREAM_FAILURE, "TOSS_AUTH_FAILED", `토스 API 토큰 발급에 실패했습니다: ${detail}`);
@@ -189,6 +190,8 @@ export function createTossClient(options: TossClientOptions): TossClient {
         continue;
       }
 
+      // 한도 초과는 어느 묶음(경로)이 넘쳤는지 알아야 고칠 수 있다. 경로만 남긴다 (토큰·키는 남기지 않는다).
+      if (res.status === 429) console.warn(`[toss] 429 rate limited: ${path}`);
       throw toHttpError(res.status, code, message);
     }
   }

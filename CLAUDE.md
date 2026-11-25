@@ -180,6 +180,7 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
   재무 지표(PER·EPS·PBR 등)는 OpenDART(`dart/dartClient.ts`)에서 받는다. 규칙 기반 매수·매도 추천(`analysis.service.ts`),
   코스피·코스닥 지수와 자체 계산 공포·탐욕 지수(`market.service.ts`), 장중 수급 스냅샷·투자자별 순매수 상위(`investorFlow.service.ts`) 포함.
   매매는 서버에서 가상 체결해 포트폴리오를 express-session 에 둔다. `/api/stocksim/**` 는 공개.
+  화면은 지금 종목 정보 페이지라 주문·계좌 UI 를 주석으로 보존해 두었다 (백엔드 매매 엔드포인트는 그대로).
   **토스 주문 API 는 실제 계좌에 체결되므로 호출하지 않는다.**
 - **`modules/survey/`** — Google Forms/Drive 연동. `passport-google-oauth20` 세션 로그인.
   OAuth2 엔드포인트: `/api/oauth2/**`, `/api/login/oauth2/**`.

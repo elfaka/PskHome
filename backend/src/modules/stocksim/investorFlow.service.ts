@@ -37,11 +37,20 @@ const SAMPLE_INTERVAL_MS = 5 * 60_000;
 /** 한 종목·하루에 쌓는 스냅샷 상한 (5분 간격이면 하루 80개 남짓) */
 const MAX_POINTS = 300;
 const RANKING_COUNT = 20;
-/** 등락률을 붙일 때 한 번에 조회하는 종목 수. 일봉 조회 한도(초당 20회)를 넘지 않도록 나눠 받는다 */
-const QUOTE_CHUNK = 10;
+/**
+ * 등락률을 붙일 때 한 번에 조회하는 종목 수. 종목마다 일봉을 조회하는데, 차트 일봉과 같은 한도(초당 20회)를 쓴다.
+ * 순위를 받는 동안에도 차트가 한도를 절반은 쓸 수 있게 초당 10회 안쪽으로 나눠 받는다.
+ */
+const QUOTE_CHUNK = 5;
 
 /** 등락률 조회 묶음 사이 간격 (테스트는 0) */
-export const rankingThrottle = { intervalMs: 600 };
+export const rankingThrottle = { intervalMs: 500 };
+
+/**
+ * 장중 수집에서 종목 사이 간격 (테스트는 0).
+ * 매매동향 한도(초당 10회)를 수집이 혼자 다 쓰면 그 순간 화면의 수급·매매 신호 조회가 거절된다.
+ */
+export const samplerThrottle = { intervalMs: 250 };
 
 const latestCache = new TtlCache<TossInvestorTradingRecord | null>(60_000);
 const rankingRawCache = new TtlCache<TossInvestorTradingRanking>(5 * 60_000);
@@ -145,7 +154,10 @@ export async function sampleTrackedSymbols(now = new Date()): Promise<number> {
   const client = getTossClient();
   let recorded = 0;
 
-  for (const symbol of trackedSymbols(now)) {
+  for (const [i, symbol] of trackedSymbols(now).entries()) {
+    if (i > 0 && samplerThrottle.intervalMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, samplerThrottle.intervalMs));
+    }
     try {
       const record = (await client.getInvestorTrading(symbol, 1)).records[0];
       if (record) {

@@ -5,18 +5,17 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   getMarket,
   getOverview,
-  getPortfolio,
+  // 모의투자 — getPortfolio, resetPortfolio, type OrderSide,
   getQuotesWithChange,
-  resetPortfolio,
+  type Holding,
   type MarketChartSymbol,
-  type OrderSide,
   type QuoteWithChange,
 } from "@/api/stockSim";
-import Alert from "@/components/ui/Alert";
+// 모의투자 — import Alert from "@/components/ui/Alert";
 import Container from "@/components/ui/Container";
-import Skeleton from "@/components/ui/Skeleton";
+// 모의투자 — import Skeleton from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
-import { errorMessage } from "@/lib/errorMessage";
+// 모의투자 — import { errorMessage } from "@/lib/errorMessage";
 import { usePolling } from "@/lib/stocksim/usePolling";
 import { useSimTab, type SimTab } from "@/lib/stocksim/useTab";
 import { DEFAULT_WATCHLIST, useWatchlist } from "@/lib/stocksim/watchlist";
@@ -31,33 +30,45 @@ import TodayFlowCard from "./TodayFlowCard";
 import MarketPanel from "./MarketPanel";
 import MarketStrip from "./MarketStrip";
 import OrderbookPanel from "./OrderbookPanel";
-import OrderPanel from "./OrderPanel";
-import { AccountPanel, PortfolioSummary } from "./PortfolioSections";
+// 모의투자 — import OrderPanel from "./OrderPanel";
+// 모의투자 — import { AccountPanel, PortfolioSummary } from "./PortfolioSections";
 import StockHeader, { StockStats } from "./StockHeader";
 import StockSearch from "./StockSearch";
 import TradesPanel from "./TradesPanel";
 import ValuationPanel from "./ValuationPanel";
 import WatchRail from "./WatchRail";
 
+/*
+ * ─── 모의투자(가상 매매) 보존 안내 ───────────────────────────────────────────
+ * 이 화면은 종목 정보를 한눈에 판단하는 페이지로 바뀌어 주문·계좌 기능을 화면에서 뺐다.
+ * 코드는 지우지 않고 "모의투자 —" 주석으로 남겼다. 다시 넣을 때는 이 파일에서 "모의투자" 를 찾아
+ * 주석을 풀고, `lib/stocksim/useTab.ts` 의 "account" 탭과 테스트의 주석 블록도 되살린다.
+ * `OrderPanel.tsx`, `PortfolioSections.tsx`, `api/stockSim.ts` 의 주문·포트폴리오 함수,
+ * 백엔드 매매 엔드포인트는 그대로 있다.
+ * ──────────────────────────────────────────────────────────────────────────────
+ */
+
 /** 화면에서 고른 종목 */
 type SelectedStock = { symbol: string; name: string };
 
 const PRICE_REFRESH_MS = 5_000;
-const PORTFOLIO_REFRESH_MS = 10_000;
+// 모의투자 — const PORTFOLIO_REFRESH_MS = 10_000;
 const MARKET_REFRESH_MS = 10_000;
+/** 모의투자를 빼서 보유 종목이 없다 (관심 줄이 보유 칩을 그리지 않는다) */
+const NO_HOLDINGS: Holding[] = [];
 
 const TABS: { value: SimTab; label: string }[] = [
   { value: "trade", label: "매매" },
   { value: "valuation", label: "투자 지표" },
   { value: "investors", label: "투자자 동향" },
   { value: "market", label: "시장" },
-  { value: "account", label: "계좌" },
+  // 모의투자 — { value: "account", label: "계좌" },
 ];
 
 /** 종목을 고르는 탭 — 이 탭들에서만 종목 선택 줄을 보여준다 */
 const STOCK_TABS: SimTab[] = ["trade", "valuation", "investors"];
 
-/** 좁은 화면의 매매 탭은 차트·신호 / 호가·주문을 나눠 보여준다. */
+/** 좁은 화면의 매매 탭은 차트·신호 / 호가·체결을 나눠 보여준다. */
 type TradePane = "chart" | "order";
 
 function Panel({ title, aside, children, className }: { title?: string; aside?: ReactNode; children: ReactNode; className?: string }) {
@@ -75,29 +86,30 @@ function Panel({ title, aside, children, className }: { title?: string; aside?: 
 }
 
 /**
- * 주식 모의투자 — 상단 바의 탭으로 화면을 나눈다.
+ * 주식 정보 — 상단 바의 탭으로 화면을 나눈다. (예전 모의투자 화면, 주문·계좌는 주석으로 보존)
  *
  * ```
- * ┌ 주식 모의투자 [매매|투자 지표|투자자 동향|시장|계좌]   코스피 · 코스닥 · VIX · 공포탐욕 │ 총자산 ┐  (상단 바, 고정)
- * ├ ★ 종목 시세 · 검색 · 관심/보유 칩 ─────────────────────────────────────────┤  (종목 탭에서만)
- * └ 탭 화면 — 매매: 시세 요약·차트·매매 신호 │ 호가·주문·체결 ───────────────────┘
+ * ┌ 주식 모의투자 [매매|투자 지표|투자자 동향|시장]   코스피 · 코스닥 · VIX · 공포탐욕 ┐  (상단 바, 고정)
+ * ├ ★ 종목 시세 · 검색 · 관심 칩 ─────────────────────────────────────────────┤  (종목 탭에서만)
+ * └ 탭 화면 — 매매: 시세 요약·차트·매매 신호 │ 호가·체결 ─────────────────────┘
  * ```
- * 탭은 주소 `?tab=` 에 남는다. 포트폴리오는 백엔드 세션에 있다 (로그인 불필요, 재배포 시 초기화).
+ * 탭은 주소 `?tab=` 에 남는다.
  */
 export default function StockSimulator() {
   const [tab, changeTab] = useSimTab();
   const [selected, setSelected] = useState<SelectedStock>(DEFAULT_WATCHLIST[0]);
-  const [side, setSide] = useState<OrderSide>("BUY");
+  // 모의투자 — const [side, setSide] = useState<OrderSide>("BUY");
   const [tradePane, setTradePane] = useState<TradePane>("chart");
   const [marketIndex, setMarketIndex] = useState<MarketChartSymbol>("KOSPI");
-  const [resetError, setResetError] = useState<string | null>(null);
+  // 모의투자 — const [resetError, setResetError] = useState<string | null>(null);
   const watchlist = useWatchlist();
 
-  const portfolio = usePolling("portfolio", getPortfolio, PORTFOLIO_REFRESH_MS, "포트폴리오를 불러오지 못했습니다.");
+  // 모의투자 — const portfolio = usePolling("portfolio", getPortfolio, PORTFOLIO_REFRESH_MS, "포트폴리오를 불러오지 못했습니다.");
   const market = usePolling("market", getMarket, MARKET_REFRESH_MS, "지수를 불러오지 못했습니다.");
   const overview = usePolling(selected.symbol, () => getOverview(selected.symbol), PRICE_REFRESH_MS, "시세를 불러오지 못했습니다.");
 
-  const holdings = useMemo(() => portfolio.data?.holdings ?? [], [portfolio.data]);
+  // 모의투자 — const holdings = useMemo(() => portfolio.data?.holdings ?? [], [portfolio.data]);
+  const holdings = NO_HOLDINGS;
   const railSymbols = useMemo(() => {
     const symbols = new Set(watchlist.items.map((i) => i.symbol));
     for (const h of holdings) symbols.add(h.symbol);
@@ -117,7 +129,7 @@ export default function StockSimulator() {
   );
 
   const o = overview.data;
-  const held = holdings.find((h) => h.symbol === selected.symbol);
+  // 모의투자 — const held = holdings.find((h) => h.symbol === selected.symbol);
   /** 투자자 수급은 국내 종목만 있다 (개요를 받기 전에는 그리지 않는다) */
   const domestic = o?.symbol === selected.symbol && o.currency === "KRW";
 
@@ -138,6 +150,7 @@ export default function StockSimulator() {
     setTab("market");
   };
 
+  /* 모의투자 — 호가를 누르면 주문창을 그 방향으로 연다
   const pickSide = (next: OrderSide) => {
     setSide(next);
     setTradePane("order");
@@ -155,13 +168,14 @@ export default function StockSimulator() {
       setResetError(errorMessage(e, "초기화하지 못했습니다."));
     }
   };
+  */
 
   /** 좁은 화면 매매 탭에서 지금 하위 탭이 아니면 숨긴다 (lg 이상은 항상 보인다) */
   const paneOnly = (pane: TradePane) => tradePane !== pane && "max-lg:hidden";
 
   return (
     <Container size="full" className="pb-3">
-      {/* 상단 바 — 탭 · 지수 요약 · 계좌 요약.
+      {/* 상단 바 — 탭 · 지수 요약.
           사이트 헤더(SiteHeader: h-14 + 아래 테두리 1px) 바로 밑에 붙는다. 헤더 높이를 바꾸면 여기도 바꾼다. */}
       <div className="sticky top-[calc(3.5rem+1px)] z-30 -mx-2 border-b border-line bg-bg/90 px-2 backdrop-blur-md sm:-mx-3 sm:px-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 py-1.5">
@@ -191,18 +205,20 @@ export default function StockSimulator() {
               error={market.error}
               onOpen={openMarket}
             />
+            {/* 모의투자 — 상단 바 계좌 요약
             {portfolio.data && (
               <div className="ml-auto border-l border-line pl-3 max-md:hidden">
                 <PortfolioSummary portfolio={portfolio.data} />
               </div>
             )}
+            */}
           </div>
         </div>
       </div>
 
-      {(portfolio.error || resetError) && <Alert className="mt-2">{resetError ?? portfolio.error}</Alert>}
+      {/* 모의투자 — {(portfolio.error || resetError) && <Alert className="mt-2">{resetError ?? portfolio.error}</Alert>} */}
 
-      {/* 종목 선택 줄 — 종목 시세 · 검색 · 관심/보유 칩 */}
+      {/* 종목 선택 줄 — 종목 시세 · 검색 · 관심 칩 */}
       {stockTab && (
         <div className="mt-2 space-y-2 rounded-card border border-line bg-surface px-3 py-2">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -236,7 +252,7 @@ export default function StockSimulator() {
               {(
                 [
                   ["chart", "차트·신호"],
-                  ["order", "호가·주문"],
+                  ["order", "호가·체결"],
                 ] as const
               ).map(([value, label]) => (
                 <button
@@ -256,13 +272,9 @@ export default function StockSimulator() {
             </div>
 
             <div className={cn("flex min-w-0 flex-col gap-2", paneOnly("chart"))}>
+              {/* 오늘 수급 카드는 투자자 동향 탭에만 둔다 (매매 탭은 매매 신호의 수급 항목으로 본다) */}
               <Panel>
                 <StockStats overview={o} />
-                {domestic && (
-                  <div className="border-t border-line">
-                    <TodayFlowCard symbol={selected.symbol} volume={o?.volume ?? null} />
-                  </div>
-                )}
                 <div className="border-t border-line">
                   <ChartPanel symbol={selected.symbol} livePrice={o?.price ?? null} liveTime={o?.priceTime ?? null} />
                 </div>
@@ -278,9 +290,10 @@ export default function StockSimulator() {
                   symbol={selected.symbol}
                   prevClose={o?.prevClose ?? null}
                   currentPrice={o?.price ?? null}
-                  onPickSide={pickSide}
+                  // 모의투자 — onPickSide={pickSide}
                 />
               </Panel>
+              {/* 모의투자 — 주문
               <Panel>
                 <OrderPanel
                   stock={selected}
@@ -292,6 +305,7 @@ export default function StockSimulator() {
                   onFilled={() => portfolio.refresh()}
                 />
               </Panel>
+              */}
               <Panel>
                 <TradesPanel symbol={selected.symbol} prevClose={o?.prevClose ?? null} />
               </Panel>
@@ -338,6 +352,7 @@ export default function StockSimulator() {
           </Panel>
         )}
 
+        {/* 모의투자 — 계좌 탭
         {tab === "account" &&
           (portfolio.data ? (
             <AccountPanel
@@ -352,6 +367,7 @@ export default function StockSimulator() {
           ) : portfolio.error ? null : (
             <Skeleton className="h-60 w-full" />
           ))}
+        */}
       </div>
     </Container>
   );

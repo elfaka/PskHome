@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { getOrderbook, type OrderSide } from "@/api/stockSim";
 import Skeleton from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
@@ -12,8 +14,8 @@ const REFRESH_MS = 3_000;
  * 10단계 호가창 — 위는 매도호가(파랑 잔량), 아래는 매수호가(빨강 잔량), 가운데가 가격.
  * 가격은 전일 종가 대비로 색을 칠하고, 현재가와 같은 호가는 테두리로 표시한다.
  *
- * 매도호가를 누르면 매수, 매수호가를 누르면 매도로 주문창을 바꾼다.
- * (모의투자는 시장가만 있어 가격은 넘기지 않는다)
+ * `onPickSide` 를 주면 매도호가를 누르면 매수, 매수호가를 누르면 매도로 주문창을 바꾼다
+ * (모의투자는 시장가만 있어 가격은 넘기지 않는다). 지금은 주문창이 없어 호가는 보기만 한다.
  */
 export default function OrderbookPanel({
   symbol,
@@ -24,7 +26,7 @@ export default function OrderbookPanel({
   symbol: string;
   prevClose: number | null;
   currentPrice: number | null;
-  onPickSide: (side: OrderSide) => void;
+  onPickSide?: (side: OrderSide) => void;
 }) {
   const { data: book, error } = usePolling(symbol, () => getOrderbook(symbol), REFRESH_MS, "호가를 불러오지 못했습니다.");
 
@@ -61,11 +63,33 @@ export default function OrderbookPanel({
     </div>
   );
 
+  /** 호가 한 줄 — 주문창이 있으면 누르는 버튼, 없으면 보기만 하는 줄 */
+  const level = (label: string, side: OrderSide, tone: "ask" | "bid", cells: ReactNode) => {
+    const base = cn("grid h-8 w-full grid-cols-[1fr_6.5rem_1fr]", tone === "ask" ? "bg-info-soft/40" : "bg-danger-soft/40");
+    if (!onPickSide) {
+      return (
+        <div aria-label={label} className={base}>
+          {cells}
+        </div>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => onPickSide(side)}
+        aria-label={`${label}, ${side === "BUY" ? "매수" : "매도"} 주문`}
+        className={cn(base, "transition", tone === "ask" ? "hover:bg-info-soft" : "hover:bg-danger-soft")}
+      >
+        {cells}
+      </button>
+    );
+  };
+
   return (
     <section aria-label="호가" className="flex flex-col">
       <div className="flex items-center justify-between border-b border-line px-3 py-2">
         <h2 className="text-sm font-semibold text-fg">호가</h2>
-        <span className="text-[11px] text-fg-subtle">3초마다 갱신 · 누르면 주문</span>
+        <span className="text-[11px] text-fg-subtle">3초마다 갱신{onPickSide ? " · 누르면 주문" : ""}</span>
       </div>
 
       {error && !book && (
@@ -81,32 +105,32 @@ export default function OrderbookPanel({
           <ul aria-label="매도호가">
             {book.asks.map((l) => (
               <li key={`a${l.price}`}>
-                <button
-                  type="button"
-                  onClick={() => onPickSide("BUY")}
-                  aria-label={`매도호가 ${formatNumber(l.price)}원 잔량 ${formatNumber(l.volume)}주, 매수 주문`}
-                  className="grid h-8 w-full grid-cols-[1fr_6.5rem_1fr] bg-info-soft/40 transition hover:bg-info-soft"
-                >
-                  {bar(l.volume, "ask")}
-                  {priceCell(l.price)}
-                  <span />
-                </button>
+                {level(
+                  `매도호가 ${formatNumber(l.price)}원 잔량 ${formatNumber(l.volume)}주`,
+                  "BUY",
+                  "ask",
+                  <>
+                    {bar(l.volume, "ask")}
+                    {priceCell(l.price)}
+                    <span />
+                  </>
+                )}
               </li>
             ))}
           </ul>
           <ul aria-label="매수호가">
             {book.bids.map((l) => (
               <li key={`b${l.price}`}>
-                <button
-                  type="button"
-                  onClick={() => onPickSide("SELL")}
-                  aria-label={`매수호가 ${formatNumber(l.price)}원 잔량 ${formatNumber(l.volume)}주, 매도 주문`}
-                  className="grid h-8 w-full grid-cols-[1fr_6.5rem_1fr] bg-danger-soft/40 transition hover:bg-danger-soft"
-                >
-                  <span />
-                  {priceCell(l.price)}
-                  {bar(l.volume, "bid")}
-                </button>
+                {level(
+                  `매수호가 ${formatNumber(l.price)}원 잔량 ${formatNumber(l.volume)}주`,
+                  "SELL",
+                  "bid",
+                  <>
+                    <span />
+                    {priceCell(l.price)}
+                    {bar(l.volume, "bid")}
+                  </>
+                )}
               </li>
             ))}
           </ul>

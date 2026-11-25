@@ -18,6 +18,7 @@ const {
   getIntradayFlows,
   isMarketHours,
   rankingThrottle,
+  samplerThrottle,
   recordSnapshot,
   resetInvestorFlowState,
   sampleTrackedSymbols,
@@ -56,6 +57,7 @@ describe("investor flow extensions", () => {
     };
     holder.client = toss;
     rankingThrottle.intervalMs = 0;
+    samplerThrottle.intervalMs = 0;
     resetMarketDataCache();
     resetInvestorFlowState();
   });
@@ -161,6 +163,22 @@ describe("investor flow extensions", () => {
       };
 
       expect(await sampleTrackedSymbols(kst("2026-11-24", "10:35"))).toBe(1);
+    });
+
+    it("spaces the calls so sampling does not use up the investor-trading limit", async () => {
+      for (const [i, symbol] of ["005930", "000660", "035720"].entries()) {
+        await getIntradayFlows(symbol, new Date(kst("2026-11-24", "10:00").getTime() + i * 1_000));
+      }
+      const times: number[] = [];
+      toss.getInvestorTrading = async () => {
+        times.push(Date.now());
+        return { records: [record("2026-11-24", "2026-11-24T10:30:00+09:00", 1, 1)], nextUntil: null };
+      };
+      samplerThrottle.intervalMs = 30;
+
+      expect(await sampleTrackedSymbols(kst("2026-11-24", "10:35"))).toBe(3);
+      expect(times[1] - times[0]).toBeGreaterThanOrEqual(25);
+      expect(times[2] - times[1]).toBeGreaterThanOrEqual(25);
     });
   });
 

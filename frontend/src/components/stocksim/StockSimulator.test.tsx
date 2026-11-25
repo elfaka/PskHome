@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+// 모의투자 — 주문 테스트를 되살리면 waitFor 도 다시 import 한다
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 
@@ -27,7 +28,7 @@ describe("StockSimulator", () => {
     window.history.replaceState(null, "", "/stocksim");
   });
 
-  it("starts on the trade tab with the quote, key stats, chart, signal and order panels", async () => {
+  it("starts on the trade tab with the quote, key stats, chart, signal, orderbook and trades", async () => {
     render(<StockSimulator />);
 
     expect(screenTab("매매")).toHaveAttribute("aria-selected", "true");
@@ -41,19 +42,38 @@ describe("StockSimulator", () => {
     expect(within(stats).getByText("11.66배")).toBeInTheDocument();
 
     expect(screen.getByRole("region", { name: "매매 신호" })).toBeInTheDocument();
-    expect(screen.getByRole("form", { name: "주문" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "호가" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "체결" })).toBeInTheDocument();
     // 다른 탭의 내용은 그리지 않는다
     expect(screen.queryByRole("region", { name: "투자 지표" })).not.toBeInTheDocument();
   });
 
-  it("opens the tab named in the address and keeps the chosen tab in it", async () => {
+  it("hides the paper-trading order, account tab and account summary", async () => {
+    render(<StockSimulator />);
+
+    await screen.findByRole("region", { name: "시세 요약" });
+    expect(screen.queryByRole("form", { name: "주문" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("tablist", { name: "화면" })).queryByRole("tab", { name: "계좌" })).not.toBeInTheDocument();
+    expect(screen.queryByText("총자산")).not.toBeInTheDocument();
+    // 매매 탭에는 오늘 수급 카드가 없다 (투자자 동향 탭에만)
+    expect(screen.queryByRole("region", { name: "오늘 수급" })).not.toBeInTheDocument();
+  });
+
+  it("opens the trade tab for an old account-tab address", async () => {
     window.history.replaceState(null, "", "/stocksim?tab=account");
+    render(<StockSimulator />);
+
+    expect(screenTab("매매")).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("region", { name: "시세 요약" })).toBeInTheDocument();
+  });
+
+  it("opens the tab named in the address and keeps the chosen tab in it", async () => {
+    window.history.replaceState(null, "", "/stocksim?tab=market");
     const user = userEvent.setup();
     render(<StockSimulator />);
 
-    expect(screenTab("계좌")).toHaveAttribute("aria-selected", "true");
-    expect(await screen.findByRole("region", { name: "보유종목 1" })).toBeInTheDocument();
-    // 계좌 탭에는 종목 선택 줄이 없다
+    expect(screenTab("시장")).toHaveAttribute("aria-selected", "true");
+    // 시장 탭에는 종목 선택 줄이 없다
     expect(screen.queryByRole("region", { name: "종목 시세" })).not.toBeInTheDocument();
 
     await user.click(screenTab("투자자 동향"));
@@ -61,6 +81,17 @@ describe("StockSimulator", () => {
 
     await user.click(screenTab("매매"));
     expect(window.location.search).toBe("");
+  });
+
+  /* 모의투자 — 계좌 탭을 되살리면 아래 테스트도 되살린다
+  it("opens the account tab from the address", async () => {
+    window.history.replaceState(null, "", "/stocksim?tab=account");
+    render(<StockSimulator />);
+
+    expect(screenTab("계좌")).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("region", { name: "보유종목 1" })).toBeInTheDocument();
+    // 계좌 탭에는 종목 선택 줄이 없다
+    expect(screen.queryByRole("region", { name: "종목 시세" })).not.toBeInTheDocument();
   });
 
   it("goes back to the trade tab when a holding is picked in the account tab", async () => {
@@ -74,6 +105,7 @@ describe("StockSimulator", () => {
     expect(screenTab("매매")).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("form", { name: "주문" })).toBeInTheDocument();
   });
+  */
 
   it("draws the chart and switches timeframe", async () => {
     const user = userEvent.setup();
@@ -203,7 +235,8 @@ describe("StockSimulator", () => {
     expect(screen.getByRole("figure", { name: "일별 순매수 추이" })).toBeInTheDocument();
   });
 
-  it("sums up today's foreign and institutional flow above the chart", async () => {
+  it("sums up today's foreign and institutional flow at the top of the investor tab", async () => {
+    window.history.replaceState(null, "", "/stocksim?tab=investors");
     render(<StockSimulator />);
 
     const card = await screen.findByRole("region", { name: "오늘 수급" });
@@ -221,6 +254,7 @@ describe("StockSimulator", () => {
         HttpResponse.json({ symbol: "005930", date: "2026-11-01", latestDate: "2026-10-29", points: [], collecting: false })
       )
     );
+    window.history.replaceState(null, "", "/stocksim?tab=investors");
     render(<StockSimulator />);
 
     const card = await screen.findByRole("region", { name: "오늘 수급" });
@@ -390,6 +424,16 @@ describe("StockSimulator", () => {
     expect(await within(header).findByText("77,000")).toBeInTheDocument();
   });
 
+  it("renders the orderbook for viewing only", async () => {
+    render(<StockSimulator />);
+
+    const book = screen.getByRole("region", { name: "호가" });
+    expect(await within(book).findByLabelText(/매수호가 77,000원/)).toBeInTheDocument();
+    expect(within(book).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(book).getByText("3초마다 갱신")).toBeInTheDocument();
+  });
+
+  /* 모의투자 — 주문창을 되살리면 아래 테스트들도 되살린다
   it("renders the orderbook and switches the order to sell when a bid is clicked", async () => {
     const user = userEvent.setup();
     render(<StockSimulator />);
@@ -400,6 +444,7 @@ describe("StockSimulator", () => {
     const order = screen.getByRole("form", { name: "주문" });
     expect(within(order).getByRole("button", { name: "시장가 매도" })).toBeInTheDocument();
   });
+  */
 
   it("selects a stock from search results", async () => {
     const user = userEvent.setup();
@@ -425,6 +470,7 @@ describe("StockSimulator", () => {
     );
   });
 
+  /* 모의투자 — 주문창을 되살리면 아래 테스트들도 되살린다
   it("places a market buy and shows the fill", async () => {
     const user = userEvent.setup();
     render(<StockSimulator />);
@@ -475,6 +521,7 @@ describe("StockSimulator", () => {
     expect(within(order).getByText("예수금이 부족합니다.")).toBeInTheDocument();
     expect(within(order).getByRole("button", { name: "시장가 매수" })).toBeDisabled();
   });
+  */
 
   it("shows a market data error such as missing Toss keys", async () => {
     server.use(

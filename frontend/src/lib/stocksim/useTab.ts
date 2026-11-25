@@ -10,7 +10,8 @@ import { useSyncExternalStore } from "react";
  * history.pushState 는 Next App Router 가 감싸 두어 라우터와도 동기화된다 (state 가 null 일 때).
  */
 
-export const SIM_TABS = ["trade", "valuation", "investors", "market", "account"] as const;
+// 모의투자 — 계좌 탭을 다시 쓰면 "account" 를 되살린다 (`?tab=account` 는 지금 매매 탭으로 연다).
+export const SIM_TABS = ["trade", "valuation", "investors", "market" /* , "account" */] as const;
 export type SimTab = (typeof SIM_TABS)[number];
 
 const DEFAULT_TAB: SimTab = "trade";

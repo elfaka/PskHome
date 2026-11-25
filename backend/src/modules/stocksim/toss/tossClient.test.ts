@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 import { createTossClient } from "./tossClient.js";
 
@@ -212,7 +212,8 @@ describe("createTossClient", () => {
     await expect(t.client.getPrices(["005930"])).rejects.toMatchObject({ code: "TOSS_AUTH_FAILED" });
   });
 
-  it("maps 429 to 503 TOSS_RATE_LIMITED", async () => {
+  it("maps 429 to 503 TOSS_RATE_LIMITED and logs which path was limited, without the token", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const t = setup((call) =>
       call.url.endsWith("/oauth2/token")
         ? tokenResponse("tok")
@@ -223,6 +224,9 @@ describe("createTossClient", () => {
       status: 503,
       code: "TOSS_RATE_LIMITED",
     });
+    expect(warn).toHaveBeenCalledWith("[toss] 429 rate limited: /api/v1/prices");
+    expect(warn.mock.calls.flat().join(" ")).not.toContain("tok");
+    warn.mockRestore();
   });
 
   it("passes a 400 from the API through as a client error", async () => {
