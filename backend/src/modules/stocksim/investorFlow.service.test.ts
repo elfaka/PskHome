@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 
 import { createFakeTossClient, type FakeTossClient } from "../../testing/fakeTossClient.js";
@@ -123,11 +123,25 @@ describe("investor flow extensions", () => {
   });
 
   describe("background sampling", () => {
+    // 샘플러는 화면과 같은 60초 캐시(실제 시계)를 거친다. 시계를 화면 조회 시각에 맞추고, 샘플링 때 35분 뒤로 옮긴다.
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(kst("2026-11-24", "10:00"));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const sampleAt = (time: string) => {
+      vi.setSystemTime(kst("2026-11-24", time));
+      return sampleTrackedSymbols(kst("2026-11-24", time));
+    };
+
     it("samples symbols viewed today during market hours", async () => {
       await getIntradayFlows("005930", kst("2026-11-24", "10:00"));
       latest = record("2026-11-24", "2026-11-24T10:30:00+09:00", 2_500, -800);
 
-      const recorded = await sampleTrackedSymbols(kst("2026-11-24", "10:35"));
+      const recorded = await sampleAt("10:35");
       const flows = await getIntradayFlows("005930", kst("2026-11-24", "10:36"));
 
       expect(recorded).toBe(1);
@@ -138,7 +152,7 @@ describe("investor flow extensions", () => {
       await getIntradayFlows("005930", kst("2026-11-24", "10:00"));
       const before = toss.calls.length;
 
-      expect(await sampleTrackedSymbols(kst("2026-11-24", "16:00"))).toBe(0);
+      expect(await sampleAt("16:00")).toBe(0);
       expect(toss.calls.length).toBe(before);
     });
 
@@ -154,6 +168,18 @@ describe("investor flow extensions", () => {
       expect(trackedSymbols(kst("2026-11-25", "10:00"))).toEqual([]);
     });
 
+    it("does not call Toss again for a symbol the screen fetched within the last minute", async () => {
+      await getIntradayFlows("005930", kst("2026-11-24", "10:00"));
+      const before = toss.calls.filter((c) => c.method === "getInvestorTrading").length;
+
+      vi.setSystemTime(kst("2026-11-24", "10:00").getTime() + 30_000);
+      expect(await sampleTrackedSymbols(kst("2026-11-24", "10:00"))).toBe(1);
+      expect(toss.calls.filter((c) => c.method === "getInvestorTrading")).toHaveLength(before);
+
+      expect(await sampleAt("10:35")).toBe(1);
+      expect(toss.calls.filter((c) => c.method === "getInvestorTrading")).toHaveLength(before + 1);
+    });
+
     it("skips symbols that fail and keeps going", async () => {
       await getIntradayFlows("005930", kst("2026-11-24", "10:00"));
       await getIntradayFlows("000660", kst("2026-11-24", "10:01"));
@@ -162,7 +188,7 @@ describe("investor flow extensions", () => {
         return { records: [record("2026-11-24", "2026-11-24T10:30:00+09:00", 1, 1)], nextUntil: null };
       };
 
-      expect(await sampleTrackedSymbols(kst("2026-11-24", "10:35"))).toBe(1);
+      expect(await sampleAt("10:35")).toBe(1);
     });
 
     it("spaces the calls so sampling does not use up the investor-trading limit", async () => {
@@ -171,12 +197,12 @@ describe("investor flow extensions", () => {
       }
       const times: number[] = [];
       toss.getInvestorTrading = async () => {
-        times.push(Date.now());
+        times.push(performance.now());
         return { records: [record("2026-11-24", "2026-11-24T10:30:00+09:00", 1, 1)], nextUntil: null };
       };
       samplerThrottle.intervalMs = 30;
 
-      expect(await sampleTrackedSymbols(kst("2026-11-24", "10:35"))).toBe(3);
+      expect(await sampleAt("10:35")).toBe(3);
       expect(times[1] - times[0]).toBeGreaterThanOrEqual(25);
       expect(times[2] - times[1]).toBeGreaterThanOrEqual(25);
     });

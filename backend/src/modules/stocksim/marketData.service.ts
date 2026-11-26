@@ -1,7 +1,8 @@
 import { HttpError } from "../../lib/httpError.js";
 import { TtlCache } from "../../lib/ttlCache.js";
+import { CandleSeries, type FetchCandlePage } from "./candleSeries.js";
 import { aggregateCandles, bollinger, kstDate, macd, rsi, sma } from "./indicators.js";
-import type { TossPriceLimits, TossStock } from "./toss/toss.types.js";
+import type { TossCandle, TossPriceLimits, TossStock } from "./toss/toss.types.js";
 import { getTossClient } from "./toss/tossClient.js";
 import type {
   CandlePoint,
@@ -20,8 +21,9 @@ import type {
  *
  * | 데이터 | 토스 한도(초당) | 캐시 |
  * |---|---|---|
- * | 현재가·호가·체결·상하한가 | 15회 (MARKET_DATA 그룹 공유) | 현재가 3초, 호가·체결 2초, 상하한가 1분 |
- * | 1분봉 / 일봉 | 20회 | 1분봉 20초, 일봉 5분 — 1회에 200개라 여러 번 이어 받는다 |
+ * | 현재가·호가·체결·상하한가 | 15회 (MARKET_DATA 그룹 공유) | 현재가 3초(받는 중인 종목은 합친다), 호가·체결 2초, 상하한가 그날 1시간 |
+ * | 1분봉 / 일봉 | 20회 | 1분봉 20초, 일봉 5분 — 처음엔 200개씩 이어 받고, 그 뒤로는 최신 1페이지만 이어 붙인다 (`CandleSeries`) |
+ * | 전일 종가(등락률용 일봉 2개) | 20회 (위와 공유) | 시세 날짜가 같으면 하루 |
  * | 종목 정보 | 5회 | 하루 — 이름·시장·통화는 거의 바뀌지 않는다 |
  * | 전체 종목(검색용) | 1회 | 하루 — 토스도 하루 1회 조회 후 캐싱을 권장한다 |
  * | 투자자별 매매동향·공매도 | 10회 | 10분 — 일별 데이터다 |
@@ -34,8 +36,6 @@ const STOCK_ALL_INTERVAL_MS = 1_100;
 /** `/prices`·`/stocks` 다건 조회 상한 */
 const MAX_SYMBOLS = 200;
 const SEARCH_LIMIT = 20;
-/** 토스 캔들 한 번 조회 상한 */
-const CANDLE_PAGE = 200;
 const ORDERBOOK_DEPTH = 10;
 /** 투자자 동향 화면의 일별 기간. 누적 추이에서 꺾인 시점을 보려고 석 달 가까이 받는다 */
 const FLOW_DAYS = 60;
@@ -54,14 +54,25 @@ interface Cached<T> {
 
 const quoteCache = new Map<string, Cached<Quote>>();
 const stockCache = new TtlCache<TossStock>(DAY_MS);
-const minuteCandleCache = new TtlCache<CandlePoint[]>(20_000);
-const dailyCandleCache = new TtlCache<CandlePoint[]>(5 * 60_000);
+const minuteCandles = new CandleSeries(20_000);
+const dailyCandles = new CandleSeries(5 * 60_000);
 const orderbookCache = new TtlCache<Orderbook>(2_000);
 const tradesCache = new TtlCache<TradeTick[]>(2_000);
-const priceLimitCache = new TtlCache<TossPriceLimits>(60_000);
+/** 상·하한가는 하루 동안 같다. 키에 KST 날짜를 넣고, 혹시 모를 정정에 대비해 1시간마다만 다시 받는다 */
+const priceLimitCache = new TtlCache<TossPriceLimits>(60 * 60_000);
 const flowCache = new TtlCache<InvestorFlowDay[]>(10 * 60_000);
-/** 관심종목 등락률용 최근 일봉 2개 (최신순) */
-const recentDailyCache = new TtlCache<CandlePoint[]>(5 * 60_000);
+/** 등락률용 최근 일봉 2개 (최신순). 키가 `종목:시세 날짜` 라 전일 종가는 하루 한 번만 받는다 */
+const recentDailyCache = new TtlCache<CandlePoint[]>(DAY_MS);
+/** 지금 토스에서 받는 중인 현재가 — 같은 종목을 동시에 또 부르지 않는다 */
+const quoteInflight = new Map<string, Promise<void>>();
+/**
+ * 최근에 현재가를 물어본 종목과 시각. 현재가를 받을 때 이 종목들도 한 번에 같이 받는다.
+ * 시세 개요와 관심종목 줄이 5초마다 따로(엇갈려) 폴링해도 한쪽이 받은 값으로 다른 쪽이 답하게 된다.
+ */
+const quoteAskedAt = new Map<string, number>();
+const QUOTE_HOT_MS = 15_000;
+/** 이보다 최근에 받은 종목은 같이 받지 않는다 */
+const QUOTE_PIGGYBACK_MIN_AGE_MS = 1_000;
 let universe: Cached<StockSearchItem[]> | null = null;
 let universeLoading: Promise<StockSearchItem[]> | null = null;
 
@@ -73,8 +84,10 @@ function fresh<T>(entry: Cached<T> | null | undefined, ttl: number): entry is Ca
 export function resetMarketDataCache(): void {
   quoteCache.clear();
   stockCache.clear();
-  minuteCandleCache.clear();
-  dailyCandleCache.clear();
+  quoteInflight.clear();
+  quoteAskedAt.clear();
+  minuteCandles.clear();
+  dailyCandles.clear();
   orderbookCache.clear();
   tradesCache.clear();
   priceLimitCache.clear();
@@ -108,19 +121,44 @@ function normalizeSymbol(raw: string): string {
 
 export async function getQuotes(rawSymbols: string[]): Promise<Quote[]> {
   const symbols = normalizeSymbols(rawSymbols);
-  const missing = symbols.filter((s) => !fresh(quoteCache.get(s), QUOTE_TTL_MS));
+  const now = Date.now();
+  for (const s of symbols) quoteAskedAt.set(s, now);
+  const stale = symbols.filter((s) => !fresh(quoteCache.get(s), QUOTE_TTL_MS));
+  // 다른 요청이 받는 중인 종목은 그 결과를 기다리고, 나머지만 한 번에 받는다.
+  const waiting = [...new Set(stale.flatMap((s) => (quoteInflight.has(s) ? [quoteInflight.get(s)!] : [])))];
+  const needed = stale.filter((s) => !quoteInflight.has(s));
 
-  if (missing.length > 0) {
-    const prices = await getTossClient().getPrices(missing);
-    const fetchedAt = Date.now();
-
-    for (const p of prices) {
-      quoteCache.set(p.symbol, {
-        value: { symbol: p.symbol, price: Number(p.lastPrice), currency: p.currency, timestamp: p.timestamp },
-        fetchedAt,
-      });
+  if (needed.length > 0) {
+    // 한 번에 여러 종목을 받을 수 있으니 최근에 물어본 다른 종목도 같이 받는다 (호출 수는 그대로 1회).
+    const piggyback: string[] = [];
+    for (const [s, at] of quoteAskedAt) {
+      if (now - at > QUOTE_HOT_MS) quoteAskedAt.delete(s);
+      else if (!needed.includes(s) && !quoteInflight.has(s) && !fresh(quoteCache.get(s), QUOTE_PIGGYBACK_MIN_AGE_MS)) {
+        piggyback.push(s);
+      }
     }
+    const missing = [...needed, ...piggyback].slice(0, MAX_SYMBOLS);
+
+    const loading = getTossClient()
+      .getPrices(missing)
+      .then((prices) => {
+        const fetchedAt = Date.now();
+        for (const p of prices) {
+          quoteCache.set(p.symbol, {
+            value: { symbol: p.symbol, price: Number(p.lastPrice), currency: p.currency, timestamp: p.timestamp },
+            fetchedAt,
+          });
+        }
+      })
+      .finally(() => {
+        for (const s of missing) if (quoteInflight.get(s) === loading) quoteInflight.delete(s);
+      });
+    for (const s of missing) quoteInflight.set(s, loading);
+    waiting.push(loading);
   }
+
+  // 같이 기다린 요청이 실패하면 이 요청도 같은 이유로 실패한다 (TtlCache 의 single-flight 와 같다).
+  await Promise.all(waiting);
 
   // 토스가 모르는 심볼은 응답에서 빠진다 → 결과에서도 뺀다.
   return symbols.flatMap((s) => {
@@ -150,20 +188,14 @@ export async function getQuotesWithChange(rawSymbols: string[]): Promise<QuoteWi
 
   return Promise.all(
     quotes.map(async (q) => {
+      const quoteDate = q.timestamp ? kstDate(q.timestamp) : null;
+      // 시세 날짜가 같으면 전일 종가도 같다. 날짜가 바뀌면(장 시작) 키가 달라져 한 번 다시 받는다.
       const bars = await recentDailyCache
-        .get(q.symbol, async () =>
-          (await client.getCandles(q.symbol, "1d", 2)).candles.map((c) => ({
-            time: c.timestamp,
-            open: Number(c.openPrice),
-            high: Number(c.highPrice),
-            low: Number(c.lowPrice),
-            close: Number(c.closePrice),
-            volume: Number(c.volume),
-          }))
+        .get(`${q.symbol}:${quoteDate ?? "-"}`, async () =>
+          (await client.getCandles(q.symbol, "1d", 2)).candles.map(toCandlePoint)
         )
         .catch(() => [] as CandlePoint[]);
 
-      const quoteDate = q.timestamp ? kstDate(q.timestamp) : null;
       const prev = bars[0] && quoteDate === kstDate(bars[0].time) ? bars[1] : bars[0];
       const prevClose = prev?.close ?? null;
       const change = prevClose != null ? q.price - prevClose : null;
@@ -185,44 +217,33 @@ export async function getStock(rawSymbol: string): Promise<TossStock> {
   });
 }
 
-/**
- * 봉을 `count` 개까지 이어 받아 **오래된 것부터** 돌려준다.
- * 토스는 한 번에 200개, 최신순이며 다음 페이지 기준 시각(`nextBefore`)을 준다.
- */
-async function fetchCandles(symbol: string, interval: "1m" | "1d", count: number): Promise<CandlePoint[]> {
-  const client = getTossClient();
-  const byTime = new Map<string, CandlePoint>();
-  let before: string | undefined;
+function toCandlePoint(c: TossCandle): CandlePoint {
+  return {
+    time: c.timestamp,
+    open: Number(c.openPrice),
+    high: Number(c.highPrice),
+    low: Number(c.lowPrice),
+    close: Number(c.closePrice),
+    volume: Number(c.volume),
+  };
+}
 
-  while (byTime.size < count) {
-    const page = await client.getCandles(symbol, interval, Math.min(CANDLE_PAGE, count - byTime.size), before);
-
-    for (const c of page.candles) {
-      byTime.set(c.timestamp, {
-        time: c.timestamp,
-        open: Number(c.openPrice),
-        high: Number(c.highPrice),
-        low: Number(c.lowPrice),
-        close: Number(c.closePrice),
-        volume: Number(c.volume),
-      });
-    }
-
-    if (!page.nextBefore || page.candles.length === 0) break;
-    before = page.nextBefore;
-  }
-
-  return [...byTime.values()].sort((a, b) => a.time.localeCompare(b.time));
+/** 토스 캔들 한 페이지 (최신순) */
+function candlePages(symbol: string, interval: "1m" | "1d"): FetchCandlePage {
+  return async (count, before) => {
+    const page = await getTossClient().getCandles(symbol, interval, count, before);
+    return { candles: page.candles.map(toCandlePoint), nextBefore: page.nextBefore };
+  };
 }
 
 /** 일봉 (오래된 것부터, 약 3년). 분석·52주 고저·일/주/월봉 차트가 같이 쓴다. */
 export async function getDailyCandles(rawSymbol: string): Promise<CandlePoint[]> {
   const symbol = normalizeSymbol(rawSymbol);
-  return dailyCandleCache.get(symbol, () => fetchCandles(symbol, "1d", DAILY_CANDLES));
+  return dailyCandles.get(symbol, DAILY_CANDLES, candlePages(symbol, "1d"));
 }
 
 async function getMinuteCandles(symbol: string): Promise<CandlePoint[]> {
-  return minuteCandleCache.get(symbol, () => fetchCandles(symbol, "1m", MINUTE_CANDLES));
+  return minuteCandles.get(symbol, MINUTE_CANDLES, candlePages(symbol, "1m"));
 }
 
 export function buildChartIndicators(candles: CandlePoint[]): ChartData["indicators"] {
@@ -300,7 +321,8 @@ export async function getTrades(rawSymbol: string): Promise<TradeTick[]> {
 
 export async function getPriceLimits(rawSymbol: string): Promise<TossPriceLimits> {
   const symbol = normalizeSymbol(rawSymbol);
-  return priceLimitCache.get(symbol, () => getTossClient().getPriceLimits(symbol));
+  const today = kstDate(new Date().toISOString());
+  return priceLimitCache.get(`${symbol}:${today}`, () => getTossClient().getPriceLimits(symbol));
 }
 
 /**

@@ -296,6 +296,29 @@ describe("market routes", () => {
     expect(toss.calls.filter((c) => c.method === "getIndicatorCandles")).toHaveLength(candleCalls);
   });
 
+  it("refreshes the index minute candles with one newest page per index, not the whole history", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-30T15:30:00+09:00"));
+      await request(app).get("/api/stocksim/market");
+      const minuteCalls = () => toss.calls.filter((c) => c.method === "getIndicatorCandles" && c.args[1] === "1m");
+      const first = minuteCalls().length;
+
+      // 1분봉 캐시(20초)는 지났고 일봉 캐시(5분)는 남았다.
+      vi.setSystemTime(new Date("2026-10-30T15:31:00+09:00"));
+      const res = await request(app).get("/api/stocksim/market");
+
+      expect(res.status).toBe(200);
+      expect(minuteCalls().slice(first).map((c) => [c.args[0], c.args[3]])).toEqual([
+        ["KOSPI", undefined],
+        ["KOSDAQ", undefined],
+      ]);
+      expect(res.body.indices[0].intraday.length).toBeGreaterThan(50);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("still returns the index and fear & greed when market investor data fails", async () => {
     toss.getMarketInvestorTrading = async () => {
       throw new Error("down");

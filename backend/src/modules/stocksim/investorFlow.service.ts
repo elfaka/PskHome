@@ -146,12 +146,14 @@ export function trackedSymbols(now: Date): string[] {
     .map(([symbol]) => symbol);
 }
 
-/** 장중이면 추적 중인 종목의 당일 기록을 하나씩 받아 쌓는다. 실패한 종목은 건너뛴다 */
+/**
+ * 장중이면 추적 중인 종목의 당일 기록을 하나씩 받아 쌓는다. 실패한 종목은 건너뛴다.
+ * 화면 조회와 같은 60초 캐시를 거치므로 방금 화면이 받은 종목은 토스를 다시 부르지 않는다.
+ */
 export async function sampleTrackedSymbols(now = new Date()): Promise<number> {
   if (!isMarketHours(now)) return 0;
 
   const today = kstDate(now.toISOString());
-  const client = getTossClient();
   let recorded = 0;
 
   for (const [i, symbol] of trackedSymbols(now).entries()) {
@@ -159,7 +161,7 @@ export async function sampleTrackedSymbols(now = new Date()): Promise<number> {
       await new Promise((resolve) => setTimeout(resolve, samplerThrottle.intervalMs));
     }
     try {
-      const record = (await client.getInvestorTrading(symbol, 1)).records[0];
+      const record = await fetchLatest(symbol);
       if (record) {
         recordSnapshot(symbol, record, today);
         recorded++;

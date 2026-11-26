@@ -1,5 +1,6 @@
 import { HttpError } from "../../lib/httpError.js";
 import { TtlCache } from "../../lib/ttlCache.js";
+import { CandleSeries, type FetchCandlePage } from "./candleSeries.js";
 import { aggregateCandles, kstDate, last, rsi, sma } from "./indicators.js";
 import { getCboeClient, type VixQuote } from "./cboe/cboeClient.js";
 import { buildChartIndicators } from "./marketData.service.js";
@@ -29,7 +30,7 @@ import type {
  * | 데이터 | 토스 한도(초당) | 캐시 |
  * |---|---|---|
  * | 지수 현재가 | 10회 | 3초 |
- * | 지수 1분봉 / 일봉 | 5회 (MARKET_INDICATOR_CHART) | 1분봉 20초, 일봉 5분 — 호출 간격을 `marketThrottle` 로 벌린다 |
+ * | 지수 1분봉 / 일봉 | 5회 (MARKET_INDICATOR_CHART) | 1분봉 20초, 일봉 5분 — 처음 뒤로는 최신 1페이지만 이어 붙인다 (`CandleSeries`). 호출 간격은 `marketThrottle` |
  * | 시장 투자자별 매매대금 | 10회 | 5분 |
  * | VIX 현재값 / 일별 기록 (Cboe) | - | 1분 / 1시간 (15분 지연 데이터) |
  *
@@ -56,8 +57,6 @@ export const FEAR_GREED_DISCLAIMER =
 const INDEX_NAMES: Record<MarketIndexSymbol, string> = { KOSPI: "코스피", KOSDAQ: "코스닥" };
 const INDEX_SYMBOLS: MarketIndexSymbol[] = ["KOSPI", "KOSDAQ"];
 
-/** 토스 시장 지표 캔들 한 번 조회 상한 */
-const CANDLE_PAGE = 200;
 /** 지수 일봉 — 공포탐욕(1년 변동성 + 1개월 전 값)과 일·주·월봉 차트가 같이 쓴다 (약 1.6년) */
 const INDEX_DAILY = 400;
 /** 지수 1분봉 — 정규장 하루(390분) 반 */
@@ -69,16 +68,16 @@ const FLOW_DAYS = 30;
 export const marketThrottle = { intervalMs: 250 };
 
 const priceCache = new TtlCache<TossIndicatorPrice[]>(3_000);
-const dailyCache = new TtlCache<CandlePoint[]>(5 * 60_000);
-const minuteCache = new TtlCache<CandlePoint[]>(20_000);
+const dailyCandles = new CandleSeries(5 * 60_000);
+const minuteCandles = new CandleSeries(20_000);
 const investorCache = new TtlCache<MarketInvestorDay[]>(5 * 60_000);
 const fearGreedCache = new TtlCache<FearGreed>(5 * 60_000);
 let nextSlot = 0;
 
 export function resetMarketCache(): void {
   priceCache.clear();
-  dailyCache.clear();
-  minuteCache.clear();
+  dailyCandles.clear();
+  minuteCandles.clear();
   investorCache.clear();
   fearGreedCache.clear();
   nextSlot = 0;
@@ -106,46 +105,30 @@ export function parseChartSymbol(raw: string): MarketChartSymbol {
   throw HttpError.badRequest("지수는 KOSPI, KOSDAQ, VIX 중 하나여야 합니다.", "INVALID_SYMBOL");
 }
 
-/** 봉을 `count` 개까지 이어 받아 오래된 것부터 돌려준다 (marketData 의 fetchCandles 와 같은 방식). */
-async function fetchIndicatorCandles(
-  symbol: TossIndicatorSymbol,
-  interval: "1m" | "1d",
-  count: number
-): Promise<CandlePoint[]> {
-  const client = getTossClient();
-  const byTime = new Map<string, CandlePoint>();
-  let before: string | undefined;
-
-  while (byTime.size < count) {
-    const page = await throttled(() =>
-      client.getIndicatorCandles(symbol, interval, Math.min(CANDLE_PAGE, count - byTime.size), before)
-    );
-
-    for (const c of page.candles) {
-      byTime.set(c.timestamp, {
+/** 토스 시장 지표 캔들 한 페이지 (최신순). 한도가 낮아 `throttled` 로 간격을 벌린다 */
+function indicatorPages(symbol: TossIndicatorSymbol, interval: "1m" | "1d"): FetchCandlePage {
+  return async (count, before) => {
+    const page = await throttled(() => getTossClient().getIndicatorCandles(symbol, interval, count, before));
+    return {
+      candles: page.candles.map((c) => ({
         time: c.timestamp,
         open: Number(c.openPrice),
         high: Number(c.highPrice),
         low: Number(c.lowPrice),
         close: Number(c.closePrice),
         volume: Number(c.volume),
-      });
-    }
-
-    if (!page.nextBefore || page.candles.length === 0) break;
-    before = page.nextBefore;
-  }
-
-  // 시각 문자열의 오프셋이 섞여도 순서가 맞도록 숫자로 정렬한다.
-  return [...byTime.values()].sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+      })),
+      nextBefore: page.nextBefore,
+    };
+  };
 }
 
 function getDaily(symbol: TossIndicatorSymbol): Promise<CandlePoint[]> {
-  return dailyCache.get(symbol, () => fetchIndicatorCandles(symbol, "1d", symbol === "KR_BOND_10Y" ? BOND_DAILY : INDEX_DAILY));
+  return dailyCandles.get(symbol, symbol === "KR_BOND_10Y" ? BOND_DAILY : INDEX_DAILY, indicatorPages(symbol, "1d"));
 }
 
 function getMinutes(symbol: MarketIndexSymbol): Promise<CandlePoint[]> {
-  return minuteCache.get(symbol, () => fetchIndicatorCandles(symbol, "1m", INDEX_MINUTES));
+  return minuteCandles.get(symbol, INDEX_MINUTES, indicatorPages(symbol, "1m"));
 }
 
 /** 시장 전체 투자자별 순매수 대금 (최신순, 30거래일) */
