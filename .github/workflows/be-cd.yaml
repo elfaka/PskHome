@@ -16,6 +16,8 @@ on:
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
+  # 주의: GitHub 은 그룹당 "대기" 실행을 하나만 남긴다. 이 그룹에 세 번째 실행이 들어오면 대기 중이던 것이 취소된다.
+  # 그래서 trader-cd 의 테스트·빌드는 다른 그룹(trader-*)을 쓴다 (2026-11-26 백엔드 배포가 이렇게 취소된 적 있음).
 
 # GHCR 에 이미지를 푸시하려면 packages:write 가 필요하다.
 permissions:
