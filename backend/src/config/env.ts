@@ -60,6 +60,9 @@ const envSchema = z.object({
   TRADER_ADMIN_PASSWORD_HASH: z.string().optional(),
   TRADER_SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(30),
   TRADER_SESSION_MAX_HOURS: z.coerce.number().int().positive().default(12),
+  // 자동매매 대시보드: 엔진 DB(trader)에 읽기 전용 계정(trader_web, SELECT 만)으로 붙는다. 없으면 대시보드 API 만 503
+  TRADER_DATABASE_URL: z.string().optional(),
+  TRADER_ACCOUNT_NAME: z.string().default("paper-default"),
 });
 
 export type Env = z.infer<typeof envSchema>;

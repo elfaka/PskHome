@@ -41,5 +41,9 @@ services:
       # 자동매매(/trader) 본인 전용 로그인. 없으면 로그인은 항상 실패한다.
       TRADER_ADMIN_USERNAME: ${TRADER_ADMIN_USERNAME}
       TRADER_ADMIN_PASSWORD_HASH: ${TRADER_ADMIN_PASSWORD_HASH}
+      # 자동매매 대시보드: 엔진 DB 를 읽기 전용 계정(trader_web, trader/db/create_users.sql)으로 조회한다.
+      # 비밀번호에 @ : / ? # 가 있으면 퍼센트 인코딩한 값을 시크릿에 넣는다. 비어 있으면 대시보드만 503
+      TRADER_DATABASE_URL: mysql://trader_web:${TRADER_WEB_DB_PASSWORD}@pskhome-db-1:3306/trader
+      TRADER_ACCOUNT_NAME: paper-default
     ports:
       - 8080:8080

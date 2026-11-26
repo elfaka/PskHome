@@ -4,6 +4,7 @@ import { z } from "zod";
 import { env } from "../../config/env.js";
 import { HttpError } from "../../lib/httpError.js";
 import { LoginThrottle, verifyLogin } from "./traderAuth.service.js";
+import * as dashboard from "./traderDashboard.service.js";
 
 /**
  * 자동매매(/trader) 비공개 영역.
@@ -134,9 +135,43 @@ export function createTraderRouter(throttle = new LoginThrottle()): Router {
   // --- 여기부터 trader 로그인 필요 ---
   router.use("/trader", requireTraderAuth);
 
-  // 대시보드(5단계) 자리. 지금은 인증 경계 확인용.
   router.get("/trader/ping", (_req, res) => {
     res.json({ ok: true });
+  });
+
+  // --- 대시보드 (엔진 DB 읽기 전용) ---
+  const account = () => env.TRADER_ACCOUNT_NAME;
+
+  router.get("/trader/summary", async (_req, res) => {
+    res.json(await dashboard.getSummary(account()));
+  });
+
+  router.get("/trader/orders", async (req, res) => {
+    res.json(await dashboard.listOrders(account(), dashboard.clampLimit(req.query.limit)));
+  });
+
+  router.get("/trader/fills", async (req, res) => {
+    res.json(await dashboard.listFills(account(), dashboard.clampLimit(req.query.limit)));
+  });
+
+  router.get("/trader/decisions", async (req, res) => {
+    const strategy = typeof req.query.strategy === "string" && /^[a-z_]{1,64}$/.test(req.query.strategy)
+      ? req.query.strategy
+      : undefined;
+    res.json(
+      await dashboard.listDecisions(dashboard.clampLimit(req.query.limit), {
+        strategy,
+        signalsOnly: req.query.signals === "1",
+      })
+    );
+  });
+
+  router.get("/trader/performance", async (_req, res) => {
+    res.json(await dashboard.getPerformance());
+  });
+
+  router.get("/trader/risk-events", async (req, res) => {
+    res.json(await dashboard.listRiskEvents(dashboard.clampLimit(req.query.limit, 30)));
   });
 
   return router;

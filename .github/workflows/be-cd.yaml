@@ -123,6 +123,7 @@ jobs:
               echo "DART_API_KEY='${{ secrets.DART_API_KEY }}'"
               echo "TRADER_ADMIN_USERNAME='${{ secrets.TRADER_ADMIN_USERNAME }}'"
               echo "TRADER_ADMIN_PASSWORD_HASH='${{ secrets.TRADER_ADMIN_PASSWORD_HASH }}'"
+              echo "TRADER_WEB_DB_PASSWORD='${{ secrets.TRADER_WEB_DB_PASSWORD }}'"
             } > .env
 
       # 8. 이미지 내려받고 기동

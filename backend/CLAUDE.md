@@ -185,7 +185,12 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
   (`/api/stocksim/trades/:symbol`, `/orderbook/:symbol`, `/stocks/:symbol/investors/intraday`, `/stocks/:symbol/overview`, `/market`).
   **이 응답 형태(필드 이름·시각의 오프셋 포함 ISO 형식)를 바꾸면 엔진이 깨진다** — `trader/src/trader/marketdata/` 와 그 테스트를 함께 고친다.
   엔진은 토스 키를 갖지 않으므로 토스 호출 한도는 이 백엔드의 캐시가 함께 지킨다. stocksim 주문 API 는 엔진이 쓰지 않는다.
-- 5단계 대시보드는 읽기 전용 DB 계정(`trader_web`)으로 조회할 예정
+- **대시보드 API** (`/api/trader/summary|orders|fills|decisions|performance|risk-events`, 모두 trader 로그인 필요):
+  엔진 DB 를 읽기 전용 계정(`trader_web`, SELECT 만)으로 조회한다 (`traderDb.ts`, mariadb 풀, `TRADER_DATABASE_URL`).
+  - 쓰기 쿼리·쓰기 라우트를 두지 않는다 (테스트가 SELECT 만 쓰는지, POST 가 없는지 검사한다)
+  - 금액 계산(평가금액·손익)은 SQL DECIMAL 로 하고 **문자열**로 내려보낸다. JS number 로 바꾸지 않는다
+  - DATETIME 은 엔진이 UTC 로 저장한다 → `utcIso()` 로 `...Z` 문자열
+  - 엔진 DB 스키마(`trader/migrations`)가 바뀌면 `traderDashboard.service.ts` 를 함께 고친다
 
 ## 데이터베이스
 

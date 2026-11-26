@@ -16,6 +16,7 @@ services:
       MYSQL_ROOT_PASSWORD: ${DEV_MYSQL_ROOT_PASSWORD:?DEV_MYSQL_ROOT_PASSWORD 를 .env 에 지정}
       DEV_TRADER_APP_PASSWORD: ${DEV_TRADER_APP_PASSWORD:?DEV_TRADER_APP_PASSWORD 를 .env 에 지정}
       DEV_TRADER_MIGRATE_PASSWORD: ${DEV_TRADER_MIGRATE_PASSWORD:?DEV_TRADER_MIGRATE_PASSWORD 를 .env 에 지정}
+      DEV_TRADER_WEB_PASSWORD: ${DEV_TRADER_WEB_PASSWORD:?DEV_TRADER_WEB_PASSWORD 를 .env 에 지정}
       TZ: UTC
     # innodb_flush_log_at_trx_commit=2 / skip-log-bin: 개발·테스트 속도용 (커밋마다 fsync 하지 않음).
     # 운영 DB 설정과는 무관하다 — 운영 MySQL 은 건드리지 않는다.
