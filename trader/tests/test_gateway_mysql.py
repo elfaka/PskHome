@@ -65,6 +65,7 @@ class Harness:
             open_orders=self.store.list_open_orders(self.account),
             quotes={"005930": self.q},
             day_start_equity=Decimal(10_000_000),
+            atr={"005930": Decimal(100)},
         )
 
     def decision(self) -> int:

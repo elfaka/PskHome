@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -93,10 +93,29 @@ class TradingStore(Protocol):
         action: str,
         reason: str,
         inputs: dict[str, Any],
+        detail: Mapping[str, Any] | None = None,
     ) -> int: ...
     def update_decision_risk(
-        self, decision_id: int, result: str, reason: str | None, client_order_id: str | None
+        self,
+        decision_id: int,
+        result: str,
+        reason: str | None,
+        client_order_id: str | None,
+        levels: Mapping[str, Any] | None = None,
     ) -> None: ...
+    def insert_signal_performance(
+        self,
+        decision_id: int,
+        symbol: str,
+        direction: int,
+        signal_ts: datetime,
+        ref_price: Decimal,
+        horizons: Sequence[tuple[str, datetime]],
+    ) -> None: ...
+    def due_performance(self, now: datetime) -> list[dict[str, Any]]: ...
+    def complete_performance(self, perf_id: int, values: Mapping[str, Any], now: datetime) -> None: ...
+    def bars_between(self, symbol: str, interval_s: int, start: datetime, end: datetime) -> list[Bar]: ...
+    def latest_entry_levels(self, account_id: int, symbol: str) -> tuple[Decimal | None, Decimal | None]: ...
     def record_risk_event(
         self,
         kind: str,
@@ -124,6 +143,32 @@ _RANK = {
     OrderStatus.CANCELED: 3,
     OrderStatus.REJECTED: 3,
 }
+
+
+DECISION_DETAIL_COLUMNS = frozenset(
+    {"shadow", "score", "confidence", "valid_until", "reasons", "invalidation"}
+)
+DECISION_LEVEL_COLUMNS = frozenset({"entry_price", "stop_loss", "take_profit", "risk_reward"})
+PERFORMANCE_RESULT_COLUMNS = frozenset(
+    {"status", "close_price", "max_price", "min_price", "return_pct", "mfe_pct", "mae_pct"}
+)
+
+
+def _checked(values: Mapping[str, Any] | None, allowed: frozenset[str]) -> dict[str, Any]:
+    if not values:
+        return {}
+    unknown = set(values) - allowed
+    if unknown:
+        raise ValueError(f"알 수 없는 컬럼: {sorted(unknown)}")
+    out: dict[str, Any] = {}
+    for k, v in values.items():
+        if isinstance(v, datetime):
+            out[k] = to_db(v)
+        elif isinstance(v, list | tuple | dict):
+            out[k] = jsonable(list(v) if isinstance(v, tuple) else v)
+        else:
+            out[k] = v
+    return out
 
 
 def status_rank(s: OrderStatus) -> int:
@@ -501,7 +546,9 @@ class SqlTradingStore:
         action: str,
         reason: str,
         inputs: dict[str, Any],
+        detail: Mapping[str, Any] | None = None,
     ) -> int:
+        extra = _checked(detail, DECISION_DETAIL_COLUMNS)
         with self._engine.begin() as c:
             res = c.execute(
                 insert(m.strategy_decisions).values(
@@ -512,13 +559,20 @@ class SqlTradingStore:
                     action=action,
                     reason=reason[:255],
                     inputs=jsonable(inputs),
+                    **extra,
                 )
             )
             return int(res.inserted_primary_key[0])  # type: ignore[index]
 
     def update_decision_risk(
-        self, decision_id: int, result: str, reason: str | None, client_order_id: str | None
+        self,
+        decision_id: int,
+        result: str,
+        reason: str | None,
+        client_order_id: str | None,
+        levels: Mapping[str, Any] | None = None,
     ) -> None:
+        extra = _checked(levels, DECISION_LEVEL_COLUMNS)
         with self._engine.begin() as c:
             c.execute(
                 update(m.strategy_decisions)
@@ -527,8 +581,105 @@ class SqlTradingStore:
                     risk_result=result,
                     risk_reason=reason[:255] if reason else None,
                     client_order_id=client_order_id,
+                    **extra,
                 )
             )
+
+    # ── 신호 성과 ────────────────────────────────────────────────────────
+
+    def insert_signal_performance(
+        self,
+        decision_id: int,
+        symbol: str,
+        direction: int,
+        signal_ts: datetime,
+        ref_price: Decimal,
+        horizons: Sequence[tuple[str, datetime]],
+    ) -> None:
+        if not horizons:
+            return
+        with self._engine.begin() as c:
+            c.execute(
+                insert(m.signal_performance),
+                [
+                    {
+                        "decision_id": decision_id,
+                        "symbol": symbol,
+                        "horizon": h,
+                        "direction": direction,
+                        "signal_ts": to_db(signal_ts),
+                        "ref_price": ref_price,
+                        "due_ts": to_db(due),
+                        "status": "PENDING",
+                    }
+                    for h, due in horizons
+                ],
+            )
+
+    def due_performance(self, now: datetime) -> list[dict[str, Any]]:
+        sp = m.signal_performance
+        with self._engine.connect() as c:
+            rows = c.execute(
+                select(sp)
+                .where(and_(sp.c.status == "PENDING", sp.c.due_ts <= to_db(now)))
+                .order_by(sp.c.due_ts)
+            ).all()
+        out = []
+        for r in rows:
+            d = dict(r._mapping)
+            d["signal_ts"], d["due_ts"] = from_db(d["signal_ts"]), from_db(d["due_ts"])
+            out.append(d)
+        return out
+
+    def complete_performance(self, perf_id: int, values: Mapping[str, Any], now: datetime) -> None:
+        extra = _checked(values, PERFORMANCE_RESULT_COLUMNS)
+        with self._engine.begin() as c:
+            c.execute(
+                update(m.signal_performance)
+                .where(m.signal_performance.c.id == perf_id)
+                .values(evaluated_at=to_db(now), **extra)
+            )
+
+    def bars_between(self, symbol: str, interval_s: int, start: datetime, end: datetime) -> list[Bar]:
+        """start_ts 가 [start, end) 인 봉 (오래된 순)."""
+        b = m.bars
+        with self._engine.connect() as c:
+            rows = c.execute(
+                select(b)
+                .where(
+                    and_(
+                        b.c.symbol == symbol,
+                        b.c.interval_s == interval_s,
+                        b.c.start_ts >= to_db(start),
+                        b.c.start_ts < to_db(end),
+                    )
+                )
+                .order_by(b.c.start_ts)
+            ).all()
+        return [
+            Bar(r.symbol, r.interval_s, from_db(r.start_ts), r.open, r.high, r.low, r.close, r.volume)
+            for r in rows
+        ]
+
+    def latest_entry_levels(self, account_id: int, symbol: str) -> tuple[Decimal | None, Decimal | None]:
+        """보유 종목의 마지막 체결된 매수 판단의 손절·목표가 (재시작 후 보호 청산용)."""
+        d, o = m.strategy_decisions, m.orders
+        with self._engine.connect() as c:
+            r = c.execute(
+                select(d.c.stop_loss, d.c.take_profit)
+                .select_from(d.join(o, o.c.client_order_id == d.c.client_order_id))
+                .where(
+                    and_(
+                        o.c.account_id == account_id,
+                        o.c.symbol == symbol,
+                        o.c.side == Side.BUY.value,
+                        o.c.filled_qty > 0,
+                    )
+                )
+                .order_by(o.c.id.desc())
+                .limit(1)
+            ).first()
+        return (r.stop_loss, r.take_profit) if r else (None, None)
 
     def record_risk_event(
         self,

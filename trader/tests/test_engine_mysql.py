@@ -16,6 +16,7 @@ from trader.domain import OrderRequest, OrderStatus, OrderType, Side
 from trader.engine import EXIT_OK
 from trader.engine import Engine as TradingEngine
 from trader.risk.killswitch import KEY, KillSwitch
+from trader.storage.models import SCHEMA_REVISION
 from trader.storage.store import SqlTradingStore
 
 pytestmark = pytest.mark.mysql
@@ -38,6 +39,10 @@ def settings(url: str, **kw: Any) -> Any:
         "killswitch_poll_seconds": "1",
         "health_check_seconds": "60",
         "quote_flush_size": 500,
+        # 1분봉 ATR 은 작아서 매도세·수수료를 빼면 손익비가 1 안팎이다. 엔진 흐름 검증용으로 기준을 낮춘다
+        "risk_min_risk_reward": "0.5",
+        "entry_cutoff": "",
+        "eod_exit": "",
     }
     base.update(kw)
     return make_settings(**base)
@@ -80,7 +85,7 @@ def test_engine_refuses_unmigrated_db(db_engine: Engine) -> None:
             check_schema(db_engine)
     finally:
         with db_engine.begin() as c:
-            c.execute(text("UPDATE alembic_version SET version_num = '0001'"))
+            c.execute(text("UPDATE alembic_version SET version_num = :v"), {"v": SCHEMA_REVISION})
 
 
 async def test_full_day_paper_run_is_consistent(mysql_url: str, db_engine: Engine) -> None:
@@ -92,8 +97,32 @@ async def test_full_day_paper_run_is_consistent(mysql_url: str, db_engine: Engin
 
     # 시세·봉·판단 기록
     assert scalar(db_engine, "SELECT COUNT(*) FROM quotes") == st["quotes"]
-    assert scalar(db_engine, "SELECT COUNT(*) FROM bars") == st["bars"]
-    assert scalar(db_engine, "SELECT COUNT(*) FROM strategy_decisions") == st["decisions"]
+    assert scalar(db_engine, "SELECT COUNT(*) FROM bars WHERE interval_s = 60") == st["bars"]
+    # 5분봉도 기록한다
+    assert scalar(db_engine, "SELECT COUNT(*) FROM bars WHERE interval_s = 300") > 60
+    # 그림자 전략(점수 전략)은 주문하지 않는다
+    assert (
+        scalar(
+            db_engine,
+            "SELECT COUNT(*) FROM strategy_decisions WHERE shadow = 1 AND client_order_id IS NOT NULL",
+        )
+        == 0
+    )
+    assert (
+        scalar(db_engine, "SELECT COUNT(*) FROM strategy_decisions WHERE strategy_id = 'intraday_score'")
+        == st["bars"]
+    )
+    # 체결된 매수 판단에는 위험 관리가 정한 손절·목표가가 남는다
+    missing_levels = scalar(
+        db_engine,
+        "SELECT COUNT(*) FROM strategy_decisions WHERE action = 'BUY' AND risk_result = 'APPROVED' "
+        "AND (stop_loss IS NULL OR take_profit IS NULL OR risk_reward IS NULL)",
+    )
+    assert missing_levels == 0
+    # 신호 성과가 쌓이고, 만기가 지난 것은 평가된다
+    assert scalar(db_engine, "SELECT COUNT(*) FROM signal_performance WHERE status = 'DONE'") > 0
+    # 전략 판단 + 규칙 청산(손절·목표가·장 마감) 판단
+    assert scalar(db_engine, "SELECT COUNT(*) FROM strategy_decisions") == st["decisions"] + st["exits"]
     # 모든 주문은 승인된 판단과 연결된다
     orphan = scalar(
         db_engine,
@@ -299,3 +328,24 @@ async def test_data_gap_resets_strategy_and_blocks_symbol(
     eng = await run(mysql_url, db_engine, feed="csv", feed_csv_path=str(p))
     assert scalar(db_engine, "SELECT COUNT(*) FROM risk_events WHERE kind = 'DATA_GAP'") == 1
     assert "005930" in eng.health.data_issues
+
+
+async def test_eod_exit_leaves_account_flat(mysql_url: str, db_engine: Engine) -> None:
+    """15:15(KST) 장 마감 청산 — 하루가 끝나면 보유 종목이 없어야 한다 (장중 매매)."""
+    eng = await run(mysql_url, db_engine, eod_exit="15:15", entry_cutoff="15:00")
+    assert eng.stats["fills"] >= 2
+    assert SqlTradingStore(db_engine).load_balance(eng.account_id).positions == {}
+    # 15:00 이후 신규 매수 체결이 없다
+    late_buys = scalar(
+        db_engine,
+        "SELECT COUNT(*) FROM fills WHERE side = 'BUY' AND TIME(ts) >= '06:00:00'",  # UTC 06:00 = KST 15:00
+    )
+    assert late_buys == 0
+    exits = {
+        r[0]
+        for r in q(
+            db_engine,
+            "SELECT DISTINCT strategy_id FROM strategy_decisions WHERE action = 'EXIT' AND shadow = 0",
+        )
+    }
+    assert exits <= {"risk_exit", "eod_exit"}

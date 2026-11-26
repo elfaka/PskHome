@@ -13,7 +13,7 @@ from decimal import Decimal
 
 from trader.domain import Bar
 from trader.money import AMOUNT_PLACES, ZERO, floor_shares
-from trader.strategy.base import Decision, PortfolioView
+from trader.strategy.base import Decision, MarketView, PortfolioView
 
 
 class MovingAverageCross:
@@ -37,7 +37,7 @@ class MovingAverageCross:
     def _mean(values: list[Decimal]) -> Decimal:
         return (sum(values, ZERO) / len(values)).quantize(AMOUNT_PLACES)
 
-    def on_bar(self, bar: Bar, view: PortfolioView) -> Decision:
+    def on_bar(self, bar: Bar, view: PortfolioView, market: MarketView | None = None) -> Decision:
         closes = self._closes.setdefault(bar.symbol, deque(maxlen=self.slow))
         closes.append(bar.close)
         if len(closes) < self.slow:

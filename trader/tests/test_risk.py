@@ -36,6 +36,7 @@ def ctx(**kw: object) -> RiskContext:
         "open_orders": [],
         "quotes": {"005930": quote(10_000)},
         "day_start_equity": Decimal(10_000_000),
+        "atr": {"005930": Decimal(100)},
     }
     base.update(kw)
     return RiskContext(**base)  # type: ignore[arg-type]
@@ -129,10 +130,60 @@ def test_daily_loss_limit_includes_unrealized() -> None:
     bal = AccountBalance(Decimal(9_000_000), {"005930": Position("005930", Decimal(100), Decimal(10_000))})
     # 평가 = 9,000,000 + 100 × 9,000 = 9,900,000 → 손실 100,000 = 한도
     q = {"005930": quote(9_000)}
-    d = RM.evaluate(sell(1), ctx(balance=bal, quotes=q))
-    assert d.code == "DAILY_LOSS_LIMIT"
+    assert RM.evaluate(buy(1), ctx(balance=bal, quotes=q)).code == "DAILY_LOSS_LIMIT"
     q = {"005930": quote(9_001)}
-    assert RM.evaluate(sell(1), ctx(balance=bal, quotes=q)).approved
+    assert RM.evaluate(buy(1), ctx(balance=bal, quotes=q)).approved
+
+
+def test_reducing_sell_passes_loss_limit_cutoff_and_order_size() -> None:
+    """보유분을 줄이는 매도는 손실 한도·진입 마감·1회 금액으로 막지 않는다 (청산을 막으면 더 위험하다)."""
+    rm = RiskManager(replace(LIMITS, entry_cutoff=time(9, 0)))
+    bal = AccountBalance(Decimal(0), {"005930": Position("005930", Decimal(500), Decimal(20_000))})
+    d = rm.evaluate(
+        sell(500), ctx(balance=bal, day_start_equity=Decimal(100_000_000))
+    )  # 손실 큼, 5,000,000 원어치
+    assert d.approved and d.reason == "reducing"
+    # 데이터 이상이어도 청산은 된다. 단 킬스위치·DB 오류·오래된 시세는 막는다
+    assert rm.evaluate(
+        sell(1), ctx(balance=bal, health=TradingHealth(data_issues={"005930": "gap"}))
+    ).approved
+    assert rm.evaluate(sell(1), ctx(balance=bal, halted=True)).code == "HALTED"
+    assert rm.evaluate(sell(1), ctx(balance=bal, health=TradingHealth(db_ok=False))).code == "DB_UNHEALTHY"
+    assert rm.evaluate(sell(1), ctx(balance=bal, now=T0 + timedelta(seconds=9))).code == "STALE_QUOTE"
+
+
+def test_entry_cutoff_blocks_new_buys() -> None:
+    rm = RiskManager(replace(LIMITS, entry_cutoff=time(9, 30)))  # T0 = KST 09:30
+    assert rm.evaluate(buy(), ctx()).code == "ENTRY_CUTOFF"
+    rm = RiskManager(replace(LIMITS, entry_cutoff=time(9, 31)))
+    assert rm.evaluate(buy(), ctx()).approved
+
+
+def test_atr_levels_and_risk_reward() -> None:
+    d = RM.evaluate(buy(), ctx())
+    assert d.approved
+    assert d.levels["entry_price"] == Decimal(10_000)
+    assert d.levels["stop_loss"] == Decimal(9_850)  # 10,000 - 1.5 × 100
+    assert d.levels["take_profit"] == Decimal(10_300)  # 10,000 + 3 × 100
+    assert Decimal("1.9") < d.levels["risk_reward"] < Decimal(2)
+    # 비용이 크면 손익비가 기준 아래로 → 거부하되 계산값은 남긴다
+    costly = RiskManager(
+        replace(LIMITS, commission_rate_sell=Decimal("0.003"), sell_tax_rate=Decimal("0.002"))
+    )
+    d = costly.evaluate(buy(), ctx())
+    assert d.code == "LOW_RISK_REWARD" and "stop_loss" in d.levels
+    assert RM.evaluate(buy(), ctx(atr={})).code == "NO_STOP"
+    assert RiskManager(replace(LIMITS, require_atr_stop=False)).evaluate(buy(), ctx(atr={})).approved
+
+
+def test_spread_and_price_limits() -> None:
+    wide = {"005930": quote(10_000, bid=9_900, ask=10_100)}  # 200bp
+    assert RM.evaluate(buy(), ctx(quotes=wide)).code == "WIDE_SPREAD"
+    near = ctx(provides_price_limits=True, upper_limits={"005930": Decimal(10_100)})
+    assert RM.evaluate(buy(), near).code == "NEAR_UPPER_LIMIT"
+    assert RM.evaluate(buy(), ctx(provides_price_limits=True)).code == "NO_PRICE_LIMIT"
+    ok = ctx(provides_price_limits=True, upper_limits={"005930": Decimal(13_000)})
+    assert RM.evaluate(buy(), ok).approved
 
 
 def test_fractional_qty_rejected() -> None:

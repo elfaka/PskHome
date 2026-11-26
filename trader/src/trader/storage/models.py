@@ -16,6 +16,7 @@ from decimal import Decimal
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     Column,
     Date,
     ForeignKey,
@@ -24,13 +25,16 @@ from sqlalchemy import (
     MetaData,
     Numeric,
     PrimaryKeyConstraint,
+    SmallInteger,
     String,
     Table,
+    UniqueConstraint,
+    false,
 )
 from sqlalchemy.dialects.mysql import DATETIME
 
 # 엔진이 기대하는 마이그레이션 버전. 새 마이그레이션을 추가하면 함께 올린다 (테스트가 head 와 비교한다)
-SCHEMA_REVISION = "0001"
+SCHEMA_REVISION = "0002"
 
 metadata = MetaData(
     naming_convention={
@@ -182,14 +186,54 @@ strategy_decisions = Table(
     Column("strategy_id", String(64), nullable=False),
     Column("symbol", String(16), nullable=False),
     Column("bar_ts", Ts(), nullable=False),
-    Column("action", String(8), nullable=False),  # BUY / SELL / HOLD
+    Column("action", String(8), nullable=False),  # BUY / SELL / HOLD / WAIT / EXIT
     Column("reason", String(255), nullable=False),
     Column("inputs", JSON, nullable=True),
-    # 위험 관리 결과: APPROVED / REJECTED / DUPLICATE / NULL(주문 없음)
+    # 위험 관리 결과: APPROVED / REJECTED / DUPLICATE / SHADOW(주문 없이 기록만) / NULL(주문 의도 없음)
     Column("risk_result", String(16), nullable=True),
     Column("risk_reason", String(255), nullable=True),
     Column("client_order_id", String(64), nullable=True),
+    # ── 0002: 신호 상세 ──
+    # 그림자 전략: 주문하지 않고 신호·성과만 기록
+    Column("shadow", Boolean, nullable=False, server_default=false()),
+    Column("score", Numeric(7, 2), nullable=True),
+    # 규칙이 매긴 확신도 (수익 확률이 아니다)
+    Column("confidence", Numeric(5, 4), nullable=True),
+    # 진입가·손절·목표가·손익비는 위험 관리가 계산한다 (전략·AI 가 아니다)
+    Column("entry_price", Amount(), nullable=True),
+    Column("stop_loss", Amount(), nullable=True),
+    Column("take_profit", Amount(), nullable=True),
+    Column("risk_reward", Numeric(10, 4), nullable=True),
+    Column("valid_until", Ts(), nullable=True),
+    Column("reasons", JSON, nullable=True),
+    Column("invalidation", JSON, nullable=True),
     Index(None, "strategy_id", "symbol", "ts"),
+)
+
+# 신호 이후 실제 가격 흐름 (신호 판단과 분리해 둔다 — 사후 평가용)
+signal_performance = Table(
+    "signal_performance",
+    metadata,
+    Column("id", BigInteger, primary_key=True, autoincrement=True),
+    Column("decision_id", BigInteger, ForeignKey("strategy_decisions.id"), nullable=False),
+    Column("symbol", String(16), nullable=False),
+    Column("horizon", String(8), nullable=False),  # 5m / 15m / 30m / close
+    # 1: 오르면 좋은 신호(BUY), -1: 내리면 좋은 신호(SELL/EXIT)
+    Column("direction", SmallInteger, nullable=False),
+    Column("signal_ts", Ts(), nullable=False),
+    Column("ref_price", Amount(), nullable=False),
+    Column("due_ts", Ts(), nullable=False),
+    Column("status", String(12), nullable=False),  # PENDING / DONE / NO_DATA
+    Column("close_price", Amount(), nullable=True),
+    Column("max_price", Amount(), nullable=True),
+    Column("min_price", Amount(), nullable=True),
+    # 방향 반영 수익률·최대 유리/불리 폭 (비율)
+    Column("return_pct", Numeric(12, 6), nullable=True),
+    Column("mfe_pct", Numeric(12, 6), nullable=True),
+    Column("mae_pct", Numeric(12, 6), nullable=True),
+    Column("evaluated_at", Ts(), nullable=True),
+    UniqueConstraint("decision_id", "horizon"),
+    Index(None, "status", "due_ts"),
 )
 
 risk_events = Table(

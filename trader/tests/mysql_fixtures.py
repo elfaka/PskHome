@@ -47,14 +47,21 @@ def mysql_url() -> str:
 
 @pytest.fixture(scope="session")
 def migrated_engine(mysql_url: str) -> Iterator[Engine]:
-    """세션 시작 시 base → head 로 마이그레이션을 실제로 돌린다 (마이그레이션 자체 검증)."""
-    for target in ("base", "head"):
-        cmd = [sys.executable, "-m", "alembic", "-x", f"url={mysql_url}"]
-        cmd += ["downgrade", target] if target == "base" else ["upgrade", target]
+    """세션 시작 시 테스트 DB 를 비우고 head 로 → base 로 → head 로 실제 마이그레이션한다.
+
+    (이전 실행이 중간에 죽어 버전 기록과 테이블이 어긋나 있어도 다시 시작할 수 있게 먼저 전부 지운다)
+    """
+    engine = create_db_engine(mysql_url)
+    with engine.begin() as c:
+        c.execute(text("SET FOREIGN_KEY_CHECKS=0"))
+        for (name,) in c.execute(text("SHOW TABLES")).all():
+            c.execute(text(f"DROP TABLE `{name}`"))
+        c.execute(text("SET FOREIGN_KEY_CHECKS=1"))
+    for action, target in (("upgrade", "head"), ("downgrade", "base"), ("upgrade", "head")):
+        cmd = [sys.executable, "-m", "alembic", "-x", f"url={mysql_url}", action, target]
         r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if r.returncode != 0:
-            pytest.fail(f"alembic {target} 실패:\n{r.stderr[-2000:]}")
-    engine = create_db_engine(mysql_url)
+            pytest.fail(f"alembic {action} {target} 실패:\n{r.stderr[-2000:]}")
     yield engine
     engine.dispose()
 

@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from trader.broker.base import Broker, BrokerError
 from trader.clock import Clock
@@ -50,6 +51,7 @@ class SubmitResult:
     client_order_id: str
     reason: str | None = None
     state: OrderState | None = None
+    levels: dict[str, Any] = field(default_factory=dict)
 
 
 def make_client_order_id(
@@ -101,7 +103,7 @@ class OrderGateway:
         ctx = self._context()
         decision = self._risk.evaluate(req, ctx)
         if not decision.approved or decision.approval is None:
-            self._note(decision_id, "REJECTED", f"{decision.code}: {decision.reason}", None)
+            self._note(decision_id, "REJECTED", f"{decision.code}: {decision.reason}", None, decision.levels)
             self._store.record_risk_event(
                 "ORDER_REJECTED",
                 ctx.now,
@@ -117,7 +119,7 @@ class OrderGateway:
         except DuplicateOrderError:
             self._note(decision_id, "DUPLICATE", "같은 신호의 주문이 이미 있다", coid)
             return SubmitResult("DUPLICATE", coid, "already exists")
-        self._note(decision_id, "APPROVED", None, coid)
+        self._note(decision_id, "APPROVED", None, coid, decision.levels)
 
         try:
             state = await self._broker.place_order(req, decision.approval)
@@ -148,11 +150,18 @@ class OrderGateway:
             "order sent",
             extra={"fields": {"coid": coid, "symbol": req.symbol, "side": req.side, "qty": req.qty}},
         )
-        return SubmitResult("SENT", coid, None, state)
+        return SubmitResult("SENT", coid, None, state, dict(decision.levels))
 
-    def _note(self, decision_id: int | None, result: str, reason: str | None, coid: str | None) -> None:
+    def _note(
+        self,
+        decision_id: int | None,
+        result: str,
+        reason: str | None,
+        coid: str | None,
+        levels: Mapping[str, Any] | None = None,
+    ) -> None:
         if decision_id is not None:
-            self._store.update_decision_risk(decision_id, result, reason, coid)
+            self._store.update_decision_risk(decision_id, result, reason, coid, levels or None)
 
     def _record_or_die(self, state: OrderState, event: str, now: datetime) -> None:
         try:

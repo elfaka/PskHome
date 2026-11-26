@@ -1,9 +1,18 @@
-"""엔진: 시세 → 봉 → 전략 판단 → 주문 게이트웨이, 그리고 체결 반영·감시.
+"""엔진: 시세 → 봉·지표 → 전략 판단 → 주문 게이트웨이, 그리고 체결 반영·감시.
 
 동시에 도는 것
 - 시세 루프: 시세 1건을 끝까지 처리한 다음에 다음 시세를 받는다
 - 체결 루프: 브로커 실행 이벤트를 DB 에 반영한다. 실패하면 엔진을 멈춘다
 - 감시 루프: 단일 인스턴스 락, DB 헬스, 킬스위치를 주기적으로 확인한다
+- 맥락 루프: (stocksim 일 때) 지수·VIX·수급·상하한가를 받는다
+
+전략
+- 주문하는 전략은 하나, 나머지는 그림자(신호·성과만 기록)
+- 신호(BUY/SELL/EXIT)마다 5·15·30분·장마감 성과를 남긴다
+
+규칙 청산 (전략·AI 를 거치지 않는다)
+- 매수 때 위험 관리가 정한 손절·목표가에 닿으면 EXIT
+- eod_exit 시각(KST)이 되면 보유분 EXIT
 
 멈춤 규칙
 - 기록과 실제가 어긋날 수 있는 오류(FatalEngineError, 락 상실, 체결 기록 실패)는 즉시 종료(exit 2).
@@ -16,30 +25,35 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from dataclasses import dataclass, replace
-from datetime import date
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 from trader.broker.base import Broker, OrderNotFound
 from trader.broker.paper import PaperBroker
-from trader.clock import Clock, SimClock, kst_trade_date
+from trader.clock import Clock, SimClock, kst_trade_date, to_kst
 from trader.domain import ExecKind, ExecutionEvent, OrderStatus, Quote, Side
 from trader.execution.gateway import FatalEngineError, OrderGateway, OrderIntent
+from trader.indicators import IndicatorBook
 from trader.logging_setup import log_fields
-from trader.marketdata.bars import BarAggregator, BarUpdate
+from trader.marketdata.bars import BarAggregator, BarUpdate, bucket_start
+from trader.marketdata.context import ContextProvider, NullContextProvider
 from trader.money import ZERO
+from trader.performance import direction_of, evaluate, horizons_for
 from trader.recovery import RecoveryReport, recover
 from trader.risk.health import TradingHealth
 from trader.risk.killswitch import KillSwitch
 from trader.risk.manager import RiskContext, RiskManager, equity
 from trader.storage.db import InstanceLock
 from trader.storage.store import TradingStore
-from trader.strategy.base import PortfolioView, Strategy
+from trader.strategy.base import ORDER_ACTIONS, Decision, MarketView, PortfolioView, Strategy
 
 log = logging.getLogger(__name__)
 
 EXIT_OK = 0
 EXIT_FATAL = 2
+RISK_EXIT_ID = "risk_exit"
+EOD_EXIT_ID = "eod_exit"
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +64,27 @@ class EngineConfig:
     quote_flush_size: int
     killswitch_poll_s: float
     health_check_s: float
+    eod_exit: time | None = None
+    session_close: time = time(15, 30)
+    # 기록용 보조 봉 (예: 5분봉)
+    extra_bar_intervals: tuple[int, ...] = ()
+
+
+@dataclass(slots=True)
+class StrategySlot:
+    strategy: Strategy
+    shadow: bool
+
+
+@dataclass(slots=True)
+class _Protect:
+    stop: Decimal | None
+    take: Decimal | None
+
+
+@dataclass(slots=True)
+class _ExitState:
+    pending: dict[str, str] = field(default_factory=dict)  # symbol → client_order_id
 
 
 class Engine:
@@ -61,21 +96,30 @@ class Engine:
         broker: Broker,
         clock: Clock,
         lock: InstanceLock | None,
-        strategy: Strategy,
+        strategies: list[StrategySlot],
         risk: RiskManager,
         account_id: int,
+        context: ContextProvider | None = None,
     ) -> None:
+        if sum(1 for s in strategies if not s.shadow) > 1:
+            raise ValueError("주문하는 전략은 하나만 둘 수 있다")
         self.cfg = cfg
         self.store = store
         self.broker = broker
         self.clock = clock
         self.lock = lock
-        self.strategy = strategy
+        self.strategies = strategies
         self.account_id = account_id
+        self.context: ContextProvider = context or NullContextProvider()
         self.health = TradingHealth()
         self.killswitch = KillSwitch(store, cfg.killswitch_poll_s)
         self.quotes: dict[str, Quote] = {}
         self.bars = BarAggregator(cfg.bar_interval_s)
+        self.extra_bars = [BarAggregator(i) for i in cfg.extra_bar_intervals]
+        self.indicators: dict[str, IndicatorBook] = {s: IndicatorBook() for s in cfg.symbols}
+        self.positions: dict[str, Decimal] = {}
+        self.protect: dict[str, _Protect] = {}
+        self.exits = _ExitState()
         self.gateway = OrderGateway(
             store=store,
             broker=broker,
@@ -91,7 +135,15 @@ class Engine:
         self._fatal: BaseException | None = None
         self._halt_handled = False
         self.recovery: RecoveryReport | None = None
-        self.stats = {"quotes": 0, "bars": 0, "decisions": 0, "orders_sent": 0, "fills": 0}
+        self.stats = {"quotes": 0, "bars": 0, "decisions": 0, "orders_sent": 0, "fills": 0, "exits": 0}
+
+    @property
+    def strategy(self) -> Strategy:
+        """주문하는 전략 (없으면 첫 전략)."""
+        for s in self.strategies:
+            if not s.shadow:
+                return s.strategy
+        return self.strategies[0].strategy
 
     # ── 실행 ─────────────────────────────────────────────────────────────
 
@@ -106,9 +158,11 @@ class Engine:
             now=self.clock.now(),
             restore=restore,
         )
+        self._load_positions()
         self._warm_up()
         exec_task = asyncio.create_task(self._execution_loop(), name="executions")
         watch_task = asyncio.create_task(self._watch_loop(), name="watchdog")
+        ctx_task = asyncio.create_task(self.context.run(), name="context")
         code = EXIT_OK
         try:
             async for q in self.broker.subscribe_quotes(self.cfg.symbols):
@@ -127,9 +181,9 @@ class Engine:
             self._safe_risk_event("ENGINE_ERROR", {"err": repr(e)[:500]})
             code = EXIT_FATAL
         finally:
-            watch_task.cancel()
-            exec_task.cancel()
-            for t in (watch_task, exec_task):
+            for t in (watch_task, exec_task, ctx_task):
+                t.cancel()
+            for t in (watch_task, exec_task, ctx_task):
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await t
             self._flush_quotes()
@@ -145,17 +199,28 @@ class Engine:
         if exec_task.done() and not exec_task.cancelled() and exec_task.exception():
             raise FatalEngineError(str(exec_task.exception()))
 
+    def _load_positions(self) -> None:
+        bal = self.store.load_balance(self.account_id)
+        self.positions = {s: p.qty for s, p in bal.positions.items() if p.qty > 0}
+        for sym in self.positions:
+            stop, take = self.store.latest_entry_levels(self.account_id, sym)
+            self.protect[sym] = _Protect(stop, take)
+
     def _warm_up(self) -> None:
-        """DB 에 쌓인 최근 봉으로 전략 지표를 채운다. 다음 봉과 이어지지 않으면 누락 감지가 다시 초기화한다."""
+        """DB 에 쌓인 최근 봉으로 지표·전략을 채운다. 다음 봉과 이어지지 않으면 누락 감지가 다시 초기화한다."""
+        need = max(s.strategy.warmup_bars for s in self.strategies)
         for sym in self.cfg.symbols:
             try:
-                bars = self.store.recent_bars(sym, self.cfg.bar_interval_s, self.strategy.warmup_bars)
+                bars = self.store.recent_bars(sym, self.cfg.bar_interval_s, max(need, 40))
             except Exception:
                 log.exception("warm-up read failed", extra=log_fields(symbol=sym))
                 continue
             view = PortfolioView(ZERO, ZERO, ZERO)
             for b in bars:
-                self.strategy.on_bar(b, view)  # 판단은 버린다 — 과거 봉으로 주문하지 않는다
+                snap = self.indicators[sym].add(b)
+                for slot in self.strategies:
+                    # 판단은 버린다 — 과거 봉으로 주문하지 않는다
+                    slot.strategy.on_bar(b, view, MarketView(now=b.start_ts, indicators=snap))
 
     # ── 시세 ─────────────────────────────────────────────────────────────
 
@@ -178,9 +243,16 @@ class Engine:
         await self._poll_killswitch()
         self._update_day_baseline()
 
+        for agg in self.extra_bars:
+            done = agg.add(q)
+            if done is not None:
+                self._record_bar(done)
+
         upd = self.bars.add(q)
         if upd is not None:
             await self._on_bar(upd)
+
+        await self._rule_exits(q)
 
     def _flush_quotes(self) -> None:
         if not self._quote_buf:
@@ -210,20 +282,26 @@ class Engine:
         except Exception as e:
             self._db_failed("daily baseline", e)
 
-    # ── 봉·전략 ──────────────────────────────────────────────────────────
+    def _record_bar(self, upd: BarUpdate) -> None:
+        try:
+            self.store.record_bar(upd.bar)
+        except Exception as e:
+            self._db_failed("record_bar", e)
+
+    # ── 봉·지표·전략 ─────────────────────────────────────────────────────
 
     async def _on_bar(self, upd: BarUpdate) -> None:
         bar, sym = upd.bar, upd.bar.symbol
         self.stats["bars"] += 1
-        try:
-            self.store.record_bar(bar)
-        except Exception as e:
-            self._db_failed("record_bar", e)
+        self._record_bar(upd)
 
+        book = self.indicators[sym]
         if upd.missing_before >= self.cfg.max_missing_bars:
-            self.strategy.reset(sym)
+            book.reset()
+            for slot in self.strategies:
+                slot.strategy.reset(sym)
             self.health.data_issues[sym] = f"봉 누락 {upd.missing_before}개"
-            self._recovering[sym] = self.strategy.warmup_bars
+            self._recovering[sym] = max(s.strategy.warmup_bars for s in self.strategies)
             self._safe_risk_event(
                 "DATA_GAP", {"missing": upd.missing_before, "bar": bar.start_ts}, symbol=sym
             )
@@ -235,57 +313,103 @@ class Engine:
         elif self.health.data_issues.get(sym) == "잘못된 시세":
             self.health.data_issues.pop(sym, None)
 
+        snap = book.add(bar)
+        self._evaluate_performance()
+
         try:
             view = self._portfolio_view(sym)
         except Exception as e:
             self._db_failed("portfolio view", e)
             return
-        decision = self.strategy.on_bar(bar, view)
+        market = MarketView(now=self.clock.now(), indicators=snap, context=self.context.snapshot())
+        for slot in self.strategies:
+            await self._run_strategy(
+                slot,
+                bar.start_ts,
+                bar.start_ts + timedelta(seconds=bar.interval_s),
+                sym,
+                bar.close,
+                slot.strategy.on_bar(bar, view, market),
+            )
+
+    async def _run_strategy(
+        self, slot: StrategySlot, bar_ts: datetime, bar_end: datetime, sym: str, close: Decimal, d: Decision
+    ) -> None:
+        strategy = slot.strategy
         try:
             did = self.store.insert_decision(
                 ts=self.clock.now(),
-                strategy_id=self.strategy.id,
+                strategy_id=strategy.id,
                 symbol=sym,
-                bar_ts=bar.start_ts,
-                action=decision.action,
-                reason=decision.reason,
-                inputs=decision.inputs,
+                bar_ts=bar_ts,
+                action=d.action,
+                reason=d.reason,
+                inputs=d.inputs,
+                detail={
+                    "shadow": slot.shadow,
+                    "score": d.score,
+                    "confidence": d.confidence,
+                    "valid_until": d.valid_until,
+                    "reasons": list(d.reasons) or None,
+                    "invalidation": list(d.invalidation) or None,
+                },
             )
+            if d.action in ORDER_ACTIONS:
+                self.store.insert_signal_performance(
+                    did,
+                    sym,
+                    direction_of(d.action),
+                    bar_end,
+                    close,
+                    horizons_for(bar_end, self.cfg.session_close),
+                )
         except Exception as e:
             # 판단 기록이 없으면 주문하지 않는다
             self._db_failed("insert_decision", e)
             return
         self.stats["decisions"] += 1
-        if decision.action == "HOLD" or decision.qty is None:
+        if d.action not in ORDER_ACTIONS or d.qty is None:
+            return
+        if slot.shadow:
+            try:
+                self.store.update_decision_risk(did, "SHADOW", "그림자 전략 — 주문하지 않음", None)
+            except Exception as e:
+                self._db_failed("shadow note", e)
             return
 
         intent = OrderIntent(
-            strategy_id=self.strategy.id,
+            strategy_id=strategy.id,
             symbol=sym,
-            side=Side.BUY if decision.action == "BUY" else Side.SELL,
-            qty=decision.qty,
-            signal_ts=bar.start_ts,
+            side=Side.BUY if d.action == "BUY" else Side.SELL,
+            qty=d.qty,
+            signal_ts=bar_ts,
         )
+        await self._submit(intent, did, d.action)
+
+    async def _submit(self, intent: OrderIntent, decision_id: int | None, action: str) -> str | None:
         try:
-            res = await self.gateway.submit(intent, did)
+            res = await self.gateway.submit(intent, decision_id)
         except FatalEngineError:
             raise
         except Exception as e:
             self._db_failed("submit", e)
-            return
+            return None
         if res.outcome == "SENT":
             self.stats["orders_sent"] += 1
+            if intent.side is Side.SELL:
+                self.exits.pending[intent.symbol] = res.client_order_id
         log.info(
             "decision",
             extra=log_fields(
-                symbol=sym,
-                action=decision.action,
-                reason=decision.reason,
+                symbol=intent.symbol,
+                action=action,
+                strategy=intent.strategy_id,
                 outcome=res.outcome,
                 detail=res.reason,
                 coid=res.client_order_id,
             ),
         )
+        return res.outcome
 
     def _portfolio_view(self, sym: str) -> PortfolioView:
         bal = self.store.load_balance(self.account_id)
@@ -299,6 +423,13 @@ class Engine:
     def _risk_context(self) -> RiskContext:
         self.killswitch.refresh(force=True)
         today = kst_trade_date(self.clock.now())
+        ctx = self.context.snapshot()
+        atr = {s: b.last.atr14 for s, b in self.indicators.items() if b.last is not None and b.last.atr14}
+        upper = {
+            s: c.upper_limit
+            for s, c in ctx.symbols.items()
+            if c.upper_limit is not None and c.limits_date == today
+        }
         return RiskContext(
             now=self.clock.now(),
             halted=self.killswitch.halted,
@@ -307,7 +438,71 @@ class Engine:
             open_orders=self.store.list_open_orders(self.account_id),
             quotes=dict(self.quotes),
             day_start_equity=self._day_start_equity if self._day == today else None,
+            atr=atr,
+            upper_limits=upper,
+            provides_price_limits=ctx.provides_price_limits,
         )
+
+    # ── 규칙 청산 (손절·목표가·장 마감) ───────────────────────────────────
+
+    async def _rule_exits(self, q: Quote) -> None:
+        sym = q.symbol
+        held = self.positions.get(sym, ZERO)
+        if held <= 0 or sym in self.exits.pending:
+            return
+        reason = None
+        strategy_id = RISK_EXIT_ID
+        p = self.protect.get(sym)
+        if p is not None and p.stop is not None and q.price <= p.stop:
+            reason = f"손절가 {p.stop} 도달 ({q.price})"
+        elif p is not None and p.take is not None and q.price >= p.take:
+            reason = f"목표가 {p.take} 도달 ({q.price})"
+        elif self.cfg.eod_exit is not None:
+            k = to_kst(q.ts)
+            if k.weekday() < 5 and k.time() >= self.cfg.eod_exit:
+                reason, strategy_id = f"장 마감 전 청산 ({self.cfg.eod_exit:%H:%M})", EOD_EXIT_ID
+        if reason is None:
+            return
+
+        signal_ts = bucket_start(q.ts, 60)
+        try:
+            did = self.store.insert_decision(
+                ts=self.clock.now(),
+                strategy_id=strategy_id,
+                symbol=sym,
+                bar_ts=signal_ts,
+                action="EXIT",
+                reason=reason,
+                inputs={"price": q.price, "held": held},
+            )
+        except Exception as e:
+            self._db_failed("insert_decision", e)
+            return
+        self.stats["exits"] += 1
+        outcome = await self._submit(
+            OrderIntent(strategy_id=strategy_id, symbol=sym, side=Side.SELL, qty=held, signal_ts=signal_ts),
+            did,
+            "EXIT",
+        )
+        if outcome == "DUPLICATE":
+            # 이번 분에 이미 낸 청산이 있다 — 체결·취소 이벤트를 기다린다
+            self.exits.pending.setdefault(sym, "duplicate")
+
+    # ── 신호 성과 ────────────────────────────────────────────────────────
+
+    def _evaluate_performance(self) -> None:
+        # 만기 시각까지의 봉이 다 완성됐는지 보려면 한 봉 간격만큼 여유를 둔다
+        cutoff = self.clock.now() - timedelta(seconds=self.cfg.bar_interval_s)
+        try:
+            for row in self.store.due_performance(cutoff):
+                bars = self.store.bars_between(
+                    row["symbol"], self.cfg.bar_interval_s, row["signal_ts"], row["due_ts"]
+                )
+                self.store.complete_performance(
+                    row["id"], evaluate(row["ref_price"], int(row["direction"]), bars), self.clock.now()
+                )
+        except Exception as e:
+            self._db_failed("performance", e)
 
     # ── 체결 ─────────────────────────────────────────────────────────────
 
@@ -322,10 +517,20 @@ class Engine:
 
     def _apply_execution(self, ev: ExecutionEvent) -> None:
         now = self.clock.now()
+        sym = ev.order.symbol
         if ev.kind is ExecKind.FILL:
             assert ev.fill is not None
             if self.store.apply_fill(self.account_id, ev.fill, ev.order.status, now):
                 self.stats["fills"] += 1
+                sign = 1 if ev.fill.side is Side.BUY else -1
+                self.positions[sym] = self.positions.get(sym, ZERO) + sign * ev.fill.qty
+                if self.positions[sym] <= 0:
+                    self.positions.pop(sym, None)
+                    self.protect.pop(sym, None)
+                    self.exits.pending.pop(sym, None)
+                elif ev.fill.side is Side.BUY:
+                    stop, take = self.store.latest_entry_levels(self.account_id, sym)
+                    self.protect[sym] = _Protect(stop, take)
                 log.info(
                     "fill",
                     extra=log_fields(
@@ -340,6 +545,9 @@ class Engine:
             self.store.update_order(
                 ev.order, ev.kind.value, now, {"reason": ev.reason} if ev.reason else None
             )
+        # 청산 주문이 체결 없이 끝나면 다시 청산을 시도할 수 있게 한다
+        if not ev.order.status.is_open and self.exits.pending.get(sym) == ev.client_order_id:
+            self.exits.pending.pop(sym, None)
 
     # ── 감시·킬스위치 ────────────────────────────────────────────────────
 

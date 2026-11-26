@@ -42,7 +42,8 @@ class Settings(BaseSettings):
     log_json: bool = True
 
     # ── 시세 ──────────────────────────────────────────────────────────────
-    feed: Literal["synthetic", "csv"] = "synthetic"
+    # synthetic: 모의 생성, csv: 파일 재생, stocksim: 백엔드 stocksim 을 거친 토스 실시세(읽기 전용)
+    feed: Literal["synthetic", "csv", "stocksim"] = "synthetic"
     # fast: 시세 시각대로 가상 시계를 움직이며 기다리지 않는다 (재생)
     # realtime: 실제 시각으로 돈다 (synthetic 만 지원)
     pace: Literal["fast", "realtime"] = "fast"
@@ -55,6 +56,13 @@ class Settings(BaseSettings):
     # fast 모드에서 생성할 거래일 수 (realtime 은 무한)
     synthetic_days: int = Field(default=1, ge=1)
 
+    # stocksim 실시세 — 개발 PC 는 운영 공개 API, 운영 서버는 같은 네트워크의 백엔드
+    stocksim_base_url: str = "https://elfaka.kr"
+    stocksim_poll_seconds: Decimal = Field(default=Decimal(3), ge=1)
+    stocksim_context_seconds: Decimal = Field(default=Decimal(60), ge=10)
+    stocksim_poll_start: time = time(8, 55)
+    stocksim_poll_end: time = time(15, 35)
+
     bar_interval_seconds: int = Field(default=60, ge=1)
     max_quote_age_seconds: int = Field(default=5, ge=1)
     # 봉이 이만큼 연속으로 비면 데이터 누락으로 보고 해당 종목 판단을 초기화한다
@@ -64,6 +72,11 @@ class Settings(BaseSettings):
     enforce_market_hours: bool = True
     market_open: time = time(9, 0)
     market_close: time = time(15, 20)
+    # 장중 규칙: 이 시각 이후 신규 매수 금지, 이 시각에 보유분 청산 (빈 값이면 끔)
+    entry_cutoff: time | None = time(15, 0)
+    eod_exit: time | None = time(15, 15)
+    # 신호 성과의 "장 마감" 기준 시각
+    session_close: time = time(15, 30)
 
     # ── 가상 브로커 ───────────────────────────────────────────────────────
     paper_initial_cash: PosDecimal
@@ -82,8 +95,19 @@ class Settings(BaseSettings):
     risk_daily_loss_limit: PosDecimal
     # 주문 승인 유효 시간. 승인 후 이 시간이 지나면 브로커가 거부한다
     risk_approval_ttl_seconds: int = Field(default=5, ge=1)
+    # 손절·목표가 = 진입가 ∓ ATR(14) × 배수, 비용 차감 손익비 최소값
+    risk_atr_stop_mult: PosDecimal = Decimal("1.5")
+    risk_atr_take_mult: PosDecimal = Decimal(3)
+    risk_min_risk_reward: PosDecimal = Decimal("1.5")
+    risk_max_spread_bps: PosDecimal = Decimal(30)
+    risk_near_upper_limit_pct: Rate = Decimal("0.02")
 
-    # ── 전략: 이동평균 교차 ────────────────────────────────────────────────
+    # ── 전략 ──────────────────────────────────────────────────────────────
+    # 돌릴 전략과, 그중 주문하지 않고 신호·성과만 기록할 전략(그림자)
+    strategies: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["ma_cross", "intraday_score"])
+    shadow_strategies: Annotated[list[str], NoDecode] = Field(default_factory=lambda: ["intraday_score"])
+
+    # 이동평균 교차
     strategy_fast: int = Field(default=5, ge=1)
     strategy_slow: int = Field(default=20, ge=2)
     # 매수 1회에 쓸 금액. 수량 = floor(금액 / 종가)
@@ -94,7 +118,12 @@ class Settings(BaseSettings):
     health_check_seconds: Decimal = Decimal(5)
     quote_flush_size: int = Field(default=200, ge=1)
 
-    @field_validator("symbols", mode="before")
+    @field_validator("entry_cutoff", "eod_exit", mode="before")
+    @classmethod
+    def _blank_is_off(cls, v: object) -> object:
+        return None if isinstance(v, str) and not v.strip() else v
+
+    @field_validator("symbols", "strategies", "shadow_strategies", mode="before")
     @classmethod
     def _split_symbols(cls, v: object) -> object:
         if isinstance(v, str):
@@ -107,7 +136,7 @@ class Settings(BaseSettings):
         if not v:
             raise ValueError("종목이 하나 이상 필요하다")
         for s in v:
-            if not s.isalnum() or len(s) > 16:
+            if not s.isalnum() or len(s) > 16:  # 종목 코드
                 raise ValueError(f"종목 코드 형식이 아니다: {s!r}")
         return v
 
@@ -119,6 +148,16 @@ class Settings(BaseSettings):
             raise ValueError("feed=csv 이면 TRADER_FEED_CSV_PATH 가 필요하다")
         if self.feed == "csv" and self.pace == "realtime":
             raise ValueError("csv 재생은 pace=fast 만 지원한다")
+        if self.feed == "stocksim" and self.pace != "realtime":
+            raise ValueError("feed=stocksim 은 pace=realtime 이어야 한다")
+        known = {"ma_cross", "intraday_score"}
+        if not self.strategies or set(self.strategies) - known:
+            raise ValueError(f"strategies 는 {sorted(known)} 중에서 고른다")
+        if set(self.shadow_strategies) - set(self.strategies):
+            raise ValueError("shadow_strategies 는 strategies 안에 있어야 한다")
+        if len(set(self.strategies) - set(self.shadow_strategies)) > 1:
+            # 한 계좌를 여러 전략이 주문하면 서로의 포지션을 건드린다
+            raise ValueError("주문하는 전략은 하나만 둘 수 있다 (나머지는 shadow_strategies 로)")
         if self.market_open >= self.market_close:
             raise ValueError("market_open 은 market_close 보다 빨라야 한다")
         return self
