@@ -15,6 +15,26 @@ const nextConfig: NextConfig = {
   // Docker 이미지에 필요한 파일만 담기 위한 독립 실행형 빌드
   output: "standalone",
 
+  // 자동매매(/trader)는 본인 전용 — 메타 태그와 별개로 응답 헤더로도 검색 노출을 막는다
+  async headers() {
+    return [
+      {
+        source: "/trader/:path*",
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
+      {
+        source: "/trader",
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+          { key: "Cache-Control", value: "no-store" },
+        ],
+      },
+    ];
+  },
+
   async rewrites() {
     if (!apiProxyTarget) return [];
 

@@ -53,11 +53,23 @@ src/app/
 ├── stocksim/                                    # 주식 모의투자 (layout: metadata + SiteShell)
 │   ├── page.tsx                                 # /stocksim
 │   └── [...slug]/page.tsx                       # 그 외 → /stocksim 으로 리다이렉트
-└── wedding/                                     # 모바일 청첩장 — SiteShell 없음, 사이트 테마와 분리
-    ├── layout.tsx                               # metadata(noindex), 폰트, .wedding-root
-    ├── page.tsx                                 # /wedding
-    └── [...slug]/page.tsx                       # 그 외 → /wedding 으로 리다이렉트
+├── wedding/                                     # 모바일 청첩장 — SiteShell 없음, 사이트 테마와 분리
+│   ├── layout.tsx                               # metadata(noindex), 폰트, .wedding-root
+│   ├── page.tsx                                 # /wedding
+│   └── [...slug]/page.tsx                       # 그 외 → /wedding 으로 리다이렉트
+└── trader/                                      # 자동매매 — 본인 전용. 어디에도 링크하지 않는다
+    ├── layout.tsx                               # metadata(noindex, 제목 "로그인")
+    ├── page.tsx                                 # /trader (TraderGate: 로그인 → 준비 중 화면)
+    └── [...slug]/page.tsx                       # 그 외 → /trader 로 리다이렉트
 ```
+
+### 예외: `/trader` (자동매매, 본인 전용)
+
+- **사이트 메뉴·`/project`·`ProjectFlyout`·`data/projects.ts` 에 넣지 않는다.** SiteShell 도 쓰지 않는다.
+- 보호는 백엔드(`/api/trader/**` 의 `requireTraderAuth`)가 한다. 화면은 `/api/trader/auth/me` 결과로
+  로그인 양식 / 내용 중 무엇을 그릴지만 정한다. 데이터 API 를 붙일 때도 백엔드에서 막혀 있어야 한다.
+- 검색 차단은 `layout.tsx` 의 `robots` 메타 + `next.config.ts` 의 `X-Robots-Tag` 헤더 두 겹이다.
+- Google 로그인(`/api/auth/me`)과 별개다. 대시보드는 5단계에서 `TraderGate` 의 준비 중 자리에 들어간다.
 
 **라우트 페이지는 얇게 유지한다.** 실제 화면 구현은 `src/components/` 에 두고
 페이지는 조립만 한다. (`/pspost/new` 와 `/pspost/[id]/edit` 가 같은 `PostForm` 을 공유하는 이유)
@@ -223,6 +235,7 @@ export async function fetchData(id: number) {
 - `src/api/pspost.ts` — PS 게시글 CRUD (`listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`)
 - `src/api/jsonPrettierApi.ts` — JSON 포맷 (`formatJson`)
 - `src/api/stockSim.ts` — 주식 모의투자 (검색·시세·차트·호가·체결·개요·분석·수급·시장 지수·공포탐욕·포트폴리오·주문)
+- `src/api/trader.ts` — 자동매매 본인 로그인 (`getTraderMe`, `traderLogin`, `traderLogout`)
 
 **에러 메시지**는 `@/lib/errorMessage` 의 `errorMessage(e, fallback)` 로 뽑는다.
 백엔드 실패 응답 형태(`{ error: { code, message } }`)를 알고 있으므로 화면마다 파싱하지 않는다.

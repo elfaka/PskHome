@@ -63,6 +63,16 @@ export const mockPortfolio = {
 };
 
 export const handlers = [
+  // 자동매매(/trader) — 기본은 비로그인. 로그인 흐름은 테스트에서 server.use 로 바꾼다
+  http.get("/api/trader/auth/me", () => HttpResponse.json({ authenticated: false })),
+  http.post("/api/trader/auth/logout", () => HttpResponse.json({ ok: true })),
+  http.post("/api/trader/auth/login", () =>
+    HttpResponse.json(
+      { error: { code: "LOGIN_FAILED", message: "아이디 또는 비밀번호가 올바르지 않습니다." } },
+      { status: 401 }
+    )
+  ),
+
   http.get("/api/posts", () => HttpResponse.json(mockPage)),
 
   http.get("/api/posts/:id", ({ params }) => {
