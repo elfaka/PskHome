@@ -115,6 +115,21 @@ class TradingStore(Protocol):
     def check_consistency(self, account_id: int) -> list[Mismatch]: ...
 
 
+_RANK = {
+    OrderStatus.PENDING_NEW: 0,
+    OrderStatus.NEW: 1,
+    OrderStatus.PARTIALLY_FILLED: 2,
+    OrderStatus.PENDING_CANCEL: 2,
+    OrderStatus.FILLED: 3,
+    OrderStatus.CANCELED: 3,
+    OrderStatus.REJECTED: 3,
+}
+
+
+def status_rank(s: OrderStatus) -> int:
+    return _RANK[s]
+
+
 def _row_to_order(r: Any) -> OrderState:
     return OrderState(
         client_order_id=r.client_order_id,
@@ -256,7 +271,12 @@ class SqlTradingStore:
             ).first()
             if row is None:
                 raise StoreConsistencyError(f"DB 에 없는 주문: {state.client_order_id}")
-            values: dict[str, Any] = {"status": state.status.value, "updated_at": to_db(now)}
+            current = OrderStatus(row.status)
+            # 이벤트 순서가 뒤바뀌어도(예: 체결 이벤트가 접수 응답보다 먼저 기록) 상태가 뒤로 가지 않게 한다
+            # 종료 상태(FILLED/CANCELED/REJECTED)는 바꾸지 않는다.
+            terminal = status_rank(current) == 3
+            status = current if terminal or status_rank(state.status) < status_rank(current) else state.status
+            values: dict[str, Any] = {"status": status.value, "updated_at": to_db(now)}
             if state.broker_order_id is not None:
                 values["broker_order_id"] = state.broker_order_id
             if state.reject_reason is not None:
@@ -267,7 +287,7 @@ class SqlTradingStore:
                     order_id=row.id,
                     ts=to_db(now),
                     event=event,
-                    status=state.status.value,
+                    status=status.value,
                     detail=jsonable(detail) if detail else None,
                 )
             )
