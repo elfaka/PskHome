@@ -1,0 +1,50 @@
+# 로컬 개발·테스트 전용. 운영 DB 에는 접속하지 않는다.
+#
+#   docker compose -f compose.dev.yaml up -d db          # MySQL 만
+#   docker compose -f compose.dev.yaml --profile engine up --build engine
+#
+# 비밀번호는 같은 폴더의 .env (DEV_*) 에서 읽는다.
+name: trader-dev
+
+services:
+  db:
+    # 운영(pskhome-db-1)과 같은 버전
+    image: mysql:8.0.46
+    container_name: trader-dev-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DEV_MYSQL_ROOT_PASSWORD:?DEV_MYSQL_ROOT_PASSWORD 를 .env 에 지정}
+      DEV_TRADER_APP_PASSWORD: ${DEV_TRADER_APP_PASSWORD:?DEV_TRADER_APP_PASSWORD 를 .env 에 지정}
+      DEV_TRADER_MIGRATE_PASSWORD: ${DEV_TRADER_MIGRATE_PASSWORD:?DEV_TRADER_MIGRATE_PASSWORD 를 .env 에 지정}
+      TZ: UTC
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_0900_ai_ci
+      --default-time-zone=+00:00
+    ports:
+      # 이 PC 에서만 접속. 운영과 헷갈리지 않게 3307
+      - 127.0.0.1:3307:3306
+    volumes:
+      - trader-dev-db:/var/lib/mysql
+      - ./db/dev-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  engine:
+    profiles: ["engine"]
+    build:
+      context: .
+      dockerfile: dockerfile
+    env_file: .env
+    environment:
+      TRADER_DATABASE_URL: mysql+pymysql://trader_app:${DEV_TRADER_APP_PASSWORD}@db:3306/trader
+      TRADER_MIGRATE_DATABASE_URL: mysql+pymysql://trader_migrate:${DEV_TRADER_MIGRATE_PASSWORD}@db:3306/trader
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  trader-dev-db:
