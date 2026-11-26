@@ -13,6 +13,7 @@ dependencies = [
   "pydantic-settings>=2.7,<3",
   # Windows 에는 IANA 시간대 DB 가 없어 zoneinfo 가 Asia/Seoul 을 못 찾는다
   "tzdata>=2024.2",
+  "httpx>=0.27,<1",
 ]
 
 [project.scripts]

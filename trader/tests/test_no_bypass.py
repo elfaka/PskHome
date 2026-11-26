@@ -55,9 +55,15 @@ def test_strategy_does_not_touch_broker_or_store() -> None:
                 assert not m.startswith(forbidden), f"{p.name} imports {m}"
 
 
-def test_no_network_clients_in_phase1() -> None:
+NETWORK_MODULE = "marketdata/stocksim_client.py"
+
+
+def test_network_only_in_read_only_stocksim_client() -> None:
+    """네트워크는 stocksim 읽기 전용 클라이언트에서만. 증권사 직접 연결·실주문 코드는 없다."""
     banned = ("requests", "httpx", "aiohttp", "urllib.request", "websockets", "socket")
     for p in _files():
+        if p.relative_to(SRC).as_posix() == NETWORK_MODULE:
+            continue
         tree = ast.parse(p.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -68,3 +74,10 @@ def test_no_network_clients_in_phase1() -> None:
                 continue
             for n in names:
                 assert not n.startswith(banned), f"{p.relative_to(SRC)} imports {n}"
+
+
+def test_stocksim_client_only_reads() -> None:
+    src = (SRC / NETWORK_MODULE).read_text(encoding="utf-8")
+    for forbidden in ("/orders", "/reset", ".post(", ".put(", ".delete(", ".patch(", ".request(", "method="):
+        assert forbidden not in src, forbidden
+    assert _calls(SRC / NETWORK_MODULE, "get")
