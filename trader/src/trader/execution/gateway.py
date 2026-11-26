@@ -52,11 +52,13 @@ class SubmitResult:
     state: OrderState | None = None
 
 
-def make_client_order_id(strategy_id: str, symbol: str, signal_ts: datetime, side: Side) -> str:
+def make_client_order_id(
+    account_id: int, strategy_id: str, symbol: str, signal_ts: datetime, side: Side
+) -> str:
+    """같은 계좌·전략·종목·신호 봉·방향이면 항상 같은 ID. 계좌가 다르면 다른 ID (DB UNIQUE 는 전역이다)."""
     stamp = signal_ts.strftime("%Y%m%dT%H%M%S")
-    h = hashlib.sha256(f"{strategy_id}|{symbol}|{signal_ts.isoformat()}|{side.value}".encode()).hexdigest()[
-        :10
-    ]
+    key = f"{account_id}|{strategy_id}|{symbol}|{signal_ts.isoformat()}|{side.value}"
+    h = hashlib.sha256(key.encode()).hexdigest()[:10]
     return f"{strategy_id[:16]}-{symbol[:12]}-{stamp}-{side.value[0]}-{h}"
 
 
@@ -79,7 +81,9 @@ class OrderGateway:
         self._context = context
 
     async def submit(self, intent: OrderIntent, decision_id: int | None) -> SubmitResult:
-        coid = make_client_order_id(intent.strategy_id, intent.symbol, intent.signal_ts, intent.side)
+        coid = make_client_order_id(
+            self._account_id, intent.strategy_id, intent.symbol, intent.signal_ts, intent.side
+        )
         req = OrderRequest(
             client_order_id=coid,
             symbol=intent.symbol,

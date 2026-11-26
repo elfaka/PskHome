@@ -1,0 +1,139 @@
+name: Trader Engine
+
+# 자동매매 엔진 (1단계: 가상매매)
+# - main 에 trader/** 가 바뀌면: 테스트(로컬과 같은 MySQL 8.0.46) → 이미지 빌드·GHCR 푸시
+# - 서버 배포는 수동 실행(workflow_dispatch)만 한다.
+#   DB 계정(trader/db/create_users.sql)과 server/trader.env 는 사용자가 서버에서 직접 준비한다.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - trader/**
+      - .github/workflows/trader-cd.yaml
+      - server/docker-compose-trader.yaml
+  pull_request:
+    paths:
+      - trader/**
+      - .github/workflows/trader-cd.yaml
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "서버에 배포한다 (마이그레이션 후 엔진 재기동)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/pskhome-trader
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0.46
+        env:
+          # CI 전용 일회용 컨테이너 비밀번호 (운영과 무관)
+          MYSQL_ROOT_PASSWORD: ci-only
+          MYSQL_DATABASE: trader_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-only --silent"
+          --health-interval=5s --health-timeout=3s --health-retries=30
+    env:
+      TRADER_TEST_DATABASE_URL: mysql+pymysql://root:ci-only@127.0.0.1:3306/trader_test
+    defaults:
+      run:
+        working-directory: trader
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+      - run: uv sync --frozen
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy
+      - name: Test (MySQL 포함)
+        run: uv run pytest -q
+
+  build:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./trader
+          file: ./trader/dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy compose file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST_NAME }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          source: server/docker-compose-trader.yaml
+          target: ~/${{ github.event.repository.name }}
+      - name: Migrate and restart engine
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST_NAME }}
+          username: ${{ secrets.SSH_USER_NAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          command_timeout: 10m
+          script_stop: true
+          envs: GHCR_TOKEN,GHCR_USER,TRADER_TAG
+          script: |
+            cd ~/${{ github.event.repository.name }}/server
+            if [ ! -f trader.env ]; then
+              echo "server/trader.env 가 없다 — trader.env.example 을 보고 서버에서 직접 만든다"
+              exit 1
+            fi
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            export TRADER_TAG
+            docker compose -f docker-compose-trader.yaml pull engine
+            docker compose -f docker-compose-trader.yaml --profile migrate run --rm migrate
+            docker compose -f docker-compose-trader.yaml up -d engine
+            docker logout ghcr.io
+            sleep 5
+            docker logs --tail 50 pskhome-trader-1
+            test "$(docker inspect -f '{{.State.Status}}' pskhome-trader-1)" = running
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          TRADER_TAG: sha-${{ github.sha }}

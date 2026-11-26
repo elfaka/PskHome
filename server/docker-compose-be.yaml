@@ -37,5 +37,9 @@ services:
 
       # OpenDART (모의투자 재무 지표). 없으면 PER·PBR 등만 빠진다.
       DART_API_KEY: ${DART_API_KEY}
+
+      # 자동매매(/trader) 본인 전용 로그인. 없으면 로그인은 항상 실패한다.
+      TRADER_ADMIN_USERNAME: ${TRADER_ADMIN_USERNAME}
+      TRADER_ADMIN_PASSWORD_HASH: ${TRADER_ADMIN_PASSWORD_HASH}
     ports:
       - 8080:8080

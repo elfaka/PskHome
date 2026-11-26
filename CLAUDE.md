@@ -2,7 +2,7 @@
 
 이 파일은 Claude Code (claude.ai/code)에게 이 저장소의 코드베이스 작업 방법을 안내합니다.
 
-> 각 서브 모듈의 상세 가이드: [`backend/CLAUDE.md`](backend/CLAUDE.md), [`frontend/CLAUDE.md`](frontend/CLAUDE.md)
+> 각 서브 모듈의 상세 가이드: [`backend/CLAUDE.md`](backend/CLAUDE.md), [`frontend/CLAUDE.md`](frontend/CLAUDE.md), [`trader/CLAUDE.md`](trader/CLAUDE.md)
 > 프로젝트 전체 개요: [`docs/skill.md`](docs/skill.md)
 
 ## 에이전트 워크플로우 프로토콜
@@ -123,6 +123,16 @@ cd frontend && npm run test
 cd frontend && npm run test:watch
 ```
 
+### 자동매매 엔진 (Python 3.12 + uv, `trader/`)
+```bash
+cd trader && docker compose -f compose.dev.yaml up -d db   # 로컬 MySQL 8.0.46 (127.0.0.1:3307)
+cd trader && uv sync && uv run alembic upgrade head
+cd trader && uv run pytest -q                               # MySQL 테스트 포함
+cd trader && uv run ruff check . && uv run mypy
+cd trader && uv run trader run | status | halt --reason "..." | resume
+```
+1단계는 **가상매매만** 한다. 실주문 코드는 없다. 안전 규칙은 [`trader/CLAUDE.md`](trader/CLAUDE.md) — 반드시 지킨다.
+
 ### 인프라 (Docker Compose)
 ```bash
 # DB 시작 (MySQL:3306)
@@ -189,6 +199,7 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
   인증이 필요한 라우터만 `middleware/requireAuth.ts` 를 붙인다.
   공개: `/api/ping`, `/api/auth/me`, `/api/auth/logout`, `/api/json/**`, `/api/posts/**`, `/api/stocksim/**`, OAuth2 flow.
   인증 필요: `/api/forms/**`.
+  자동매매 로그인 필요(`requireTraderAuth`): `/api/trader/**` (단 `/api/trader/auth/{login,logout,me}` 는 공개).
 
 **설정:** 프로파일 대신 `.env` + `config/env.ts`(zod 스키마) 하나로 관리한다.
 시크릿은 전부 optional 이라, 없더라도 앱은 기동되고 해당 엔드포인트만 실패한다.
@@ -196,14 +207,23 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 **세션:** `express-session` 기본 MemoryStore. 기존 Spring 백엔드도 spring-session-data-redis 가 없어
 세션이 프로세스 메모리에 있었으므로 동작이 같다. 재배포하면 로그인 세션이 사라진다.
 
+### 자동매매 (`trader/` + `/trader` 화면)
+
+본인 전용. **사이트 메뉴·프로젝트 목록에 노출하지 않는다.** 저장소가 공개이므로 보호는 로그인으로 한다.
+- `trader/` — Python 엔진. 시세 → 전략 → 위험 관리 → 주문 게이트웨이 → Broker(PaperBroker). 운영 MySQL 의 전용 DB `trader` + 최소 권한 계정.
+  운영 compose 는 `server/docker-compose-trader.yaml`(엔진만, 포트 없음, `server/trader.env`). 서버 배포는 수동(workflow_dispatch).
+- 백엔드 `modules/trader` — `/api/trader/**` 본인 ID/비밀번호 로그인 (Google 로그인과 별개).
+- 프론트 `/trader` — 로그인 게이트 + 준비 중 화면 (5단계에서 대시보드).
+
 ### 프론트엔드 (`frontend/src/`)
 
-Next.js App Router SPA. 최상위 라우트 5개:
+Next.js App Router SPA. 최상위 라우트 6개:
 - `/`, `/about`, `/project`, `/pspost/**` → `app/(home)/`
 - `/googleform/**` → `app/googleform/`
 - `/jsonprettier` → `app/jsonprettier/`
 - `/stocksim` → `app/stocksim/` (주식 모의투자. 증권사 WTS 형태, 이 화면만 전체 폭)
 - `/wedding` → `app/wedding/` (모바일 청첩장. 백엔드 호출 없음, 사이트 테마와 분리)
+- `/trader` → `app/trader/` (자동매매 본인 전용. 어디에도 링크하지 않음, noindex)
 
 라우트 페이지는 얇게 유지하고 화면 구현은 `src/components/` 에 둔다.
 

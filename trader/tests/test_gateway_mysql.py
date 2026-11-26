@@ -139,7 +139,7 @@ async def test_failure_to_record_ack_is_fatal(h: Harness, monkeypatch: pytest.Mo
     with pytest.raises(FatalEngineError):
         await h.gw.submit(intent(), h.decision())
     # 주문은 나갔고 DB 에는 PENDING_NEW 로 남는다 → 재시작 복구가 브로커 조회로 정리한다
-    o = h.store.get_order(make_client_order_id("ma", "005930", T0, Side.BUY))
+    o = h.store.get_order(make_client_order_id(h.account, "ma", "005930", T0, Side.BUY))
     assert o is not None and o.status is OrderStatus.PENDING_NEW
 
 
@@ -172,3 +172,20 @@ def test_killswitch_persists_and_fails_closed(h: Harness, monkeypatch: pytest.Mo
     monkeypatch.setattr(h.store, "get_engine_state", boom)
     ks.refresh(force=True)
     assert ks.halted
+
+
+async def test_same_signal_in_another_account_is_a_different_order(h: Harness) -> None:
+    """client_order_id UNIQUE 는 DB 전역이다 — 계좌가 다르면 같은 신호라도 막히면 안 된다."""
+    r1 = await h.gw.submit(intent(), h.decision())
+    other_acc = h.store.ensure_account("other", "paper", "KRW", Decimal(10_000_000), T0)
+    other = OrderGateway(
+        store=h.store,
+        broker=h.broker,
+        risk=RiskManager(LIMITS),
+        clock=h.clock,
+        account_id=other_acc,
+        context=h.ctx,
+    )
+    r2 = await other.submit(intent(), h.decision())
+    assert r1.outcome == "SENT" and r2.outcome == "SENT"
+    assert r1.client_order_id != r2.client_order_id

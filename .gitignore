@@ -1,3 +1,7 @@
 # Claude Code 로컬 설정 및 AI 하네스
 .claude/
 .harness/
+
+# 서버에서 직접 만드는 비밀값 파일
+server/.env
+server/trader.env

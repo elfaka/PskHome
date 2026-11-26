@@ -154,9 +154,14 @@ def write_csv(path: Path, quotes: list[Any]) -> Path:
 
 
 def snapshot(db: Engine) -> dict[str, Any]:
+    """계좌 ID·해시와 무관한 비교용 요약 (두 실행 사이에 auto-increment 가 달라진다)."""
     return {
-        "orders": q(db, "SELECT client_order_id, status, filled_qty FROM orders ORDER BY client_order_id"),
-        "fills": q(db, "SELECT exec_id, qty, price, commission, tax FROM fills ORDER BY exec_id"),
+        "orders": q(
+            db,
+            "SELECT SUBSTRING_INDEX(client_order_id, '-', 4), status, filled_qty, avg_fill_price "
+            "FROM orders ORDER BY created_at, client_order_id",
+        ),
+        "fills": q(db, "SELECT ts, side, qty, price, commission, tax FROM fills ORDER BY ts, id"),
         "cash": scalar(db, "SELECT SUM(amount) FROM cash_ledger"),
         "positions": q(db, "SELECT symbol, qty, avg_price FROM positions ORDER BY symbol"),
     }

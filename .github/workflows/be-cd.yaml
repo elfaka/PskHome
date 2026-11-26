@@ -121,6 +121,8 @@ jobs:
               echo "TOSS_CLIENT_ID='${{ secrets.TOSS_CLIENT_ID }}'"
               echo "TOSS_CLIENT_SECRET='${{ secrets.TOSS_CLIENT_SECRET }}'"
               echo "DART_API_KEY='${{ secrets.DART_API_KEY }}'"
+              echo "TRADER_ADMIN_USERNAME='${{ secrets.TRADER_ADMIN_USERNAME }}'"
+              echo "TRADER_ADMIN_PASSWORD_HASH='${{ secrets.TRADER_ADMIN_PASSWORD_HASH }}'"
             } > .env
 
       # 8. 이미지 내려받고 기동
