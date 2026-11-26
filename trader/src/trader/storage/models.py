@@ -11,6 +11,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy import (
     JSON,
     BigInteger,
@@ -37,11 +39,11 @@ metadata = MetaData(
 )
 
 
-def Amount() -> Numeric:
+def Amount() -> Numeric[Decimal]:
     return Numeric(20, 4, asdecimal=True)
 
 
-def Qty() -> Numeric:
+def Qty() -> Numeric[Decimal]:
     return Numeric(20, 6, asdecimal=True)
 
 
