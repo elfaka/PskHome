@@ -133,6 +133,8 @@ class OrderState:
     reject_reason: str | None = None
     tif: TimeInForce = TimeInForce.DAY
     strategy_id: str | None = None
+    # DB 에서 읽은 주문에만 있다 (DAY 주문 만료 판단용)
+    created_at: datetime | None = None
 
     @property
     def remaining_qty(self) -> Decimal:

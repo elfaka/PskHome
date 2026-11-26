@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Protocol
 
 from trader.domain import Quote
@@ -10,6 +11,10 @@ from trader.domain import Quote
 
 class MarketDataFeed(Protocol):
     source: str
+
+    def start_time(self) -> datetime | None:
+        """재생 모드에서 첫 시세 시각 (가상 시계 시작점). 실시간 공급이면 None."""
+        ...
 
     def stream(self) -> AsyncIterator[Quote]:
         """시각 순서대로 시세를 내보낸다. 공급이 끝나면 iterator 가 끝난다."""

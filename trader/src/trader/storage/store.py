@@ -145,6 +145,7 @@ def _row_to_order(r: Any) -> OrderState:
         reject_reason=r.reject_reason,
         tif=TimeInForce(r.tif),
         strategy_id=r.strategy_id,
+        created_at=from_db(r.created_at),
     )
 
 

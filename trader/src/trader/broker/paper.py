@@ -112,7 +112,9 @@ class PaperBroker:
         for o in open_orders:
             if o.status is OrderStatus.PENDING_NEW:
                 continue  # 접수 전 주문은 브로커에 없다
-            self._orders[o.client_order_id] = _PaperOrder(o, today)
+            # 접수일을 유지해야 지난 거래일의 DAY 주문이 다음 시세에서 만료된다
+            created = kst_trade_date(o.created_at) if o.created_at else today
+            self._orders[o.client_order_id] = _PaperOrder(o, created)
         self._restored = True
 
     # ── 조회 ─────────────────────────────────────────────────────────────

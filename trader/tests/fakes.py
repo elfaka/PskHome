@@ -19,6 +19,9 @@ class ListFeed:
     def __init__(self, quotes: Iterable[Quote]) -> None:
         self._quotes = list(quotes)
 
+    def start_time(self) -> datetime | None:
+        return self._quotes[0].ts if self._quotes else None
+
     async def stream(self) -> AsyncIterator[Quote]:
         for q in self._quotes:
             yield q

@@ -29,6 +29,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.mysql import DATETIME
 
+# 엔진이 기대하는 마이그레이션 버전. 새 마이그레이션을 추가하면 함께 올린다 (테스트가 head 와 비교한다)
+SCHEMA_REVISION = "0001"
+
 metadata = MetaData(
     naming_convention={
         "ix": "ix_%(table_name)s_%(column_0_N_name)s",

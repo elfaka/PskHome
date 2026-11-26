@@ -8,7 +8,6 @@ import pytest
 from sqlalchemy import Engine, text
 
 from tests.fakes import T0, ListFeed, quote
-from tests.mysql_fixtures import db_engine, migrated_engine, mysql_url  # noqa: F401
 from tests.test_paper_broker import FEES
 from tests.test_risk import LIMITS
 from trader.broker.paper import PaperBroker
@@ -79,7 +78,7 @@ def intent(qty: int = 10, ts_offset: int = 0) -> OrderIntent:
 
 
 @pytest.fixture
-def h(db_engine: Engine) -> Harness:  # noqa: F811
+def h(db_engine: Engine) -> Harness:
     return Harness(db_engine)
 
 

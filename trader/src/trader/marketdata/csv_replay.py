@@ -67,6 +67,12 @@ class CsvReplayFeed:
     def __init__(self, path: Path) -> None:
         self._path = path
 
+    def start_time(self) -> datetime | None:
+        with self._path.open(newline="", encoding="utf-8") as f:
+            for i, row in enumerate(csv.DictReader(f), start=2):
+                return parse_row(row, i).ts
+        return None
+
     async def stream(self) -> AsyncIterator[Quote]:
         last_ts: datetime | None = None
         with self._path.open(newline="", encoding="utf-8") as f:

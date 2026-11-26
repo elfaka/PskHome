@@ -9,6 +9,9 @@ import pytest
 
 from trader.config import Settings
 
+# MySQL fixture (mysql_url, migrated_engine, db_engine)
+pytest_plugins = ["tests.mysql_fixtures"]
+
 # 테스트용 설정값. 실제 수수료·세율이 아니라 계산 검증용 임의값이다.
 BASE_SETTINGS: dict[str, Any] = {
     "database_url": "mysql+pymysql://trader_app:test-password@127.0.0.1:3307/trader_test",

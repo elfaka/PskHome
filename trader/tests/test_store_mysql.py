@@ -7,7 +7,6 @@ import pytest
 from sqlalchemy import Engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
-from tests.mysql_fixtures import db_engine, migrated_engine, mysql_url  # noqa: F401
 from trader.domain import Bar, Fill, OrderRequest, OrderState, OrderStatus, OrderType, Quote, Side
 from trader.storage.db import InstanceLock, InstanceLockError, create_db_engine
 from trader.storage.store import DuplicateOrderError, SqlTradingStore, StoreConsistencyError
@@ -40,11 +39,11 @@ def _fill(
 
 
 @pytest.fixture
-def store(db_engine: Engine) -> SqlTradingStore:  # noqa: F811
+def store(db_engine: Engine) -> SqlTradingStore:
     return SqlTradingStore(db_engine)
 
 
-def test_schema_types(db_engine: Engine) -> None:  # noqa: F811
+def test_schema_types(db_engine: Engine) -> None:
     insp = inspect(db_engine)
     cols = {c["name"]: c for c in insp.get_columns("orders")}
     assert str(cols["qty"]["type"]) == "DECIMAL(20, 6)"
@@ -56,7 +55,7 @@ def test_schema_types(db_engine: Engine) -> None:  # noqa: F811
         assert c.execute(text("SELECT @@session.time_zone")).scalar() == "+00:00"
 
 
-def test_client_order_id_unique_at_db_level(store: SqlTradingStore, db_engine: Engine) -> None:  # noqa: F811
+def test_client_order_id_unique_at_db_level(store: SqlTradingStore, db_engine: Engine) -> None:
     acc = store.ensure_account("a", "paper", "KRW", Decimal(1_000_000), T0)
     store.insert_order(acc, "paper", _req(), None, T0)
     with pytest.raises(DuplicateOrderError):
@@ -125,7 +124,7 @@ def test_status_must_match_filled_qty(store: SqlTradingStore) -> None:
         store.apply_fill(acc, _fill("b1", "e1", Side.BUY, "4", "100"), OrderStatus.FILLED, T0)
 
 
-def test_consistency_detects_tampering(store: SqlTradingStore, db_engine: Engine) -> None:  # noqa: F811
+def test_consistency_detects_tampering(store: SqlTradingStore, db_engine: Engine) -> None:
     acc = store.ensure_account("a", "paper", "KRW", Decimal(1_000_000), T0)
     store.insert_order(acc, "paper", _req("b1", qty="1"), None, T0)
     store.apply_fill(acc, _fill("b1", "e1", Side.BUY, "1", "100"), OrderStatus.FILLED, T0)
@@ -187,7 +186,7 @@ def test_quotes_bars_decisions_events_state(store: SqlTradingStore) -> None:
     assert store.set_daily_start_equity(acc, date(2026, 11, 26), Decimal(50), T0) == Decimal(100)
 
 
-def test_instance_lock_is_exclusive(mysql_url: str) -> None:  # noqa: F811
+def test_instance_lock_is_exclusive(mysql_url: str) -> None:
     e1, e2 = create_db_engine(mysql_url), create_db_engine(mysql_url)
     a, b = InstanceLock(e1), InstanceLock(e2)
     try:

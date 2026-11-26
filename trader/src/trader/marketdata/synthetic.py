@@ -97,6 +97,11 @@ class SyntheticFeed:
             d += timedelta(days=1)
         return out
 
+    def start_time(self) -> datetime | None:
+        if self.pace == "realtime":
+            return None
+        return datetime.combine(self._trading_days()[0], self.market_open, KST)
+
     async def stream(self) -> AsyncIterator[Quote]:
         if self.pace == "fast":
             async for q in self._fast():
