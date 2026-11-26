@@ -131,7 +131,8 @@ cd trader && uv run pytest -q                               # MySQL 테스트 �
 cd trader && uv run ruff check . && uv run mypy
 cd trader && uv run trader run | status | halt --reason "..." | resume
 ```
-1단계는 **가상매매만** 한다. 실주문 코드는 없다. 안전 규칙은 [`trader/CLAUDE.md`](trader/CLAUDE.md) — 반드시 지킨다.
+1단계는 **가상매매만** 한다(최종 목표는 자동 주문, 실주문 코드는 아직 없다). 시세는 백엔드 stocksim 을 거친 토스 실시세(읽기 전용)로 테스트한다.
+안전 규칙은 [`trader/CLAUDE.md`](trader/CLAUDE.md) — 반드시 지킨다.
 
 ### 인프라 (Docker Compose)
 ```bash

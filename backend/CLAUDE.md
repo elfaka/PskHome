@@ -181,7 +181,11 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 - IP 별 15분 5회, 전체 15분 20회 실패하면 429. `trust proxy` 라 IP 는 위조될 수 있어 전체 제한을 둔다 (카운터는 프로세스 메모리)
 - 로그인 시 세션 ID 를 재발급한다(세션 고정 방지). 같은 쿠키의 Google 로그인(`session.passport`)은 옮겨 담는다
 - trader 로그인은 `session.trader` 에만 있다. Google 로그인으로는 `/api/trader/**` 를 통과할 수 없다
-- 매매 엔진은 Python(`../trader/`)이고 이 백엔드와 직접 연동하지 않는다. 5단계 대시보드는 읽기 전용 DB 계정(`trader_web`)으로 조회할 예정
+- 매매 엔진은 Python(`../trader/`)이다. 엔진은 이 백엔드의 **stocksim 공개 GET 엔드포인트로 실시세를 읽는다**
+  (`/api/stocksim/trades/:symbol`, `/orderbook/:symbol`, `/stocks/:symbol/investors/intraday`, `/stocks/:symbol/overview`, `/market`).
+  **이 응답 형태(필드 이름·시각의 오프셋 포함 ISO 형식)를 바꾸면 엔진이 깨진다** — `trader/src/trader/marketdata/` 와 그 테스트를 함께 고친다.
+  엔진은 토스 키를 갖지 않으므로 토스 호출 한도는 이 백엔드의 캐시가 함께 지킨다. stocksim 주문 API 는 엔진이 쓰지 않는다.
+- 5단계 대시보드는 읽기 전용 DB 계정(`trader_web`)으로 조회할 예정
 
 ## 데이터베이스
 

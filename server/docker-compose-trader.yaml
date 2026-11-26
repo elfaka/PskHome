@@ -35,8 +35,10 @@ services:
     mem_limit: 256m
     environment:
       TRADER_MODE: paper
-      TRADER_FEED: synthetic
+      # 실시세는 같은 네트워크의 백엔드(stocksim)를 거쳐 읽기만 한다. 엔진은 토스 키를 갖지 않는다
+      TRADER_FEED: stocksim
       TRADER_PACE: realtime
+      TRADER_STOCKSIM_BASE_URL: http://pskhome-be-1:8080
       TRADER_LOG_JSON: "true"
     stop_grace_period: 30s
 

@@ -81,6 +81,9 @@ def setup_logging(level: str, *, json_output: bool, secrets: list[str]) -> None:
     root.setLevel(level)
     # SQL 문장 로그에 바인드 값이 섞이지 않도록 SQLAlchemy 는 경고 이상만
     logging.getLogger("sqlalchemy").setLevel(logging.WARNING)
+    # 요청마다 INFO 를 남겨 시세 폴링 로그가 묻힌다
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def log_fields(**fields: Any) -> dict[str, Any]:

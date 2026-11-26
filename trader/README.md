@@ -29,6 +29,47 @@ uv run trader status
 - **운영 DB 에는 접속하지 않는다.** 개발·테스트는 이 컨테이너만 쓴다.
 - CSV 재생: `TRADER_FEED=csv`, `TRADER_FEED_CSV_PATH=data/sample_ticks.csv` (모의 생성으로 만든 예시 데이터. 실제 시세 아님)
 
+### 실시세로 테스트 (stocksim)
+
+기존 주식 모의투자(`/stocksim`)의 백엔드가 받는 **토스 실시세**를 엔진이 읽어 가상매매한다.
+엔진은 토스 키가 없고 GET 만 한다. 체결은 엔진의 PaperBroker(수수료·세금·슬리피지·DB 기록·복구)가 한다.
+
+```powershell
+# .env 에서
+#   TRADER_FEED=stocksim
+#   TRADER_PACE=realtime
+#   TRADER_STOCKSIM_BASE_URL=https://elfaka.kr   (개발 PC 는 운영 공개 API)
+uv run trader run
+```
+
+- 평일 08:55~15:35(KST)에만 폴링한다. 장 시간(09:00~15:20) 밖에서는 시세가 들어와도 주문하지 않는다.
+- 로컬에서 같은 토스 키로 백엔드를 띄우지 않는다 (운영 토큰이 밀려난다).
+- 결과 보기 (개발 DB):
+  ```sql
+  -- 전략 판단과 위험 관리 결과
+  SELECT ts, strategy_id, symbol, action, score, risk_result, risk_reason, entry_price, stop_loss, take_profit, risk_reward
+  FROM strategy_decisions ORDER BY id DESC LIMIT 50;
+  -- 신호 성과 (방향 반영 수익률)
+  SELECT d.strategy_id, p.horizon, COUNT(*), AVG(p.return_pct), AVG(p.mfe_pct), AVG(p.mae_pct)
+  FROM signal_performance p JOIN strategy_decisions d ON d.id = p.decision_id
+  WHERE p.status = 'DONE' GROUP BY d.strategy_id, p.horizon;
+  ```
+
+### 전략과 신호
+
+| 전략 | 역할 | 내용 |
+|---|---|---|
+| `ma_cross` | 주문 | 1분봉 이동평균 교차 (예시) |
+| `intraday_score` | 그림자 | 100점: 기술30·수급25·시장20·글로벌(VIX)15·뉴스10(3단계). 없는 항목 0점. 80↑ + VWAP 위 + 거래량 1.5배 → BUY |
+
+- 신호: BUY / SELL / HOLD / WAIT / EXIT. 그림자 전략은 주문하지 않고 신호와 성과만 남긴다.
+- 매수 시 위험 관리가 **ATR 손절·목표가**를 정하고, 비용 차감 손익비가 `TRADER_RISK_MIN_RISK_REWARD` 미만이면 막는다.
+- 손절·목표가 도달, 15:15(`TRADER_EOD_EXIT`)에는 규칙으로 청산한다. 15:00(`TRADER_ENTRY_CUTOFF`) 이후 신규 매수 금지.
+- 신호마다 5·15·30분·장마감 성과(`signal_performance`)를 기록한다.
+
+> 1분봉 ATR 은 작아서 매도세·수수료를 빼면 손익비가 1 안팎이다. 기본값(1.5)이면 `ma_cross` 매수가 거의 막힌다.
+> 배수·봉 주기·기준은 성과 기록을 보고 정한다.
+
 ### 명령
 
 | 명령 | 하는 일 |
@@ -110,3 +151,5 @@ GitHub Secrets 에 `TRADER_ADMIN_USERNAME`, `TRADER_ADMIN_PASSWORD_HASH` 를 넣
 - 실제 수수료율·거래세율·원 단위 처리 규칙 (설정값으로만 받는다)
 - KRX 호가 단위표, 동시호가·휴장일 (지금은 단순 시각 범위 `09:00~15:20` KST 만 본다)
 - 토스증권 Open API: clientOrderId 형식·길이, 주문/체결 조회 API, 웹소켓 사양, 호출 한도 — 2단계 착수 때 최신 문서로 확인
+- VI 발동 정보 (출처 없음 — 지금은 검사하지 않는다)
+- LLM 모델 선택과 사양 (3단계)
