@@ -214,7 +214,8 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 - `trader/` — Python 엔진. 시세 → 전략 → 위험 관리 → 주문 게이트웨이 → Broker(PaperBroker). 운영 MySQL 의 전용 DB `trader` + 최소 권한 계정.
   운영 compose 는 `server/docker-compose-trader.yaml`(엔진만, 포트 없음, `server/trader.env`). 서버 배포는 수동(workflow_dispatch).
 - 백엔드 `modules/trader` — `/api/trader/**` 본인 ID/비밀번호 로그인 (Google 로그인과 별개).
-- 프론트 `/trader` — 로그인 게이트 + 준비 중 화면 (5단계에서 대시보드).
+- 프론트 `/trader` — 로그인 게이트 + 대시보드 (백엔드가 엔진 DB 를 `trader_web` 읽기 전용 계정으로 조회).
+- 엔진 판단 구조: 가격 점수(규칙→ML) · 맥락 점수 · 이슈 점수(→LLM) → 결합 규칙 → 위험 관리 → 주문 (`trader/src/trader/scoring/`).
 
 ### 프론트엔드 (`frontend/src/`)
 

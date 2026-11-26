@@ -31,7 +31,7 @@ from decimal import Decimal
 
 from trader.broker.base import Broker, OrderNotFound
 from trader.broker.paper import PaperBroker
-from trader.clock import Clock, SimClock, kst_trade_date, to_kst
+from trader.clock import KST, Clock, SimClock, kst_trade_date, to_kst
 from trader.domain import ExecKind, ExecutionEvent, OrderStatus, Quote, Side
 from trader.execution.gateway import FatalEngineError, OrderGateway, OrderIntent
 from trader.indicators import IndicatorBook
@@ -120,6 +120,10 @@ class Engine:
         self.positions: dict[str, Decimal] = {}
         self.protect: dict[str, _Protect] = {}
         self.exits = _ExitState()
+        # 그림자 전략의 가상 보유 (전략, 종목) → 수량. 그림자 BUY 로 생기고 EXIT/SELL 로 줄어든다.
+        # 실제 계좌 보유와 섞지 않는다 — 그래야 그림자 전략의 신호 성과가 자기 판단만 반영한다. 거래일마다 초기화
+        self.shadow_pos: dict[tuple[str, str], Decimal] = {}
+        self._shadow_day: date | None = None
         self.gateway = OrderGateway(
             store=store,
             broker=broker,
@@ -159,6 +163,7 @@ class Engine:
             restore=restore,
         )
         self._load_positions()
+        self._restore_shadow_positions()
         self._warm_up()
         exec_task = asyncio.create_task(self._execution_loop(), name="executions")
         watch_task = asyncio.create_task(self._watch_loop(), name="watchdog")
@@ -322,14 +327,18 @@ class Engine:
             self._db_failed("portfolio view", e)
             return
         market = MarketView(now=self.clock.now(), indicators=snap, context=self.context.snapshot())
+        self._roll_shadow_day()
         for slot in self.strategies:
+            slot_view = view
+            if slot.shadow:
+                slot_view = PortfolioView(self.shadow_pos.get((slot.strategy.id, sym), ZERO), ZERO, ZERO)
             await self._run_strategy(
                 slot,
                 bar.start_ts,
                 bar.start_ts + timedelta(seconds=bar.interval_s),
                 sym,
                 bar.close,
-                slot.strategy.on_bar(bar, view, market),
+                slot.strategy.on_bar(bar, slot_view, market),
             )
 
     async def _run_strategy(
@@ -344,7 +353,7 @@ class Engine:
                 bar_ts=bar_ts,
                 action=d.action,
                 reason=d.reason,
-                inputs=d.inputs,
+                inputs={**d.inputs, "signal_qty": d.qty},
                 detail={
                     "shadow": slot.shadow,
                     "score": d.score,
@@ -371,6 +380,7 @@ class Engine:
         if d.action not in ORDER_ACTIONS or d.qty is None:
             return
         if slot.shadow:
+            self._apply_shadow(strategy.id, sym, d.action, d.qty)
             try:
                 self.store.update_decision_risk(did, "SHADOW", "그림자 전략 — 주문하지 않음", None)
             except Exception as e:
@@ -442,6 +452,40 @@ class Engine:
             upper_limits=upper,
             provides_price_limits=ctx.provides_price_limits,
         )
+
+    # ── 그림자 가상 보유 ─────────────────────────────────────────────────
+
+    def _apply_shadow(self, strategy_id: str, sym: str, action: str, qty: Decimal) -> None:
+        key = (strategy_id, sym)
+        cur = self.shadow_pos.get(key, ZERO)
+        cur = cur + qty if action == "BUY" else cur - qty
+        if cur > 0:
+            self.shadow_pos[key] = cur
+        else:
+            self.shadow_pos.pop(key, None)
+
+    def _roll_shadow_day(self) -> None:
+        today = kst_trade_date(self.clock.now())
+        if self._shadow_day != today:
+            self._shadow_day = today
+            self.shadow_pos.clear()
+
+    def _restore_shadow_positions(self) -> None:
+        """재시작 시 오늘 기록된 그림자 신호를 다시 적용해 가상 보유를 되살린다."""
+        ids = [s.strategy.id for s in self.strategies if s.shadow]
+        if not ids:
+            return
+        now = self.clock.now()
+        self._shadow_day = kst_trade_date(now)
+        day_start = datetime.combine(self._shadow_day, time(0, 0), KST)
+        try:
+            rows = self.store.shadow_signals_since(ids, day_start)
+        except Exception:
+            log.exception("shadow restore failed — 그림자 가상 보유를 비운 채로 시작한다")
+            return
+        for strategy_id, sym, action, qty in rows:
+            if qty is not None and qty > 0:
+                self._apply_shadow(strategy_id, sym, action, qty)
 
     # ── 규칙 청산 (손절·목표가·장 마감) ───────────────────────────────────
 

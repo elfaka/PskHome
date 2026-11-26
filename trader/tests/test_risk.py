@@ -189,3 +189,10 @@ def test_spread_and_price_limits() -> None:
 def test_fractional_qty_rejected() -> None:
     r = OrderRequest("f", "005930", Side.BUY, OrderType.MARKET, Decimal("1.5"))
     assert RM.evaluate(r, ctx()).code == "INVALID_QTY"
+
+
+def test_stop_and_take_are_rounded_conservatively_to_ticks() -> None:
+    d = RM.evaluate(buy(), ctx(atr={"005930": Decimal("33.3333")}))
+    # 10,000 - 1.5 × 33.3333 = 9,950.00005 → 올림 9,951 / 10,000 + 3 × 33.3333 = 10,099.9999 → 내림 10,099
+    assert d.levels["stop_loss"] == Decimal(9951)
+    assert d.levels["take_profit"] == Decimal(10099)

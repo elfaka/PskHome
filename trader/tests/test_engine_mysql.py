@@ -112,6 +112,30 @@ async def test_full_day_paper_run_is_consistent(mysql_url: str, db_engine: Engin
         scalar(db_engine, "SELECT COUNT(*) FROM strategy_decisions WHERE strategy_id = 'intraday_score'")
         == st["bars"]
     )
+    # 그림자 전략은 자기 가상 보유만 본다 — 실제 계좌(ma_cross)가 산 것을 EXIT 하지 않는다
+    shadow_seq = [
+        r[0]
+        for r in q(
+            db_engine,
+            "SELECT action FROM strategy_decisions WHERE shadow = 1 AND action IN ('BUY','SELL','EXIT') ORDER BY id",
+        )
+    ]
+    held = 0
+    for action in shadow_seq:
+        if action == "BUY":
+            held += 1
+        else:
+            assert held > 0, f"그림자 전략이 사지 않은 것을 청산했다: {shadow_seq}"
+            held -= 1
+    # 모든 전략 판단에 신호 수량이 기록된다 (그림자 가상 보유 복원에 쓴다)
+    assert (
+        scalar(
+            db_engine,
+            "SELECT COUNT(*) FROM strategy_decisions WHERE strategy_id IN ('ma_cross', 'intraday_score') "
+            "AND JSON_CONTAINS_PATH(inputs, 'one', '$.signal_qty') = 0",
+        )
+        == 0
+    )
     # 체결된 매수 판단에는 위험 관리가 정한 손절·목표가가 남는다
     missing_levels = scalar(
         db_engine,

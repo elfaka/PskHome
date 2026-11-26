@@ -97,6 +97,7 @@ def risk_limits(s: Settings) -> RiskLimits:
         min_risk_reward=s.risk_min_risk_reward,
         max_spread_bps=s.risk_max_spread_bps,
         near_upper_limit_pct=s.risk_near_upper_limit_pct,
+        price_decimals=s.price_decimals,
     )
 
 

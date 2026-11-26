@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta
-from decimal import Decimal
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from typing import Any
 
 from trader.clock import to_kst
@@ -54,6 +54,8 @@ class RiskLimits:
     max_spread_bps: Decimal | None = Decimal(30)
     # 상한가까지 이 비율 안쪽이면 매수 금지
     near_upper_limit_pct: Decimal = Decimal("0.02")
+    # 손절·목표가를 호가 자릿수로 맞춘다 (원화 0). 손절은 올림, 목표는 내림 — 둘 다 보수적으로
+    price_decimals: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,8 +219,9 @@ class RiskManager:
             if lim.require_atr_stop:
                 return self._reject("NO_STOP", "ATR 이 없어 손절 기준을 계산할 수 없다", value)
         else:
-            stop = ref - atr * lim.atr_stop_mult
-            take = ref + atr * lim.atr_take_mult
+            exp = Decimal(1).scaleb(-lim.price_decimals)
+            stop = (ref - atr * lim.atr_stop_mult).quantize(exp, rounding=ROUND_CEILING)
+            take = (ref + atr * lim.atr_take_mult).quantize(exp, rounding=ROUND_FLOOR)
             rr = risk_reward(
                 ref,
                 stop,

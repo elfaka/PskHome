@@ -116,6 +116,9 @@ class TradingStore(Protocol):
     def complete_performance(self, perf_id: int, values: Mapping[str, Any], now: datetime) -> None: ...
     def bars_between(self, symbol: str, interval_s: int, start: datetime, end: datetime) -> list[Bar]: ...
     def latest_entry_levels(self, account_id: int, symbol: str) -> tuple[Decimal | None, Decimal | None]: ...
+    def shadow_signals_since(
+        self, strategy_ids: Sequence[str], since: datetime
+    ) -> list[tuple[str, str, str, Decimal | None]]: ...
     def record_risk_event(
         self,
         kind: str,
@@ -660,6 +663,30 @@ class SqlTradingStore:
             Bar(r.symbol, r.interval_s, from_db(r.start_ts), r.open, r.high, r.low, r.close, r.volume)
             for r in rows
         ]
+
+    def shadow_signals_since(
+        self, strategy_ids: Sequence[str], since: datetime
+    ) -> list[tuple[str, str, str, Decimal | None]]:
+        """그림자 전략의 BUY/SELL/EXIT 신호 (오래된 순). 수량은 판단 기록의 inputs.signal_qty."""
+        d = m.strategy_decisions
+        with self._engine.connect() as c:
+            rows = c.execute(
+                select(d.c.strategy_id, d.c.symbol, d.c.action, d.c.inputs)
+                .where(
+                    and_(
+                        d.c.shadow.is_(True),
+                        d.c.strategy_id.in_(list(strategy_ids)),
+                        d.c.action.in_(["BUY", "SELL", "EXIT"]),
+                        d.c.ts >= to_db(since),
+                    )
+                )
+                .order_by(d.c.id)
+            ).all()
+        out: list[tuple[str, str, str, Decimal | None]] = []
+        for r in rows:
+            raw = (r.inputs or {}).get("signal_qty")
+            out.append((r.strategy_id, r.symbol, r.action, Decimal(str(raw)) if raw is not None else None))
+        return out
 
     def latest_entry_levels(self, account_id: int, symbol: str) -> tuple[Decimal | None, Decimal | None]:
         """보유 종목의 마지막 체결된 매수 판단의 손절·목표가 (재시작 후 보호 청산용)."""

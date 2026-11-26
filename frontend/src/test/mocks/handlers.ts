@@ -62,6 +62,46 @@ export const mockPortfolio = {
   createdAt: "2026-10-30T00:00:00.000Z",
 };
 
+export const mockTraderSummary = {
+  account: { name: "paper-default", broker: "paper", createdAt: "2026-11-26T00:00:00.000Z" },
+  cash: "9124526.0000",
+  marketValue: "981400.0000",
+  equity: "10105926.0000",
+  dayStartEquity: "10000000.0000",
+  dayPnl: "105926.0000",
+  positions: [
+    {
+      symbol: "005930", qty: "14.000000", avgPrice: "70100.0000", lastPrice: "70100.0000",
+      lastPriceAt: "2026-11-26T06:19:50.000Z", marketValue: "981400.0000", unrealizedPnl: "-1400.0000", realizedPnl: "0.0000",
+    },
+  ],
+  openOrders: 0,
+  killswitch: { halted: false, reason: null, updatedAt: null },
+  lastQuoteAt: "2026-11-26T06:19:50.000Z",
+  lastDecisionAt: "2026-11-26T06:19:00.000Z",
+};
+
+export const mockTraderDecisions = [
+  {
+    id: 2, ts: "2026-11-26T00:31:00.000Z", barTs: "2026-11-26T00:30:00.000Z", strategyId: "intraday_score",
+    symbol: "005930", action: "BUY", reason: "합계 90 ≥ 80, VWAP 위, 거래량 2.0배", shadow: true, score: "90.00",
+    confidence: "0.9000", riskResult: "SHADOW", riskReason: "그림자 전략 — 주문하지 않음", clientOrderId: null,
+    entryPrice: null, stopLoss: null, takeProfit: null, riskReward: null, reasons: ["technical: 30/30"],
+    components: {
+      price: { kind: "price", source: "rules", model_version: "rules-v1", points: "30", max: "30" },
+      context: { kind: "context", source: "rules", model_version: "rules-v1", points: "60", max: "60" },
+      issue: { status: "NOT_CONFIGURED", points: "0", max: "10", veto: false, source: "none" },
+    },
+  },
+  {
+    id: 1, ts: "2026-11-26T00:31:00.000Z", barTs: "2026-11-26T00:30:00.000Z", strategyId: "ma_cross",
+    symbol: "005930", action: "BUY", reason: "golden cross", shadow: false, score: null, confidence: null,
+    riskResult: "APPROVED", riskReason: null, clientOrderId: "ma_cross-005930-20261126T003000-B-abc",
+    entryPrice: "70135.0000", stopLoss: "69985.0000", takeProfit: "70435.0000", riskReward: "1.0500",
+    reasons: null, components: null,
+  },
+];
+
 export const handlers = [
   // 자동매매(/trader) — 기본은 비로그인. 로그인 흐름은 테스트에서 server.use 로 바꾼다
   http.get("/api/trader/auth/me", () => HttpResponse.json({ authenticated: false })),
@@ -71,6 +111,31 @@ export const handlers = [
       { error: { code: "LOGIN_FAILED", message: "아이디 또는 비밀번호가 올바르지 않습니다." } },
       { status: 401 }
     )
+  ),
+
+  // 자동매매 대시보드 (금액은 Decimal 문자열)
+  http.get("/api/trader/summary", () => HttpResponse.json(mockTraderSummary)),
+  http.get("/api/trader/decisions", () => HttpResponse.json(mockTraderDecisions)),
+  http.get("/api/trader/performance", () =>
+    HttpResponse.json([
+      {
+        strategyId: "intraday_score", action: "BUY", horizon: "5m", count: 4,
+        avgReturnPct: "0.001234", winRate: "0.75", avgMfePct: "0.004", avgMaePct: "-0.002", pending: 1,
+      },
+    ])
+  ),
+  http.get("/api/trader/orders", () =>
+    HttpResponse.json([
+      {
+        clientOrderId: "ma_cross-005930-20261126T003000-B-abc", symbol: "005930", side: "BUY", orderType: "MARKET",
+        qty: "13.000000", limitPrice: null, status: "FILLED", filledQty: "13.000000", avgFillPrice: "70171.0000",
+        strategyId: "ma_cross", rejectReason: null, createdAt: "2026-11-26T00:31:00.000Z", updatedAt: "2026-11-26T00:31:10.000Z",
+      },
+    ])
+  ),
+  http.get("/api/trader/fills", () => HttpResponse.json([])),
+  http.get("/api/trader/risk-events", () =>
+    HttpResponse.json([{ id: 1, ts: "2026-11-26T00:00:01.000Z", kind: "RECOVERED", symbol: null, clientOrderId: null, detail: { cash: "10000000" } }])
   ),
 
   http.get("/api/posts", () => HttpResponse.json(mockPage)),

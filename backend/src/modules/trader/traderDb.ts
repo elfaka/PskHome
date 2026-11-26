@@ -26,6 +26,9 @@ export function getTraderPool(): mariadb.Pool {
     decimalAsNumber: false,
     bigIntAsNumber: true,
     checkDuplicate: false,
+    // 쿼리별 timeout 옵션은 MariaDB 서버 전용이라 MySQL 에서는 오류가 난다.
+    // MySQL 은 세션 변수로 SELECT 실행 시간을 제한한다 (ms).
+    initSql: "SET SESSION max_execution_time = 5000",
   });
   return pool;
 }
@@ -33,7 +36,7 @@ export function getTraderPool(): mariadb.Pool {
 export async function traderQuery<T>(sql: string, params: unknown[] = []): Promise<T[]> {
   let rows: unknown;
   try {
-    rows = await getTraderPool().query({ sql, timeout: 5_000 }, params);
+    rows = await getTraderPool().query(sql, params);
   } catch (e) {
     if (e instanceof HttpError) throw e;
     // 원인은 서버 로그에만 남기고 화면에는 일반 메시지 (502/504 는 Cloudflare 가 본문을 버려서 쓰지 않는다)

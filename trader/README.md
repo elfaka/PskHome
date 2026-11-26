@@ -70,6 +70,16 @@ uv run trader run
 > 1분봉 ATR 은 작아서 매도세·수수료를 빼면 손익비가 1 안팎이다. 기본값(1.5)이면 `ma_cross` 매수가 거의 막힌다.
 > 배수·봉 주기·기준은 성과 기록을 보고 정한다.
 
+### 대시보드 (`/trader`)
+
+로그인하면 엔진 DB 를 읽기 전용으로 보여준다 (10초마다 새로고침). 평가금액·현금·오늘 손익·킬스위치 상태, 보유 종목,
+판단 기록(점수 구성: 가격·맥락·이슈 / 위험 관리 결과 / 진입·손절·목표), 신호 성과, 주문·체결, 위험 이벤트.
+화면에서 주문하거나 킬스위치를 조작하지는 않는다 (`trader halt` 는 서버에서).
+
+로컬에서 보려면 `backend/.env` 에 `TRADER_DATABASE_URL=mysql://trader_web:<DEV_TRADER_WEB_PASSWORD>@127.0.0.1:3307/trader`
+와 `TRADER_ADMIN_USERNAME`/`TRADER_ADMIN_PASSWORD_HASH` 를 넣고 백엔드·프론트를 띄운다.
+(이미 만들어 둔 로컬 MySQL 이면 `trader_web` 계정을 직접 만든다 — 초기화 스크립트는 최초 기동 때만 돈다)
+
 ### 명령
 
 | 명령 | 하는 일 |

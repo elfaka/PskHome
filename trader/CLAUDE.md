@@ -20,7 +20,8 @@ trader/
 │   │   └── context.py          # 시장 맥락: 코스피·VIX·장중 수급·상하한가 (지연 데이터, 시각 포함)
 │   ├── indicators.py      # RSI·ATR·MACD·VWAP·SMA20·거래량 비율 (Decimal)
 │   ├── performance.py     # 신호 성과 평가 (5·15·30분·장마감)
-│   ├── strategy/          # Strategy 프로토콜(신호 5종), ma_cross(주문), intraday_score(그림자)
+│   ├── scoring/           # 점수 결합 구조 (아래 그림): price · context · issue · combine
+│   ├── strategy/          # Strategy 프로토콜(신호 5종), ma_cross(주문), intraday_score(그림자, scoring 조합)
 │   ├── risk/              # approval(승인 증표), manager, killswitch, health
 │   ├── execution/gateway.py  # 주문이 브로커로 가는 유일한 경로
 │   ├── storage/           # models(테이블), store(SqlTradingStore), db(엔진·인스턴스 락)
@@ -42,6 +43,27 @@ trader/
   stocksim 의 주문 API(세션 메모리·수수료 없음·중복 방지 없음)는 쓰지 않고, 체결은 PaperBroker 가 한다.
 - **신호** BUY / SELL / HOLD / WAIT / EXIT. 주문하는 전략은 하나, 나머지는 그림자(신호·성과만).
 - **장중 규칙**: 15:00 이후 신규 매수 금지, 15:15 보유분 청산, 손절·목표가 도달 시 규칙 청산 (전략·AI 를 거치지 않는다).
+
+### 점수 결합 구조 (`scoring/`)
+
+```
+차트 데이터   → 가격 점수 (PriceScorer: 지금 RulePriceScorer, 4단계 ML)   30 ─┐
+수급·지수·VIX → 맥락 점수 (RuleContextScorer)                             60 ─┼→ 결합 규칙 → 위험 관리 → 주문
+뉴스·공시     → 이슈 점수 (IssueScorer: 지금 NoIssueScorer, 3단계 LLM)    10 ─┘
+```
+
+- 공급부는 `IntradayScore(price=..., issue=...)` 로 바꿔 끼운다. 판단 기록 `inputs.components` 에 출처·모델 버전·점수가 남는다.
+- 결합 규칙(`combine.py`): 이슈 **거부권** → 매수 금지 + 보유분 EXIT. 이슈 공급부 **실패·지연(FAILED/STALE)** → 신규 매수만 금지.
+  가격 점수가 없거나 공급부가 예외를 내면 매수하지 않는다. 데이터 없는 항목은 0점.
+- ML·LLM 공급부는 `score()`·`latest()` 안에서 네트워크를 부르지 않는다. LLM 은 별도 작업이 판단을 만들어 두고 `latest()` 는 읽기만 한다.
+- **그림자 전략은 자기 가상 보유만 본다** (`Engine.shadow_pos`, 거래일마다 초기화, 재시작 시 오늘의 그림자 신호 `inputs.signal_qty` 로 복원).
+  실제 계좌 보유를 보여 주면 남이 산 것을 EXIT 해서 신호 성과가 왜곡된다 (대시보드 확인 중 발견해 고침).
+- 손절·목표가는 호가 자릿수로 맞춘다 (손절 올림, 목표 내림).
+
+### 대시보드
+
+`/trader` (로그인 후) — 백엔드가 이 DB 를 `trader_web`(SELECT 전용)으로 읽어 보여준다. 엔진과 직접 통신하지 않는다.
+**스키마를 바꾸면 `backend/src/modules/trader/traderDashboard.service.ts` 도 함께 고친다.**
 
 ## 안전 규칙 (깨면 안 된다)
 

@@ -9,12 +9,14 @@ import { cardClass } from "@/components/ui/Card";
 import { Field, Input } from "@/components/ui/Field";
 import { errorMessage } from "@/lib/errorMessage";
 
+import TraderDashboard from "./TraderDashboard";
+
 /**
  * /trader 진입 게이트.
  *
  * 로그인 전에는 로그인 양식만 보인다. 실제 보호는 백엔드(`/api/trader/**` 의 requireTraderAuth)가 하고,
  * 이 화면은 그 결과(`/api/trader/auth/me`)에 따라 무엇을 보여줄지만 정한다.
- * 대시보드는 5단계에서 이 안에 들어간다.
+ * 로그인하면 대시보드(엔진 DB 읽기 전용)를 보여준다.
  */
 export default function TraderGate() {
   const [me, setMe] = useState<TraderMe | null>(null);
@@ -58,15 +60,13 @@ export default function TraderGate() {
     );
   }
   return (
-    <Shell>
-      <Placeholder
-        username={me.username}
-        onLogout={async () => {
-          await traderLogout();
-          setMe({ authenticated: false });
-        }}
-      />
-    </Shell>
+    <TraderDashboard
+      username={me.username}
+      onLogout={async () => {
+        await traderLogout();
+        setMe({ authenticated: false });
+      }}
+    />
   );
 }
 
@@ -123,20 +123,5 @@ function LoginForm({ onLoggedIn }: { onLoggedIn: (me: TraderMe) => void }) {
         {busy ? "확인 중…" : "로그인"}
       </Button>
     </form>
-  );
-}
-
-function Placeholder({ username, onLogout }: { username: string; onLogout: () => Promise<void> }) {
-  return (
-    <section className={cardClass({ className: "space-y-3 p-6 sm:p-8" })} aria-label="자동매매">
-      <h1 className="text-xl font-semibold tracking-tight text-fg">자동매매</h1>
-      <p className="text-sm text-fg-muted">대시보드는 준비 중입니다. 지금은 엔진이 가상매매만 합니다.</p>
-      <div className="flex items-center justify-between pt-2">
-        <span className="text-xs text-fg-subtle">{username}</span>
-        <Button variant="secondary" size="sm" onClick={() => void onLogout()}>
-          로그아웃
-        </Button>
-      </div>
-    </section>
   );
 }

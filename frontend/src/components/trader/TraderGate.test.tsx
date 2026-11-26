@@ -11,7 +11,7 @@ describe("TraderGate", () => {
   it("shows only the login form when not logged in", async () => {
     render(<TraderGate />);
     expect(await screen.findByRole("form", { name: "로그인" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "자동매매" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "자동매매" })).not.toBeInTheDocument();
   });
 
   it("shows the backend error and clears the password on a failed login", async () => {
@@ -23,7 +23,7 @@ describe("TraderGate", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("아이디 또는 비밀번호가 올바르지 않습니다.");
     expect(screen.getByLabelText("비밀번호")).toHaveValue("");
-    expect(screen.queryByRole("region", { name: "자동매매" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "자동매매" })).not.toBeInTheDocument();
   });
 
   it("logs in, shows the placeholder, and logs out", async () => {
@@ -40,7 +40,7 @@ describe("TraderGate", () => {
     await user.type(screen.getByLabelText("비밀번호"), "right-password");
     await user.click(screen.getByRole("button", { name: "로그인" }));
 
-    expect(await screen.findByRole("region", { name: "자동매매" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "자동매매" })).toBeInTheDocument();
     expect(sent).toEqual({ username: "owner", password: "right-password" });
 
     await user.click(screen.getByRole("button", { name: "로그아웃" }));
@@ -52,6 +52,6 @@ describe("TraderGate", () => {
       http.get("/api/trader/auth/me", () => HttpResponse.json({ authenticated: true, username: "owner" }))
     );
     render(<TraderGate />);
-    expect(await screen.findByRole("region", { name: "자동매매" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "자동매매" })).toBeInTheDocument();
   });
 });

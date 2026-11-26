@@ -113,3 +113,29 @@ def test_price_scorer_is_swappable_and_failure_means_no_buy() -> None:
 def test_rule_price_scorer_without_indicators_is_unavailable() -> None:
     s = RulePriceScorer().score("005930", None, T0)
     assert not s.available and s.points == 0 and s.max_points == 30
+
+
+def test_engine_restores_shadow_positions_from_today_signals() -> None:
+    """재시작 시 그림자 가상 보유를 오늘 기록에서 되살린다 (수량은 inputs.signal_qty)."""
+    from trader.clock import SimClock
+    from trader.engine import Engine, StrategySlot
+
+    class Store:
+        def shadow_signals_since(
+            self, ids: list[str], since: datetime
+        ) -> list[tuple[str, str, str, Decimal | None]]:
+            assert ids == ["intraday_score"]
+            return [
+                ("intraday_score", "005930", "BUY", Decimal(10)),
+                ("intraday_score", "000660", "BUY", Decimal(3)),
+                ("intraday_score", "000660", "EXIT", Decimal(3)),
+                ("intraday_score", "005930", "BUY", None),  # 수량 없는 기록은 무시
+            ]
+
+    eng = Engine.__new__(Engine)
+    eng.strategies = [StrategySlot(IntradayScore(Decimal(1)), shadow=True)]
+    eng.store = Store()  # type: ignore[assignment]
+    eng.clock = SimClock(T0)
+    eng.shadow_pos = {}
+    eng._restore_shadow_positions()
+    assert eng.shadow_pos == {("intraday_score", "005930"): Decimal(10)}
