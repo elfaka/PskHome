@@ -50,7 +50,8 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "DTZ", "RUF"]
 # RUF001~003: 한글 주석/문자열의 전각 문자 경고는 끈다
-ignore = ["RUF001", "RUF002", "RUF003"]
+# E501: 줄 길이는 formatter 가 맞춘다 (긴 문자열·SQL 만 남는다)
+ignore = ["RUF001", "RUF002", "RUF003", "E501"]
 
 [tool.mypy]
 python_version = "3.12"
