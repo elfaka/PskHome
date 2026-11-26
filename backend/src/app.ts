@@ -9,6 +9,7 @@ import { psPostRouter } from "./modules/pspost/psPost.router.js";
 import { stockSimRouter } from "./modules/stocksim/stockSim.router.js";
 import { createAuthRouter } from "./modules/survey/auth.router.js";
 import { formsRouter } from "./modules/survey/forms.router.js";
+import { createTraderRouter } from "./modules/trader/trader.router.js";
 
 /**
  * Express 앱 조립.
@@ -48,6 +49,8 @@ export function createApp(): express.Express {
 
   // --- 인증 필요 ---
   api.use(formsRouter);
+  // 자동매매(/trader): login/logout/me 만 공개, 나머지 /trader/** 는 trader 로그인 필요 (Google 로그인과 별개)
+  api.use(createTraderRouter());
 
   app.use("/api", api);
 

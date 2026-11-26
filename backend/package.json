@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
-    "prisma:pull": "prisma db pull"
+    "prisma:pull": "prisma db pull",
+    "trader:hash-password": "tsx scripts/trader-hash-password.ts"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.9.1",

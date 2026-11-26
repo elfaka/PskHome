@@ -53,6 +53,13 @@ const envSchema = z.object({
 
   // --- Cboe 공개 데이터 (모의투자 VIX 지수, 키 불필요) ---
   CBOE_API_BASE_URL: z.string().default("https://cdn-api.cboe.com/api/global"),
+
+  // --- 자동매매(/trader) 본인 전용 로그인 ---
+  // 둘 중 하나라도 없으면 로그인은 항상 실패한다. 해시는 `npm run trader:hash-password` 로 만든다.
+  TRADER_ADMIN_USERNAME: z.string().optional(),
+  TRADER_ADMIN_PASSWORD_HASH: z.string().optional(),
+  TRADER_SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(30),
+  TRADER_SESSION_MAX_HOURS: z.coerce.number().int().positive().default(12),
 });
 
 export type Env = z.infer<typeof envSchema>;

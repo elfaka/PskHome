@@ -43,6 +43,7 @@ src/
     ├── jsonprettier/           # /api/json/**       (공개)
     ├── pspost/                 # /api/posts/**      (공개)
     ├── stocksim/               # /api/stocksim/**   (공개) 모의투자 — 아래 '모의투자 모듈' 참고
+    ├── trader/                 # /api/trader/**     자동매매 본인 전용 (ID/비밀번호) — 아래 '자동매매 로그인' 참고
     └── survey/                 # /api/auth/**, /api/oauth2/**, /api/forms/**
 ```
 
@@ -85,6 +86,10 @@ api.use(newModuleRouter);   // 라우터 안에서 router.use("/newmodule", requ
 **인증 필요 (`requireAuth`)**
 - `/api/forms/**`
 
+**자동매매 로그인 필요 (`requireTraderAuth`, Google 로그인과 별개)**
+- `/api/trader/**` — 단 `POST /api/trader/auth/login`, `POST /api/trader/auth/logout`,
+  `GET /api/trader/auth/me`(비로그인에도 200)는 공개
+
 미인증 요청은 Google 로 리다이렉트하지 않고 **401 JSON** (`{ error: { code: "UNAUTHORIZED" } }`) 을 반환한다.
 
 ## OAuth2 경로 (변경 금지)
@@ -117,6 +122,8 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | `DART_API_KEY` | (없음) | OpenDART. 없으면 재무 지표(PER·PBR 등)만 빠지고 나머지는 동작 |
 | `DART_API_BASE_URL` | `https://opendart.fss.or.kr/api` | |
 | `CBOE_API_BASE_URL` | `https://cdn-api.cboe.com/api/global` | Cboe 공개 데이터 (VIX). 키 불필요. 로컬 확인 때 가짜 서버로 바꿀 수 있다 |
+| `TRADER_ADMIN_USERNAME` / `TRADER_ADMIN_PASSWORD_HASH` | (없음) | `/trader` 본인 계정. 없으면 로그인 항상 실패. 해시는 `npm run trader:hash-password` |
+| `TRADER_SESSION_IDLE_MINUTES` / `TRADER_SESSION_MAX_HOURS` | `30` / `12` | trader 로그인 유휴·절대 만료 |
 
 **시크릿은 전부 optional 이다.** 하나가 없다고 프로세스 부팅을 막지 않고,
 해당 시크릿을 쓰는 엔드포인트만 런타임에 실패한다.
@@ -162,6 +169,19 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 - 토스 토큰은 client 당 1개다. **로컬에서 운영과 같은 키로 서버를 오래 띄워 두면 운영 토큰이 계속 밀려난다** (401 `token-revoked`).
   클라이언트가 한 번은 새로 받아 재시도하지만, 두 프로세스가 번갈아 발급하면 요청마다 토큰을 새로 받게 된다.
   로컬 화면 확인은 가능하면 가짜 토스 서버(`TOSS_API_BASE_URL`)로 한다.
+
+## 자동매매 로그인 (`modules/trader/`)
+
+본인만 쓰는 비공개 영역이다. 사이트 어디에도 링크하지 않고, 응답에 `X-Robots-Tag: noindex` · `Cache-Control: no-store` 를 붙인다.
+저장소가 공개라 경로는 숨겨지지 않는다 — **보호는 로그인으로만 한다.**
+
+- 계정은 `.env` 의 아이디 + scrypt 해시 하나. 평문 비밀번호는 어디에도 두지 않는다.
+  해시 형식은 `scrypt:N:r:p:salt:hash` — `$` 를 쓰면 compose `.env` 가 변수로 치환한다
+- 실패 응답은 아이디·비밀번호 구분 없이 같은 401 `LOGIN_FAILED`. 계정 미설정·해시 손상도 같은 계산을 거쳐 실패한다
+- IP 별 15분 5회, 전체 15분 20회 실패하면 429. `trust proxy` 라 IP 는 위조될 수 있어 전체 제한을 둔다 (카운터는 프로세스 메모리)
+- 로그인 시 세션 ID 를 재발급한다(세션 고정 방지). 같은 쿠키의 Google 로그인(`session.passport`)은 옮겨 담는다
+- trader 로그인은 `session.trader` 에만 있다. Google 로그인으로는 `/api/trader/**` 를 통과할 수 없다
+- 매매 엔진은 Python(`../trader/`)이고 이 백엔드와 직접 연동하지 않는다. 5단계 대시보드는 읽기 전용 DB 계정(`trader_web`)으로 조회할 예정
 
 ## 데이터베이스
 
