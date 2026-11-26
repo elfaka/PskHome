@@ -43,7 +43,7 @@ def test_approval_issued_only_by_risk_manager() -> None:
 
 def test_strategy_does_not_touch_broker_or_store() -> None:
     forbidden = ("trader.broker", "trader.storage", "trader.execution", "trader.engine")
-    for p in (SRC / "strategy").rglob("*.py"):
+    for p in [*(SRC / "strategy").rglob("*.py"), *(SRC / "scoring").rglob("*.py")]:
         tree = ast.parse(p.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             mods: list[str] = []
