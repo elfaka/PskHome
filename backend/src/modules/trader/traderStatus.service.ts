@@ -46,12 +46,27 @@ function iso(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-/** KST 평일 09:00~15:30 (휴장일은 모른다 — 경고에만 쓴다) */
-export function isMarketHours(now: Date): boolean {
+/**
+ * 한국거래소 장 구간 (KST 평일, 휴장일은 모른다 — 화면 표시·경고에만 쓴다)
+ * - continuous: 09:00~15:20 정규장 (체결이 계속 들어온다)
+ * - closing_auction: 15:20~15:30 장 마감 동시호가 — 체결 없이 호가만 쌓이다 15:30 에 한 번에 체결된다
+ * - closed: 그 밖
+ */
+export type MarketPhase = "continuous" | "closing_auction" | "closed";
+
+export function marketPhase(now: Date): MarketPhase {
   const kst = new Date(now.getTime() + 9 * 3_600_000);
   const day = kst.getUTCDay();
   const minutes = kst.getUTCHours() * 60 + kst.getUTCMinutes();
-  return day >= 1 && day <= 5 && minutes >= 9 * 60 && minutes < 15 * 60 + 30;
+  if (day < 1 || day > 5) return "closed";
+  if (minutes >= 9 * 60 && minutes < 15 * 60 + 20) return "continuous";
+  if (minutes >= 15 * 60 + 20 && minutes < 15 * 60 + 30) return "closing_auction";
+  return "closed";
+}
+
+/** KST 평일 09:00~15:30 (마감 동시호가 포함) */
+export function isMarketHours(now: Date): boolean {
+  return marketPhase(now) !== "closed";
 }
 
 async function states(): Promise<Map<string, { value: Json | null; updatedAt: string | null; updatedBy: string | null }>> {
@@ -113,7 +128,8 @@ export async function getStatus(now = new Date()): Promise<TraderStatus> {
   const heartbeatAt = iso(hb?.at);
   const age = heartbeatAt ? now.getTime() - new Date(heartbeatAt).getTime() : null;
   const state = heartbeatAt == null ? "unknown" : age! > HEARTBEAT_STALE_MS ? "stale" : "running";
-  const marketOpen = isMarketHours(now);
+  const phase = marketPhase(now);
+  const marketOpen = phase !== "closed";
   // 킬스위치 상태를 읽지 못하는 경우는 없다 (행이 없으면 엔진도 "꺼짐 아님"으로 본다)
   const halted = Boolean(killValue?.halted);
 
@@ -126,9 +142,16 @@ export async function getStatus(now = new Date()): Promise<TraderStatus> {
   for (const [sym, why] of Object.entries(dataIssues)) {
     alerts.push({ level: "warn", code: "DATA_ISSUE", message: `${sym}: ${why}` });
   }
-  if (marketOpen && state === "running") {
+  // 정규장에서만 본다. 마감 동시호가(15:20~15:30)에는 원래 체결이 없다.
+  // 마지막 시세는 모든 종목 중 가장 최근 것이라, 한 종목의 VI(약 2분 단일가)로는 울리지 않는다
+  if (phase === "continuous" && state === "running") {
     const q = lastQuoteAt ? now.getTime() - new Date(lastQuoteAt).getTime() : Infinity;
-    if (q > QUOTE_STALE_MS) alerts.push({ level: "warn", code: "QUOTE_STALE", message: "장중인데 시세가 1분 넘게 들어오지 않았습니다 (stocksim 연결 확인)." });
+    if (q > QUOTE_STALE_MS)
+      alerts.push({
+        level: "warn",
+        code: "QUOTE_STALE",
+        message: "정규장(09:00~15:20)인데 시세가 1분 넘게 들어오지 않았습니다 (stocksim 연결 확인).",
+      });
   }
   if (settings?.rejected) alerts.push({ level: "warn", code: "SETTINGS_REJECTED", message: `엔진이 설정 변경을 거부했습니다: ${settings.rejected.reason}` });
 
@@ -158,6 +181,7 @@ export async function getStatus(now = new Date()): Promise<TraderStatus> {
     lastQuoteAt,
     lastQuoteBySymbol,
     marketOpen,
+    marketPhase: phase,
     switches: Object.fromEntries(
       Object.entries((switchesDoc?.values as Record<string, unknown>) ?? {}).map(([k, v]) => [k, Boolean(v)])
     ),

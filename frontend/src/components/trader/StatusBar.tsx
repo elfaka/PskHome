@@ -48,8 +48,10 @@ export default function StatusBar({
   const [dialog, setDialog] = useState<"halt" | "resume" | null>(null);
   const eng = engineTone(status);
   const quoteAge = status?.lastQuoteAt ? now - new Date(status.lastQuoteAt).getTime() : null;
+  // 마감 동시호가(15:20~15:30)에는 체결이 없으므로 시세가 멈춰 있어도 경고하지 않는다
+  const phase = status?.marketPhase ?? (status?.marketOpen ? "continuous" : "closed");
   const quoteTone: DotTone =
-    quoteAge == null ? "off" : !status?.marketOpen ? "off" : quoteAge > 60_000 ? "warn" : "ok";
+    quoteAge == null ? "off" : phase !== "continuous" ? "off" : quoteAge > 60_000 ? "warn" : "ok";
   const dbTone: DotTone = status?.engine.dbOk == null ? "off" : status.engine.dbOk ? "ok" : "error";
   const live = status?.engine.mode === "live";
   const halted = status?.killswitch.halted ?? false;
@@ -88,7 +90,9 @@ export default function StatusBar({
           </div>
           <div className="flex items-center gap-1.5">
             <dt>장</dt>
-            <dd className="text-fg">{status == null ? "—" : status.marketOpen ? "장중" : "장 외"}</dd>
+            <dd className="text-fg">
+              {status == null ? "—" : phase === "continuous" ? "장중" : phase === "closing_auction" ? "마감 동시호가" : "장 외"}
+            </dd>
           </div>
           <div className="flex items-center gap-1.5">
             <dt>갱신</dt>

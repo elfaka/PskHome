@@ -42,6 +42,15 @@ describe("TraderDashboard", () => {
     expect(screen.getByRole("button", { name: "긴급 정지" })).toBeInTheDocument();
   });
 
+  it("labels the closing auction (15:20~15:30) instead of regular trading", async () => {
+    server.use(
+      http.get("/api/trader/status", () => HttpResponse.json({ ...mockTraderStatus, marketPhase: "closing_auction" }))
+    );
+    renderDashboard();
+    expect(await screen.findByText("마감 동시호가")).toBeInTheDocument();
+    expect(screen.queryByText("장중")).not.toBeInTheDocument();
+  });
+
   it("shows key numbers from decimal strings: equity, P&L, cumulative return, MDD", async () => {
     renderDashboard();
     expect(await screen.findByText("10,105,926")).toBeInTheDocument();

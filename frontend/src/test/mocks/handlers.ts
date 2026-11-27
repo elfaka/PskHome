@@ -126,6 +126,7 @@ export const mockTraderStatus = {
   lastQuoteAt: "2026-11-26T00:59:57.000Z",
   lastQuoteBySymbol: { "005930": "2026-11-26T00:59:57.000Z" },
   marketOpen: true,
+  marketPhase: "continuous",
   switches: {},
   settings: {
     ready: true,

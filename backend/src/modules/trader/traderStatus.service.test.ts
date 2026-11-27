@@ -40,6 +40,39 @@ describe("trader status", () => {
     expect(svc.isMarketHours(NOW)).toBe(true);
     expect(svc.isMarketHours(new Date("2026-11-27T07:00:00Z"))).toBe(false); // 16:00 KST
     expect(svc.isMarketHours(new Date("2026-11-28T01:00:00Z"))).toBe(false); // 토요일
+    expect(svc.marketPhase(NOW)).toBe("continuous");
+    expect(svc.marketPhase(new Date("2026-11-27T06:19:59Z"))).toBe("continuous"); // 15:19:59 KST
+    expect(svc.marketPhase(new Date("2026-11-27T06:20:00Z"))).toBe("closing_auction"); // 15:20 KST
+    expect(svc.marketPhase(new Date("2026-11-27T06:29:59Z"))).toBe("closing_auction");
+    expect(svc.marketPhase(new Date("2026-11-27T06:30:00Z"))).toBe("closed"); // 15:30 KST
+    expect(svc.marketPhase(new Date("2026-11-26T23:59:00Z"))).toBe("closed"); // 08:59 KST
+  });
+
+  it("does not warn about missing quotes during the closing auction (15:20~15:30, no trades)", async () => {
+    const at = (iso: string) => {
+      db.answer = (sql) => {
+        if (sql.includes("FROM engine_state"))
+          return stateRows({
+            heartbeat: { at: new Date(new Date(iso).getTime() - 2_000).toISOString(), db_ok: true, last_quote_at: { "005930": "2026-11-27T06:19:59Z" } },
+            killswitch: { halted: false },
+          });
+        return [];
+      };
+      return svc.getStatus(new Date(iso));
+    };
+    const auction = await at("2026-11-27T06:25:00Z"); // 15:25 KST, 마지막 체결 15:19:59
+    expect(auction.marketPhase).toBe("closing_auction");
+    expect(auction.marketOpen).toBe(true);
+    expect(auction.alerts.map((a) => a.code)).not.toContain("QUOTE_STALE");
+    // 정규장 중에 1분 넘게 없으면 경고
+    const regular = await at("2026-11-27T06:19:30Z");
+    db.answer = (sql) =>
+      sql.includes("FROM engine_state")
+        ? stateRows({ heartbeat: { at: "2026-11-27T06:19:28Z", db_ok: true, last_quote_at: { "005930": "2026-11-27T06:18:00Z" } }, killswitch: { halted: false } })
+        : [];
+    const stale = await svc.getStatus(new Date("2026-11-27T06:19:30Z"));
+    expect(regular.alerts.map((a) => a.code)).not.toContain("QUOTE_STALE");
+    expect(stale.alerts.map((a) => a.code)).toContain("QUOTE_STALE");
   });
 
   it("reports a running engine and pending settings", async () => {

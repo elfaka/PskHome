@@ -224,7 +224,10 @@ export interface TraderStatus {
   killswitch: { halted: boolean; reason: string | null; updatedAt: string | null; updatedBy: string | null };
   lastQuoteAt: string | null;
   lastQuoteBySymbol: Record<string, string>;
+  /** 09:00~15:30 (마감 동시호가 포함) */
   marketOpen: boolean;
+  /** continuous 정규장 · closing_auction 마감 동시호가(15:20~15:30, 체결 없음) · closed. 옛 백엔드면 없다 */
+  marketPhase?: "continuous" | "closing_auction" | "closed";
   switches: Record<string, boolean>;
   settings: TraderSettingsState | null;
   alerts: TraderAlert[];
