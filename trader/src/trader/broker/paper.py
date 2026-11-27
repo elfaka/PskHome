@@ -100,6 +100,14 @@ class PaperBroker:
         self._exec_q: asyncio.Queue[ExecutionEvent | None] = asyncio.Queue()
         self._restored = False
 
+    def update_costs(self, fees: FeeSchedule, slippage_bps: Decimal, participation_rate: Decimal) -> None:
+        """화면에서 바꾼 비용·체결 모델을 다음 체결부터 적용한다 (이미 난 체결은 그대로)."""
+        if not (Decimal(0) < participation_rate <= 1) or slippage_bps < 0:
+            raise ValueError("체결 모델 값이 범위를 벗어났다")
+        self._fees = fees
+        self._slip = slippage_bps / BPS
+        self._participation = participation_rate
+
     # ── 복구 ─────────────────────────────────────────────────────────────
 
     def restore(self, balance: AccountBalance, open_orders: list[OrderState]) -> None:

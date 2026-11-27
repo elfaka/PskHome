@@ -3,7 +3,7 @@
 동시에 도는 것
 - 시세 루프: 시세 1건을 끝까지 처리한 다음에 다음 시세를 받는다
 - 체결 루프: 브로커 실행 이벤트를 DB 에 반영한다. 실패하면 엔진을 멈춘다
-- 감시 루프: 단일 인스턴스 락, DB 헬스, 킬스위치를 주기적으로 확인한다
+- 감시 루프: 단일 인스턴스 락, DB 헬스, 킬스위치, 화면 설정·전략 스위치를 주기적으로 확인하고 상태 신호를 남긴다
 - 맥락 루프: (stocksim 일 때) 지수·VIX·수급·상하한가를 받는다
 
 전략
@@ -32,6 +32,7 @@ from decimal import Decimal
 from trader.broker.base import Broker, OrderNotFound
 from trader.broker.paper import PaperBroker
 from trader.clock import KST, Clock, SimClock, kst_trade_date, to_kst
+from trader.control import HEARTBEAT_KEY, RuntimeControls, SettingsChange, fee_schedule, risk_limits
 from trader.domain import ExecKind, ExecutionEvent, OrderStatus, Quote, Side
 from trader.execution.gateway import FatalEngineError, OrderGateway, OrderIntent
 from trader.indicators import IndicatorBook
@@ -100,6 +101,8 @@ class Engine:
         risk: RiskManager,
         account_id: int,
         context: ContextProvider | None = None,
+        controls: RuntimeControls | None = None,
+        info: dict[str, object] | None = None,
     ) -> None:
         if sum(1 for s in strategies if not s.shadow) > 1:
             raise ValueError("주문하는 전략은 하나만 둘 수 있다")
@@ -111,6 +114,10 @@ class Engine:
         self.strategies = strategies
         self.account_id = account_id
         self.context: ContextProvider = context or NullContextProvider()
+        self.risk = risk
+        self.controls = controls
+        self.info = info or {}
+        self.started_at: datetime | None = None
         self.health = TradingHealth()
         self.killswitch = KillSwitch(store, cfg.killswitch_poll_s)
         self.quotes: dict[str, Quote] = {}
@@ -152,7 +159,11 @@ class Engine:
     # ── 실행 ─────────────────────────────────────────────────────────────
 
     async def run(self) -> int:
+        self.started_at = self.clock.now()
         self.killswitch.refresh(force=True)
+        if self.controls is not None:
+            self._poll_controls(force=True)
+            self.controls.publish(self.clock.now(), dict(self.info))
         restore = self.broker.restore if isinstance(self.broker, PaperBroker) else None
         self.recovery = await recover(
             store=self.store,
@@ -378,6 +389,15 @@ class Engine:
             return
         self.stats["decisions"] += 1
         if d.action not in ORDER_ACTIONS or d.qty is None:
+            return
+        if d.action == "BUY" and self.controls is not None and not self.controls.enabled(strategy.id):
+            # 꺼진 전략은 신규 매수만 하지 않는다. 매도·청산 신호와 규칙 청산은 그대로 간다
+            try:
+                self.store.update_decision_risk(
+                    did, "STRATEGY_OFF", "전략이 꺼져 있다 — 신규 매수 안 함", None
+                )
+            except Exception as e:
+                self._db_failed("strategy off note", e)
             return
         if slot.shadow:
             self._apply_shadow(strategy.id, sym, d.action, d.qty)
@@ -610,6 +630,8 @@ class Engine:
             except Exception as e:
                 self._db_failed("ping", e)
             await self._poll_killswitch()
+            self._poll_controls()
+            self._heartbeat()
 
     async def _poll_killswitch(self) -> None:
         self.killswitch.refresh()
@@ -648,6 +670,52 @@ class Engine:
                     coid=o.client_order_id,
                 )
         log.warning("cancel-all done", extra=log_fields(count=len(opens), reason=reason))
+
+    # ── 화면 제어·상태 신호 ──────────────────────────────────────────────
+
+    def _poll_controls(self, *, force: bool = False) -> None:
+        if self.controls is None:
+            return
+        change = self.controls.poll(self.clock.now(), force=force)
+        if change is not None:
+            self.apply_settings(change)
+
+    def apply_settings(self, change: SettingsChange) -> None:
+        """검증을 통과한 새 설정을 다음 판단·체결부터 적용한다."""
+        assert self.controls is not None
+        s = change.settings
+        self.risk.limits = risk_limits(s)
+        if isinstance(self.broker, PaperBroker):
+            self.broker.update_costs(fee_schedule(s), s.slippage_bps, s.participation_rate)
+        for slot in self.strategies:
+            if hasattr(slot.strategy, "order_value"):
+                slot.strategy.order_value = s.strategy_order_value
+        self.controls.applied(change, self.clock.now())
+
+    def _heartbeat(self) -> None:
+        now = self.clock.now()
+        value: dict[str, object] = {
+            "at": now.isoformat(),
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "mode": self.info.get("mode", "paper"),
+            "feed": self.info.get("feed"),
+            "db_ok": self.health.db_ok,
+            "halted": self.killswitch.halted,
+            "data_issues": dict(self.health.data_issues),
+            "last_quote_at": {s: q.ts.isoformat() for s, q in self.quotes.items()},
+            "strategies": {
+                slot.strategy.id: {
+                    "shadow": slot.shadow,
+                    "enabled": self.controls.enabled(slot.strategy.id) if self.controls else True,
+                }
+                for slot in self.strategies
+            },
+            "stats": dict(self.stats),
+        }
+        try:
+            self.store.set_engine_state(HEARTBEAT_KEY, value, now, "engine")
+        except Exception as e:
+            self._db_failed("heartbeat", e)
 
     # ── 공통 ─────────────────────────────────────────────────────────────
 

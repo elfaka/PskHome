@@ -160,6 +160,11 @@ class Settings(BaseSettings):
             raise ValueError("주문하는 전략은 하나만 둘 수 있다 (나머지는 shadow_strategies 로)")
         if self.market_open >= self.market_close:
             raise ValueError("market_open 은 market_close 보다 빨라야 한다")
+        # 매수 금액이 한도보다 크면 모든 매수가 거부된다 — 설정 실수를 기동·화면 변경 단계에서 막는다
+        if self.strategy_order_value > self.risk_max_order_value:
+            raise ValueError("strategy_order_value 는 risk_max_order_value 이하여야 한다")
+        if self.risk_max_order_value > self.risk_max_position_value:
+            raise ValueError("risk_max_order_value 는 risk_max_position_value 이하여야 한다")
         return self
 
     def secret_values(self) -> list[str]:

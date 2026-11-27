@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
 
 from sqlalchemy import Engine as DbEngine
 from sqlalchemy import text
 
-from trader.broker.paper import FeeSchedule, PaperBroker
+from trader.broker.paper import PaperBroker
 from trader.clock import Clock, SimClock, SystemClock
 from trader.config import Settings
+from trader.control import RuntimeControls, fee_schedule, risk_limits, static_info
 from trader.engine import Engine, EngineConfig, StrategySlot
 from trader.marketdata.base import MarketDataFeed
 from trader.marketdata.context import StockSimContextProvider
@@ -18,7 +18,7 @@ from trader.marketdata.csv_replay import CsvReplayFeed
 from trader.marketdata.stocksim_client import StockSimClient
 from trader.marketdata.stocksim_feed import StockSimFeed
 from trader.marketdata.synthetic import SyntheticFeed
-from trader.risk.manager import RiskLimits, RiskManager
+from trader.risk.manager import RiskManager
 from trader.storage.db import InstanceLock, create_db_engine
 from trader.storage.models import SCHEMA_REVISION
 from trader.storage.store import SqlTradingStore
@@ -76,31 +76,6 @@ def build_feed(s: Settings, clock: Clock) -> MarketDataFeed:
     )
 
 
-def risk_limits(s: Settings) -> RiskLimits:
-    return RiskLimits(
-        max_order_value=s.risk_max_order_value,
-        max_position_value=s.risk_max_position_value,
-        daily_loss_limit=s.risk_daily_loss_limit,
-        max_quote_age=timedelta(seconds=s.max_quote_age_seconds),
-        approval_ttl=timedelta(seconds=s.risk_approval_ttl_seconds),
-        slippage_bps=s.slippage_bps,
-        commission_rate_buy=s.commission_rate_buy,
-        enforce_market_hours=s.enforce_market_hours,
-        market_open=s.market_open,
-        market_close=s.market_close,
-        commission_rate_sell=s.commission_rate_sell,
-        sell_tax_rate=s.sell_tax_rate,
-        entry_cutoff=s.entry_cutoff,
-        require_atr_stop=True,
-        atr_stop_mult=s.risk_atr_stop_mult,
-        atr_take_mult=s.risk_atr_take_mult,
-        min_risk_reward=s.risk_min_risk_reward,
-        max_spread_bps=s.risk_max_spread_bps,
-        near_upper_limit_pct=s.risk_near_upper_limit_pct,
-        price_decimals=s.price_decimals,
-    )
-
-
 def build_strategies(s: Settings) -> list[StrategySlot]:
     made: dict[str, Strategy] = {
         "ma_cross": MovingAverageCross(s.strategy_fast, s.strategy_slow, s.strategy_order_value),
@@ -130,12 +105,7 @@ def build_engine(s: Settings, *, db: DbEngine | None = None, take_lock: bool = T
     broker = PaperBroker(
         feed=feed,
         clock=clock,
-        fees=FeeSchedule(
-            commission_rate_buy=s.commission_rate_buy,
-            commission_rate_sell=s.commission_rate_sell,
-            sell_tax_rate=s.sell_tax_rate,
-            rounding=s.fee_rounding,
-        ),
+        fees=fee_schedule(s),
         slippage_bps=s.slippage_bps,
         participation_rate=s.participation_rate,
         price_decimals=s.price_decimals,
@@ -171,4 +141,6 @@ def build_engine(s: Settings, *, db: DbEngine | None = None, take_lock: bool = T
         risk=RiskManager(risk_limits(s)),
         account_id=account_id,
         context=context,
+        controls=RuntimeControls(store, s, poll_seconds=float(s.health_check_seconds)),
+        info=static_info(s),
     )
