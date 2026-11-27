@@ -107,7 +107,7 @@ describe("trader status", () => {
   it("merges fills, failed orders and events newest first with levels", async () => {
     db.answer = (sql) => {
       if (sql.includes("FROM fills f"))
-        return [{ id: 1, ts: "2026-11-27 00:10:00.000000", symbol: "005930", side: "BUY", qty: "11", price: "170200", strategy_id: "ma_cross" }];
+        return [{ id: 1, ts: "2026-11-27 00:10:00.000000", symbol: "005930", side: "BUY", qty: "11.000000", price: "170200.0000", strategy_id: "ma_cross" }];
       if (sql.includes("FROM orders o"))
         return [{ id: 9, updated_at: "2026-11-27 00:20:00.000000", symbol: "005930", side: "BUY", qty: "11", status: "REJECTED", reject_reason: "cash" }];
       if (sql.includes("FROM risk_events"))
@@ -126,6 +126,14 @@ describe("trader status", () => {
     ]);
     expect(a[0].message).toContain("manual");
     expect(a[3].message).toContain("slippage_bps 5→7");
+    expect(a[2].message).toBe("매수 체결 11주 @ 170200 · ma_cross");
+  });
+
+  it("trims trailing zeros for display", () => {
+    expect(svc.plain("13.000000")).toBe("13");
+    expect(svc.plain("74062.5000")).toBe("74062.5");
+    expect(svc.plain("100")).toBe("100");
+    expect(svc.plain("1000.0000")).toBe("1000");
   });
 
   it("only reads", async () => {

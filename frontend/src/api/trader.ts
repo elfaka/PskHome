@@ -2,17 +2,22 @@ import { api } from "./client";
 
 /** 자동매매(/trader) 본인 전용 로그인. 백엔드 `modules/trader` 와 계약이 묶여 있다. */
 export type TraderMe =
-  | { authenticated: false }
-  | { authenticated: true; username: string };
+  | { authenticated: false; totpRequired?: boolean }
+  | { authenticated: true; username: string; totpEnabled?: boolean; stepUpUntil?: string | null };
 
 export async function getTraderMe(): Promise<TraderMe> {
   const res = await api.get<TraderMe>("/api/trader/auth/me");
   return res.data;
 }
 
-export async function traderLogin(username: string, password: string): Promise<TraderMe> {
-  const res = await api.post<TraderMe>("/api/trader/auth/login", { username, password });
+export async function traderLogin(username: string, password: string, code?: string): Promise<TraderMe> {
+  const res = await api.post<TraderMe>("/api/trader/auth/login", { username, password, ...(code ? { code } : {}) });
   return res.data;
+}
+
+/** 2단계 인증 — 맞으면 5분 동안 재개·전략 켜기·설정 변경을 할 수 있다. */
+export async function traderStepUp(code: string): Promise<{ stepUpUntil: string }> {
+  return (await api.post<{ stepUpUntil: string }>("/api/trader/auth/step-up", { code })).data;
 }
 
 export async function traderLogout(): Promise<void> {
@@ -33,6 +38,10 @@ export interface TraderPosition {
   marketValue: Dec | null;
   unrealizedPnl: Dec | null;
   realizedPnl: Dec;
+  /** 총자산 대비 비중 (비율) */
+  weight?: Dec | null;
+  /** 종목 보유 한도 대비 사용률 (비율) */
+  limitUsage?: Dec | null;
 }
 
 export interface TraderSummary {
@@ -42,6 +51,11 @@ export interface TraderSummary {
   equity: Dec | null;
   dayStartEquity: Dec | null;
   dayPnl: Dec | null;
+  initialCash?: Dec | null;
+  cumReturn?: Dec | null;
+  dailyLossLimit?: Dec | null;
+  lossUsage?: Dec | null;
+  maxPositionValue?: Dec | null;
   positions: TraderPosition[];
   openOrders: number;
   killswitch: { halted: boolean; reason: string | null; updatedAt: string | null };
@@ -154,4 +168,116 @@ export async function getTraderPerformance(): Promise<TraderPerformanceRow[]> {
 
 export async function getTraderRiskEvents(limit = 20): Promise<TraderRiskEvent[]> {
   return (await api.get<TraderRiskEvent[]>("/api/trader/risk-events", { params: { limit } })).data;
+}
+
+// ── 상태 · 전략 · 추이 · 활동 ────────────────────────────────────────────────
+
+export type EngineRunState = "running" | "stale" | "unknown";
+
+export interface TraderAlert {
+  level: "error" | "warn" | "info";
+  code: string;
+  message: string;
+}
+
+export interface TraderSettingsState {
+  base: Record<string, string | null>;
+  effective: Record<string, string | null>;
+  overrides: Record<string, string>;
+  appliedVersion: number;
+  pending: { version: number; values: Record<string, string>; at: string | null } | null;
+  rejected: { version: number; reason: string; at: string | null } | null;
+  info: {
+    mode?: string;
+    feed?: string;
+    account?: string;
+    symbols?: string[];
+    strategies?: { id: string; shadow: boolean }[];
+    paper_initial_cash?: string;
+    bar_interval_seconds?: number;
+    entry_cutoff?: string | null;
+    eod_exit?: string | null;
+    market_open?: string;
+    market_close?: string;
+  } | null;
+}
+
+export interface TraderStatus {
+  serverTime: string;
+  engine: {
+    state: EngineRunState;
+    heartbeatAt: string | null;
+    startedAt: string | null;
+    mode: string | null;
+    feed: string | null;
+    dbOk: boolean | null;
+    dataIssues: Record<string, string>;
+  };
+  killswitch: { halted: boolean; reason: string | null; updatedAt: string | null; updatedBy: string | null };
+  lastQuoteAt: string | null;
+  lastQuoteBySymbol: Record<string, string>;
+  marketOpen: boolean;
+  switches: Record<string, boolean>;
+  settings: TraderSettingsState | null;
+  alerts: TraderAlert[];
+}
+
+export interface TraderEquity {
+  points: { date: string; equity: Dec }[];
+  mdd: Dec | null;
+}
+
+export interface TraderStrategyRow {
+  id: string;
+  shadow: boolean;
+  enabled: boolean;
+  today: { decisions: number; signals: number; orders: number; fills: number; rejected: number };
+  lastDecisionAt: string | null;
+  recent: { ts: string | null; symbol: string; action: string; riskResult: string | null }[];
+}
+
+export interface TraderActivity {
+  id: string;
+  ts: string | null;
+  level: "error" | "warn" | "info";
+  source: "fill" | "order" | "event";
+  kind: string;
+  symbol: string | null;
+  message: string;
+}
+
+export async function getTraderStatus(): Promise<TraderStatus> {
+  return (await api.get<TraderStatus>("/api/trader/status")).data;
+}
+
+export async function getTraderEquity(): Promise<TraderEquity> {
+  return (await api.get<TraderEquity>("/api/trader/equity")).data;
+}
+
+export async function getTraderStrategies(): Promise<TraderStrategyRow[]> {
+  return (await api.get<TraderStrategyRow[]>("/api/trader/strategies")).data;
+}
+
+export async function getTraderActivity(limit = 50): Promise<TraderActivity[]> {
+  return (await api.get<TraderActivity[]>("/api/trader/activity", { params: { limit } })).data;
+}
+
+// ── 조작 (엔진이 약 5초 안에 반영) ───────────────────────────────────────────
+
+export async function traderHalt(reason: string): Promise<void> {
+  await api.post("/api/trader/control/halt", { reason });
+}
+
+export async function traderResume(note: string): Promise<void> {
+  await api.post("/api/trader/control/resume", { note });
+}
+
+export async function traderSetStrategy(id: string, enabled: boolean): Promise<void> {
+  await api.post(`/api/trader/control/strategies/${encodeURIComponent(id)}`, { enabled });
+}
+
+export async function traderUpdateSettings(
+  values: Record<string, string | null>
+): Promise<{ version: number; overrides: Record<string, string> }> {
+  return (await api.put<{ version: number; overrides: Record<string, string> }>("/api/trader/control/settings", { values })).data;
 }

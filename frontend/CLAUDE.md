@@ -59,7 +59,7 @@ src/app/
 │   └── [...slug]/page.tsx                       # 그 외 → /wedding 으로 리다이렉트
 └── trader/                                      # 자동매매 — 본인 전용. 어디에도 링크하지 않는다
     ├── layout.tsx                               # metadata(noindex, 제목 "로그인")
-    ├── page.tsx                                 # /trader (TraderGate: 로그인 → 준비 중 화면)
+    ├── page.tsx                                 # /trader (TraderGate: 로그인(+인증 코드) → 대시보드)
     └── [...slug]/page.tsx                       # 그 외 → /trader 로 리다이렉트
 ```
 
@@ -69,11 +69,17 @@ src/app/
 - 보호는 백엔드(`/api/trader/**` 의 `requireTraderAuth`)가 한다. 화면은 `/api/trader/auth/me` 결과로
   로그인 양식 / 내용 중 무엇을 그릴지만 정한다. 데이터 API 를 붙일 때도 백엔드에서 막혀 있어야 한다.
 - 검색 차단은 `layout.tsx` 의 `robots` 메타 + `next.config.ts` 의 `X-Robots-Tag` 헤더 두 겹이다.
-- Google 로그인(`/api/auth/me`)과 별개다. 로그인하면 `TraderDashboard`(엔진 DB 읽기 전용)를 보여준다.
+- Google 로그인(`/api/auth/me`)과 별개다. 로그인하면 `TraderDashboard` 를 보여준다. 2단계 인증이 켜져 있으면(`totpRequired`) 로그인에 인증 코드 칸이 나온다.
+- 화면 구성(`components/trader/`): `StatusBar`(실행/중지·모의·시세·DB·갱신·긴급 정지/재개) → 알림 줄 → 탭(개요·전략·보유·주문·판단·성과·활동 로그·설정, 주소 `#해시`).
+  lg 이상은 왼쪽 메뉴, 좁으면 위쪽 탭. 공용 조각은 `ui.tsx`(Section·DataTable·Kpi·StatusDot·Gauge·Switch·Modal·EquityChart).
+  모달은 `createPortal` 로 body 에 띄운다 — 상단 바처럼 `backdrop-filter` 가 있는 조상 안에서는 fixed 가 잘린다.
+- 위험이 커지는 조작(재개·전략 켜기·설정 변경)은 `stepUp.tsx` 의 `guarded()` 로 감싼다. 서버가 403 `STEP_UP_REQUIRED` 를 주면 코드를 묻고 한 번 다시 시도한다.
+  긴급 정지·전략 끄기는 감싸지 않는다. 상태 조회가 401 이면 `onSessionExpired` 로 로그인 화면으로 돌아간다 (재배포로 세션이 사라질 때).
+- 설정 항목 설명(올리면·내리면)은 `lib/trader/settingsMeta.ts` 한 곳. 키 목록은 백엔드 `TUNABLE_RULES`·엔진 `TUNABLE` 과 같아야 한다.
 - **숫자는 백엔드가 준 Decimal 문자열을 그대로 포맷한다** (`lib/trader/decimal.ts` — 반올림·천 단위·퍼센트 이동 모두 문자열 연산).
   `Number()` 로 바꿔 계산하지 않는다. 상승 빨강 / 하락 파랑은 stocksim 의 `TONE_TEXT` 를 쓴다.
 - 표는 카드 안에서 가로 스크롤한다. 그리드 안 카드는 `min-w-0` 이어야 좁은 화면에서 페이지가 옆으로 넘치지 않는다.
-- 화면에서 주문·킬스위치 조작은 하지 않는다 (읽기 전용).
+- 화면에서 주문은 내지 않는다. 엔진 조작은 긴급 정지·재개·전략 켜기/끄기·설정 변경뿐이다 (보호는 서버가 한다).
 
 **라우트 페이지는 얇게 유지한다.** 실제 화면 구현은 `src/components/` 에 두고
 페이지는 조립만 한다. (`/pspost/new` 와 `/pspost/[id]/edit` 가 같은 `PostForm` 을 공유하는 이유)
@@ -239,8 +245,9 @@ export async function fetchData(id: number) {
 - `src/api/pspost.ts` — PS 게시글 CRUD (`listPosts`, `getPost`, `createPost`, `updatePost`, `deletePost`)
 - `src/api/jsonPrettierApi.ts` — JSON 포맷 (`formatJson`)
 - `src/api/stockSim.ts` — 주식 모의투자 (검색·시세·차트·호가·체결·개요·분석·수급·시장 지수·공포탐욕·포트폴리오·주문)
-- `src/api/trader.ts` — 자동매매 본인 로그인 (`getTraderMe`, `traderLogin`, `traderLogout`)과
-  대시보드 조회 (`getTraderSummary`, `getTraderDecisions`, `getTraderPerformance`, `getTraderOrders`, `getTraderFills`, `getTraderRiskEvents`)
+- `src/api/trader.ts` — 자동매매 본인 로그인 (`getTraderMe`, `traderLogin`, `traderStepUp`, `traderLogout`),
+  대시보드 조회 (`getTraderSummary`, `getTraderStatus`, `getTraderEquity`, `getTraderStrategies`, `getTraderActivity`, `getTraderDecisions`, `getTraderPerformance`, `getTraderOrders`, `getTraderFills`, `getTraderRiskEvents`),
+  조작 (`traderHalt`, `traderResume`, `traderSetStrategy`, `traderUpdateSettings`)
 
 **에러 메시지**는 `@/lib/errorMessage` 의 `errorMessage(e, fallback)` 로 뽑는다.
 백엔드 실패 응답 형태(`{ error: { code, message } }`)를 알고 있으므로 화면마다 파싱하지 않는다.

@@ -25,6 +25,7 @@ trader/
 │   ├── risk/              # approval(승인 증표), manager, killswitch, health
 │   ├── execution/gateway.py  # 주문이 브로커로 가는 유일한 경로
 │   ├── storage/           # models(테이블), store(SqlTradingStore), db(엔진·인스턴스 락)
+│   ├── control.py         # 화면 제어: 설정 덮어쓰기·전략 스위치 반영, 적용값·상태 신호 기록 (engine_state)
 │   ├── recovery.py        # 재시작 복구
 │   ├── engine.py          # 시세 루프·체결 루프·감시 루프
 │   ├── app.py             # 설정 → 엔진 조립, 스키마 버전 확인
@@ -60,10 +61,26 @@ trader/
   실제 계좌 보유를 보여 주면 남이 산 것을 EXIT 해서 신호 성과가 왜곡된다 (대시보드 확인 중 발견해 고침).
 - 손절·목표가는 호가 자릿수로 맞춘다 (손절 올림, 목표 내림).
 
-### 대시보드
+### 대시보드와 화면 제어
 
-`/trader` (로그인 후) — 백엔드가 이 DB 를 `trader_web`(SELECT 전용)으로 읽어 보여준다. 엔진과 직접 통신하지 않는다.
-**스키마를 바꾸면 `backend/src/modules/trader/traderDashboard.service.ts` 도 함께 고친다.**
+`/trader` (로그인 + 2단계 인증) — 백엔드가 이 DB 를 `trader_web` 으로 읽어 보여준다. 엔진과 직접 통신하지 않는다.
+**스키마를 바꾸면 `backend/src/modules/trader/traderDashboard.service.ts`·`traderStatus.service.ts` 도 함께 고친다.**
+
+화면 조작은 `engine_state`(키-값) 를 거친다. 엔진은 감시 루프(`health_check_seconds`, 기본 5초)마다 읽는다.
+
+| 키 | 쓰는 쪽 | 내용 |
+|---|---|---|
+| `killswitch` | 웹·CLI | `{halted, reason, at}` — 긴급 정지·재개 |
+| `strategy_switches` | 웹 | `{version, values: {전략: bool}}` — 꺼진 전략은 **신규 매수만** 안 한다 (매도·청산·규칙 청산은 그대로) |
+| `settings_overrides` | 웹 | `{version, values}` — `control.TUNABLE` 만. 엔진이 Settings 검증을 다시 통과시킨 뒤 다음 판단부터 적용 |
+| `settings_effective` | 엔진 | trader.env 기본값·덮어쓰기·적용값·거부 사유·바꿀 수 없는 설정(info) |
+| `heartbeat` | 엔진 | 상태 신호 (DB·킬스위치·데이터 이상·마지막 시세·전략). 30초 넘게 없으면 화면이 "응답 없음" |
+
+- 바꿀 수 있는 설정(`TUNABLE`): 수수료·세율·원 단위 처리·슬리피지·체결 비율·1회 매수 금액·위험 한도 3종·ATR 배수·최소 손익비·최대 스프레드.
+  목록은 백엔드 `traderControl.service.ts` 의 `TUNABLE_RULES`, 프론트 `lib/trader/settingsMeta.ts` 와 같아야 한다.
+- 덮어쓰기 검증에 실패하면 이전 값을 유지하고 `SETTINGS_REJECTED` 를 남긴다. 적용하면 `SETTINGS_APPLIED`(바뀐 값).
+- 웹 조작은 `risk_events` 에 HALT/RESUME/STRATEGY_ON/OFF/SETTINGS_CHANGE 로 남는다 (`by` = `web:<아이디>`).
+- 웹 계정 `trader_web` 의 쓰기 권한은 `engine_state`(INSERT·UPDATE)·`risk_events`(INSERT)뿐 (`db/grant_web_control.sql`).
 
 ## 안전 규칙 (깨면 안 된다)
 
@@ -84,7 +101,8 @@ trader/
 10. **수수료·세율·한도는 설정값**이고 기본값을 넣지 않는다.
 11. **엔진 인스턴스는 1개**: MySQL `GET_LOCK`. 락 연결이 끊기면 엔진을 멈춘다.
 12. 운영 MySQL 의 다른 DB·컨테이너·볼륨은 건드리지 않는다. 계정 SQL 실행·운영 배포는 사용자가 한다.
-13. 킬스위치는 DB(`engine_state`)에 있고 사람만 끈다. 켜지면 미체결 일괄 취소. 상태를 못 읽으면 켜진 것으로 본다.
+13. 킬스위치는 DB(`engine_state`)에 있고 사람만 끈다 (CLI `trader resume` 또는 웹 — 웹은 2단계 인증 필수). 켜지면 미체결 일괄 취소. 상태를 못 읽으면 켜진 것으로 본다.
+    웹에서 위험이 커지는 조작(재개·전략 켜기·설정 변경)은 2단계 인증, 줄이는 조작(긴급 정지·전략 끄기)은 인증 없이 된다.
 14. 복구 중 DB·브로커 불일치가 있으면 킬스위치를 켠 채로 뜬다.
 15. **손절·목표가는 위험 관리가 ATR 로 정한다** (전략·AI 가 아니다). 비용(수수료·세금·슬리피지) 차감 손익비가 기준 미만이거나
     ATR 이 없으면 매수하지 않는다. 손절·목표가·장마감 청산은 규칙으로 실행한다.
@@ -133,4 +151,4 @@ trader/
 - **알림** (5단계): 체결·오류·엔진 중단을 텔레그램 등으로.
 - AI 는 점수·의견만 낸다. 주문 여부·금액은 규칙 코드(전략 + RiskManager)가 정한다. AI 에 API 키·브로커·게이트웨이를 주지 않는다.
   AI 실패 시 매매하지 않는다.
-- **5단계 대시보드**: 프론트 `/trader`(로그인 게이트 있음) + 백엔드 `/api/trader/**`(requireTraderAuth), DB 는 `trader_web`(SELECT 전용).
+- **대시보드** (완료): 프론트 `/trader`(로그인 + TOTP) + 백엔드 `/api/trader/**`. 위 "대시보드와 화면 제어" 참고.

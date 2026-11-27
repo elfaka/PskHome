@@ -18,6 +18,12 @@ type Json = Record<string, unknown>;
 
 const str = (v: unknown): string | null => (v == null ? null : String(v));
 
+/** "13.000000" → "13", "74062.5000" → "74062.5" (표시용, 문자열 연산) */
+export function plain(v: unknown): string {
+  const s = String(v ?? "");
+  return /^-?\d+\.\d+$/.test(s) ? s.replace(/\.?0+$/, "") : s;
+}
+
 /** 상태 신호가 이보다 오래되면 "응답 없음" */
 export const HEARTBEAT_STALE_MS = 30_000;
 /** 장중 시세가 이보다 오래되면 경고 */
@@ -91,8 +97,14 @@ export async function getStatus(now = new Date()): Promise<TraderStatus> {
   const switchesDoc = st.get("strategy_switches")?.value ?? null;
   const settings = settingsState(st.get("settings_effective")?.value ?? null, st.get("settings_overrides")?.value ?? null);
 
+  // 엔진은 시세를 모아서(기본 200건) 기록하므로 DB 보다 상태 신호의 마지막 시세 시각이 더 최신이다
+  const hbQuotes = Object.values((hb?.last_quote_at as Record<string, string>) ?? {})
+    .map(iso)
+    .filter((v): v is string => v != null)
+    .sort();
   const [lastQuote] = await traderQuery<Row>("SELECT MAX(ts) AS t FROM quotes");
-  const lastQuoteAt = utcIso(str(lastQuote?.t));
+  const dbQuoteAt = utcIso(str(lastQuote?.t));
+  const lastQuoteAt = [hbQuotes.at(-1), dbQuoteAt].filter((v): v is string => v != null).sort().at(-1) ?? null;
 
   const heartbeatAt = iso(hb?.at);
   const age = heartbeatAt ? now.getTime() - new Date(heartbeatAt).getTime() : null;
@@ -290,7 +302,7 @@ export async function listActivity(accountName: string, limit: number): Promise<
       source: "fill",
       kind: String(f.side),
       symbol: str(f.symbol),
-      message: `${f.side === "BUY" ? "매수" : "매도"} 체결 ${String(f.qty)}주 @ ${String(f.price)}${f.strategy_id ? ` · ${String(f.strategy_id)}` : ""}`,
+      message: `${f.side === "BUY" ? "매수" : "매도"} 체결 ${plain(f.qty)}주 @ ${plain(f.price)}${f.strategy_id ? ` · ${String(f.strategy_id)}` : ""}`,
     })),
     ...orders.map((o): TraderActivity => ({
       id: `order-${String(o.id)}`,
@@ -299,7 +311,7 @@ export async function listActivity(accountName: string, limit: number): Promise<
       source: "order",
       kind: String(o.status),
       symbol: str(o.symbol),
-      message: `${o.status === "REJECTED" ? "주문 거부" : "주문 취소"} ${o.side === "BUY" ? "매수" : "매도"} ${String(o.qty)}주${o.reject_reason ? ` · ${String(o.reject_reason)}` : ""}`,
+      message: `${o.status === "REJECTED" ? "주문 거부" : "주문 취소"} ${o.side === "BUY" ? "매수" : "매도"} ${plain(o.qty)}주${o.reject_reason ? ` · ${String(o.reject_reason)}` : ""}`,
     })),
     ...events.map((e): TraderActivity => {
       const kind = String(e.kind);

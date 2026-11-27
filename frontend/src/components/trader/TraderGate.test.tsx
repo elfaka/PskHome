@@ -11,6 +11,7 @@ describe("TraderGate", () => {
   it("shows only the login form when not logged in", async () => {
     render(<TraderGate />);
     expect(await screen.findByRole("form", { name: "로그인" })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/인증 코드/)).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "자동매매" })).not.toBeInTheDocument();
   });
 
@@ -26,12 +27,49 @@ describe("TraderGate", () => {
     expect(screen.queryByRole("heading", { name: "자동매매" })).not.toBeInTheDocument();
   });
 
-  it("logs in, shows the placeholder, and logs out", async () => {
+  it("asks for the authenticator code when 2FA is on and sends it", async () => {
+    let loggedIn = false;
     let sent: unknown = null;
     server.use(
+      http.get("/api/trader/auth/me", () =>
+        HttpResponse.json(
+          loggedIn
+            ? { authenticated: true, username: "owner", totpEnabled: true, stepUpUntil: "2099-01-01T00:00:00.000Z" }
+            : { authenticated: false, totpRequired: true }
+        )
+      ),
       http.post("/api/trader/auth/login", async ({ request }) => {
         sent = await request.json();
+        loggedIn = true;
         return HttpResponse.json({ authenticated: true, username: "owner" });
+      })
+    );
+    const user = userEvent.setup();
+    render(<TraderGate />);
+    await user.type(await screen.findByLabelText("아이디"), "owner");
+    await user.type(screen.getByLabelText("비밀번호"), "right-password");
+    await user.type(screen.getByLabelText(/인증 코드/), "12a3456");
+    await user.click(screen.getByRole("button", { name: "로그인" }));
+
+    expect(await screen.findByRole("heading", { name: "자동매매" })).toBeInTheDocument();
+    expect(sent).toEqual({ username: "owner", password: "right-password", code: "123456" });
+  });
+
+  it("logs in without a code when 2FA is off, and logs out", async () => {
+    let loggedIn = false;
+    let sent: unknown = null;
+    server.use(
+      http.get("/api/trader/auth/me", () =>
+        HttpResponse.json(loggedIn ? { authenticated: true, username: "owner", totpEnabled: false, stepUpUntil: null } : { authenticated: false, totpRequired: false })
+      ),
+      http.post("/api/trader/auth/login", async ({ request }) => {
+        sent = await request.json();
+        loggedIn = true;
+        return HttpResponse.json({ authenticated: true, username: "owner" });
+      }),
+      http.post("/api/trader/auth/logout", () => {
+        loggedIn = false;
+        return HttpResponse.json({ ok: true });
       })
     );
     const user = userEvent.setup();
@@ -47,9 +85,9 @@ describe("TraderGate", () => {
     expect(await screen.findByRole("form", { name: "로그인" })).toBeInTheDocument();
   });
 
-  it("goes straight to the placeholder when the session is still valid", async () => {
+  it("goes straight to the dashboard when the session is still valid", async () => {
     server.use(
-      http.get("/api/trader/auth/me", () => HttpResponse.json({ authenticated: true, username: "owner" }))
+      http.get("/api/trader/auth/me", () => HttpResponse.json({ authenticated: true, username: "owner", totpEnabled: true, stepUpUntil: null }))
     );
     render(<TraderGate />);
     expect(await screen.findByRole("heading", { name: "자동매매" })).toBeInTheDocument();

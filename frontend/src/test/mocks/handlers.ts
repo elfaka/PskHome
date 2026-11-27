@@ -69,10 +69,16 @@ export const mockTraderSummary = {
   equity: "10105926.0000",
   dayStartEquity: "10000000.0000",
   dayPnl: "105926.0000",
+  initialCash: "10000000.0000",
+  cumReturn: "0.010593",
+  dailyLossLimit: "300000",
+  lossUsage: "0",
+  maxPositionValue: "5000000",
   positions: [
     {
       symbol: "005930", qty: "14.000000", avgPrice: "70100.0000", lastPrice: "70100.0000",
       lastPriceAt: "2026-11-26T06:19:50.000Z", marketValue: "981400.0000", unrealizedPnl: "-1400.0000", realizedPnl: "0.0000",
+      weight: "0.097111", limitUsage: "0.196280",
     },
   ],
   openOrders: 0,
@@ -102,9 +108,67 @@ export const mockTraderDecisions = [
   },
 ];
 
+const TUNED_BASE = {
+  commission_rate_buy: "0.00015", commission_rate_sell: "0.00015", sell_tax_rate: "0.002", fee_rounding: "down",
+  slippage_bps: "5", participation_rate: "0.1", strategy_order_value: "2000000", risk_max_order_value: "2500000",
+  risk_max_position_value: "5000000", risk_daily_loss_limit: "300000", risk_atr_stop_mult: "1.5",
+  risk_atr_take_mult: "3", risk_min_risk_reward: "1.5", risk_max_spread_bps: "30",
+};
+
+export const mockTraderStatus = {
+  serverTime: "2026-11-26T01:00:00.000Z",
+  engine: {
+    state: "running", heartbeatAt: "2026-11-26T00:59:58.000Z", startedAt: "2026-11-26T00:00:00.000Z",
+    mode: "paper", feed: "stocksim", dbOk: true, dataIssues: {},
+  },
+  killswitch: { halted: false, reason: null, updatedAt: null, updatedBy: null },
+  lastQuoteAt: "2026-11-26T00:59:57.000Z",
+  lastQuoteBySymbol: { "005930": "2026-11-26T00:59:57.000Z" },
+  marketOpen: true,
+  switches: {},
+  settings: {
+    base: TUNED_BASE,
+    effective: { ...TUNED_BASE, risk_min_risk_reward: "1.2" },
+    overrides: { risk_min_risk_reward: "1.2" },
+    appliedVersion: 1,
+    pending: null,
+    rejected: null,
+    info: {
+      mode: "paper", feed: "stocksim", account: "paper-default", symbols: ["005930", "000660"],
+      strategies: [{ id: "ma_cross", shadow: false }, { id: "intraday_score", shadow: true }],
+      paper_initial_cash: "10000000", bar_interval_seconds: 60, entry_cutoff: "15:00:00", eod_exit: "15:15:00",
+    },
+  },
+  alerts: [],
+};
+
+export const mockTraderStrategies = [
+  {
+    id: "ma_cross", shadow: false, enabled: true,
+    today: { decisions: 120, signals: 3, orders: 1, fills: 1, rejected: 2 },
+    lastDecisionAt: "2026-11-26T00:59:00.000Z",
+    recent: [
+      { ts: "2026-11-26T00:58:00.000Z", symbol: "005930", action: "HOLD", riskResult: null },
+      { ts: "2026-11-26T00:59:00.000Z", symbol: "005930", action: "BUY", riskResult: "APPROVED" },
+    ],
+  },
+  {
+    id: "intraday_score", shadow: true, enabled: true,
+    today: { decisions: 120, signals: 5, orders: 0, fills: 0, rejected: 0 },
+    lastDecisionAt: "2026-11-26T00:59:00.000Z",
+    recent: [{ ts: "2026-11-26T00:59:00.000Z", symbol: "005930", action: "BUY", riskResult: "SHADOW" }],
+  },
+];
+
+export const mockTraderActivity = [
+  { id: "event-2", ts: "2026-11-26T00:40:00.000Z", level: "info", source: "event", kind: "SETTINGS_APPLIED", symbol: null, message: "설정 적용 · risk_min_risk_reward 1.5→1.2" },
+  { id: "fill-1", ts: "2026-11-26T00:31:10.000Z", level: "info", source: "fill", kind: "BUY", symbol: "005930", message: "매수 체결 13주 @ 70171 · ma_cross" },
+  { id: "event-1", ts: "2026-11-26T00:20:00.000Z", level: "warn", source: "event", kind: "DATA_GAP", symbol: "000660", message: "봉 누락 · 3" },
+];
+
 export const handlers = [
   // 자동매매(/trader) — 기본은 비로그인. 로그인 흐름은 테스트에서 server.use 로 바꾼다
-  http.get("/api/trader/auth/me", () => HttpResponse.json({ authenticated: false })),
+  http.get("/api/trader/auth/me", () => HttpResponse.json({ authenticated: false, totpRequired: false })),
   http.post("/api/trader/auth/logout", () => HttpResponse.json({ ok: true })),
   http.post("/api/trader/auth/login", () =>
     HttpResponse.json(
@@ -115,6 +179,23 @@ export const handlers = [
 
   // 자동매매 대시보드 (금액은 Decimal 문자열)
   http.get("/api/trader/summary", () => HttpResponse.json(mockTraderSummary)),
+  http.get("/api/trader/status", () => HttpResponse.json(mockTraderStatus)),
+  http.get("/api/trader/equity", () =>
+    HttpResponse.json({
+      points: [
+        { date: "2026-11-25", equity: "10000000.0000" },
+        { date: "2026-11-26", equity: "10000000.0000" },
+      ],
+      mdd: "-0.004500",
+    })
+  ),
+  http.get("/api/trader/strategies", () => HttpResponse.json(mockTraderStrategies)),
+  http.get("/api/trader/activity", () => HttpResponse.json(mockTraderActivity)),
+  http.post("/api/trader/control/halt", () => HttpResponse.json({ ok: true })),
+  http.post("/api/trader/control/resume", () => HttpResponse.json({ ok: true })),
+  http.post("/api/trader/control/strategies/:id", () => HttpResponse.json({ ok: true })),
+  http.put("/api/trader/control/settings", () => HttpResponse.json({ version: 2, overrides: {} })),
+  http.post("/api/trader/auth/step-up", () => HttpResponse.json({ stepUpUntil: "2099-01-01T00:00:00.000Z" })),
   http.get("/api/trader/decisions", () => HttpResponse.json(mockTraderDecisions)),
   http.get("/api/trader/performance", () =>
     HttpResponse.json([

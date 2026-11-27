@@ -123,6 +123,7 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 | `DART_API_BASE_URL` | `https://opendart.fss.or.kr/api` | |
 | `CBOE_API_BASE_URL` | `https://cdn-api.cboe.com/api/global` | Cboe 공개 데이터 (VIX). 키 불필요. 로컬 확인 때 가짜 서버로 바꿀 수 있다 |
 | `TRADER_ADMIN_USERNAME` / `TRADER_ADMIN_PASSWORD_HASH` | (없음) | `/trader` 본인 계정. 없으면 로그인 항상 실패. 해시는 `npm run trader:hash-password` |
+| `TRADER_TOTP_SECRET` | (없음) | 2단계 인증 비밀키(base32). 있으면 로그인·재개·전략 켜기·설정 변경에 6자리 코드. 만들기 `npm run trader:totp-setup` |
 | `TRADER_SESSION_IDLE_MINUTES` / `TRADER_SESSION_MAX_HOURS` | `30` / `12` | trader 로그인 유휴·절대 만료 |
 
 **시크릿은 전부 optional 이다.** 하나가 없다고 프로세스 부팅을 막지 않고,
@@ -185,9 +186,23 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
   (`/api/stocksim/trades/:symbol`, `/orderbook/:symbol`, `/stocks/:symbol/investors/intraday`, `/stocks/:symbol/overview`, `/market`).
   **이 응답 형태(필드 이름·시각의 오프셋 포함 ISO 형식)를 바꾸면 엔진이 깨진다** — `trader/src/trader/marketdata/` 와 그 테스트를 함께 고친다.
   엔진은 토스 키를 갖지 않으므로 토스 호출 한도는 이 백엔드의 캐시가 함께 지킨다. stocksim 주문 API 는 엔진이 쓰지 않는다.
+- **2단계 인증 (TOTP, `totp.ts`)**: RFC 6238 (SHA1·6자리·30초, ±1스텝, 같은 스텝 재사용 금지). 라이브러리 없이 node:crypto 로 구현.
+  - `TRADER_TOTP_SECRET` 이 있으면 로그인에 `code` 필요 (실패 응답은 비밀번호 오류와 같은 `LOGIN_FAILED`). 로그인 직후 5분은 step-up 으로 친다
+  - `POST /api/trader/auth/step-up {code}` → 5분 동안 위험이 커지는 조작 허용 (`session.trader.stepUpAt`). 틀린 코드도 로그인 실패 제한에 들어간다
+  - 비밀키가 없으면 재개·전략 켜기·설정 변경은 403 `TOTP_NOT_CONFIGURED`. 긴급 정지·전략 끄기는 된다
+  - `/api/trader/auth/me`: 비로그인 `{authenticated:false, totpRequired}`, 로그인 `{authenticated, username, totpEnabled, stepUpUntil}`
+  - 기동 로그 `[trader] login configured (2FA on|off)` / `login disabled: <이유>` 로 설정이 들어왔는지 본다 (값은 남기지 않음)
+- **조작 API** (`traderControl.service.ts`, 같은 출처의 JSON 요청만 — `requireSameOrigin`):
+  `POST control/halt`(코드 없이) · `POST control/resume`(step-up) · `POST control/strategies/:id {enabled}`(켜기만 step-up) · `PUT control/settings {values}`(step-up).
+  엔진 DB 의 `engine_state` 에만 쓰고 `risk_events` 에 기록한다. 엔진이 약 5초 안에 읽어 반영한다 (형식은 `trader/src/trader/control.py`).
+  설정 값은 문자열 Decimal 로 검증한다 (`cmpDec`, 범위·값 사이 관계). 엔진이 한 번 더 검증한다.
+  `trader_web` 에 쓰기 권한이 없으면 503 `TRADER_DB_NO_WRITE` (`trader/db/grant_web_control.sql`).
+- **조회 API** (`traderStatus.service.ts`): `status`(상태 신호·킬스위치·스위치·설정·알림) · `equity`(일별 추이 + MDD, SQL 창 함수) ·
+  `strategies`(오늘 집계·최근 판단 40개) · `activity`(체결·주문 실패·위험 이벤트를 시간순으로).
 - **대시보드 API** (`/api/trader/summary|orders|fills|decisions|performance|risk-events`, 모두 trader 로그인 필요):
-  엔진 DB 를 읽기 전용 계정(`trader_web`, SELECT 만)으로 조회한다 (`traderDb.ts`, mariadb 풀, `TRADER_DATABASE_URL`).
-  - 쓰기 쿼리·쓰기 라우트를 두지 않는다 (테스트가 SELECT 만 쓰는지, POST 가 없는지 검사한다)
+  엔진 DB 를 `trader_web` 계정으로 조회한다 (`traderDb.ts`, mariadb 풀, `TRADER_DATABASE_URL`).
+  - 조회 서비스(`traderDashboard`·`traderStatus`)는 SELECT 만 쓴다 (테스트가 검사한다). 쓰기는 `withTraderTx` 를 쓰는 `traderControl` 에만 둔다
+  - 비율(누적 수익률·손실 한도 사용률·비중·MDD)도 SQL DECIMAL 로 나눈다 (`ratios()`)
   - 금액 계산(평가금액·손익)은 SQL DECIMAL 로 하고 **문자열**로 내려보낸다. JS number 로 바꾸지 않는다
   - DATETIME 은 엔진이 UTC 로 저장한다 → `utcIso()` 로 `...Z` 문자열
   - 엔진 DB 스키마(`trader/migrations`)가 바뀌면 `traderDashboard.service.ts` 를 함께 고친다

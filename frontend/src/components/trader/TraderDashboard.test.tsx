@@ -1,66 +1,181 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 
+import { mockTraderStatus } from "@/test/mocks/handlers";
 import { server } from "@/test/mocks/server";
 
 import TraderDashboard from "./TraderDashboard";
 
-function renderDashboard() {
+function renderDashboard(props: { totpEnabled?: boolean; stepUpUntil?: string | null } = {}) {
   const onLogout = vi.fn(async () => {});
-  render(<TraderDashboard username="owner" onLogout={onLogout} />);
-  return { onLogout };
+  render(<TraderDashboard username="owner" onLogout={onLogout} totpEnabled {...props} />);
+  return { onLogout, user: userEvent.setup() };
 }
 
+async function openTab(user: ReturnType<typeof userEvent.setup>, label: string) {
+  const nav = screen.getByRole("navigation", { name: "자동매매 메뉴" });
+  await user.click(within(nav).getByRole("button", { name: label }));
+}
+
+afterEach(() => {
+  window.history.replaceState(null, "", "/");
+});
+
 describe("TraderDashboard", () => {
-  it("shows equity, cash and today's P&L formatted from decimal strings", async () => {
+  it("shows the status bar: running, paper mode, quote and DB health", async () => {
     renderDashboard();
-    expect(await screen.findByText("10,105,926")).toBeInTheDocument();
-    expect(screen.getByText("9,124,526")).toBeInTheDocument();
-    expect(screen.getByText("+105,926")).toBeInTheDocument();
-    expect(screen.getByText("가동 중")).toBeInTheDocument();
+    expect(await screen.findByText("실행 중")).toBeInTheDocument();
+    expect(screen.getByText("모의")).toBeInTheDocument();
+    expect(screen.getByText("정상")).toBeInTheDocument();
+    expect(screen.getByText("장중")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "긴급 정지" })).toBeInTheDocument();
   });
 
-  it("lists positions with unrealized P&L in the down tone", async () => {
+  it("shows key numbers from decimal strings: equity, P&L, cumulative return, MDD", async () => {
     renderDashboard();
-    const positions = await screen.findByRole("region", { name: "보유 종목" });
-    expect(await within(positions).findByText("005930")).toBeInTheDocument();
+    expect(await screen.findByText("10,105,926")).toBeInTheDocument();
+    expect(screen.getByText("+105,926")).toBeInTheDocument();
+    expect(screen.getByText("+1.06%")).toBeInTheDocument();
+    expect(await screen.findByText("-0.45%")).toBeInTheDocument();
+  });
+
+  it("shows risk gauges and positions with weights in the down tone for losses", async () => {
+    renderDashboard();
+    const risk = await screen.findByRole("region", { name: "리스크" });
+    expect(within(risk).getByRole("meter", { name: "하루 손실 한도 사용률" })).toBeInTheDocument();
+    expect(await within(risk).findByRole("meter", { name: "005930" })).toHaveAttribute("aria-valuenow", "9.7");
+    const positions = screen.getByRole("region", { name: "보유 종목" });
     const pnl = within(positions).getByText("-1,400");
     expect(pnl.className).toContain("text-info-soft-fg");
   });
 
-  it("shows decisions with score components, shadow badge and risk levels", async () => {
+  it("lists strategies with a status bar of recent decisions", async () => {
     renderDashboard();
-    const table = await screen.findByRole("region", { name: "판단 기록" });
-    expect(await within(table).findByText("그림자")).toBeInTheDocument();
-    expect(within(table).getByText(/가격 30\/30 rules · 맥락 60\/60 rules · 이슈 0\/10 NOT_CONFIGURED/)).toBeInTheDocument();
-    expect(within(table).getByText(/손절 69,985 \/ 목표 70,435 · R 1.05/)).toBeInTheDocument();
-    expect(within(table).getByText("SHADOW")).toBeInTheDocument();
-    expect(within(table).getByText("APPROVED")).toBeInTheDocument();
+    const list = await screen.findByRole("region", { name: "전략" });
+    expect(await within(list).findByText("ma_cross")).toBeInTheDocument();
+    expect(within(list).getByText(/그림자 \(신호만 기록\)/)).toBeInTheDocument();
+    expect(within(list).getByRole("switch", { name: "ma_cross 끄기" })).toHaveAttribute("aria-checked", "true");
   });
 
-  it("shows signal performance as percentages", async () => {
-    renderDashboard();
-    const perf = await screen.findByRole("region", { name: "신호 성과" });
-    expect(await within(perf).findByText("+0.12%")).toBeInTheDocument();
-    expect(within(perf).getByText("75%")).toBeInTheDocument();
-  });
-
-  it("shows the kill switch when halted", async () => {
+  it("turns a strategy off without a code, and asks for the code to turn it back on", async () => {
+    const sent: unknown[] = [];
     server.use(
-      http.get("/api/trader/summary", async () => {
-        const { mockTraderSummary } = await import("@/test/mocks/handlers");
-        return HttpResponse.json({ ...mockTraderSummary, killswitch: { halted: true, reason: "manual", updatedAt: null } });
+      http.post("/api/trader/control/strategies/:id", async ({ request, params }) => {
+        sent.push([params.id, await request.json()]);
+        return HttpResponse.json({ ok: true });
       })
     );
-    renderDashboard();
-    expect(await screen.findByText("중지됨 · manual")).toBeInTheDocument();
+    const { user } = renderDashboard({ stepUpUntil: null });
+    const list = await screen.findByRole("region", { name: "전략" });
+    await user.click(await within(list).findByRole("switch", { name: "ma_cross 끄기" }));
+    expect(screen.queryByRole("dialog", { name: "2단계 인증" })).not.toBeInTheDocument();
+    expect(sent).toEqual([["ma_cross", { enabled: false }]]);
+
+    await user.click(within(list).getByRole("switch", { name: "ma_cross 켜기" }));
+    const dialog = await screen.findByRole("dialog", { name: "2단계 인증" });
+    await user.type(within(dialog).getByLabelText("인증 코드"), "123456");
+    await user.click(within(dialog).getByRole("button", { name: "확인" }));
+    await vi.waitFor(() => expect(sent).toEqual([["ma_cross", { enabled: false }], ["ma_cross", { enabled: true }]]));
+  });
+
+  it("halts with a reason (no code) and offers resume when halted", async () => {
+    let body: unknown = null;
+    server.use(
+      http.post("/api/trader/control/halt", async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ ok: true });
+      })
+    );
+    const { user } = renderDashboard();
+    await user.click(await screen.findByRole("button", { name: "긴급 정지" }));
+    const dialog = screen.getByRole("dialog", { name: "긴급 정지" });
+    await user.type(within(dialog).getByLabelText(/사유/), "점검");
+    await user.click(within(dialog).getByRole("button", { name: "지금 정지" }));
+    await vi.waitFor(() => expect(body).toEqual({ reason: "점검" }));
+  });
+
+  it("shows the halt alert and needs the confirm word and code to resume", async () => {
+    server.use(
+      http.get("/api/trader/status", () =>
+        HttpResponse.json({
+          ...mockTraderStatus,
+          killswitch: { halted: true, reason: "manual", updatedAt: null, updatedBy: "web:owner" },
+          alerts: [{ level: "error", code: "HALTED", message: "긴급 정지 상태입니다 — manual" }],
+        })
+      )
+    );
+    const { user } = renderDashboard({ stepUpUntil: null });
+    expect(await screen.findByText("긴급 정지 상태입니다 — manual")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "재개…" }));
+    const dialog = screen.getByRole("dialog", { name: "엔진 재개" });
+    const submit = within(dialog).getByRole("button", { name: "재개" });
+    expect(submit).toBeDisabled();
+    await user.type(within(dialog).getByLabelText(/재개.*입력/), "재개");
+    await user.click(submit);
+    expect(await screen.findByRole("dialog", { name: "2단계 인증" })).toBeInTheDocument();
+  });
+
+  it("filters the activity log by level", async () => {
+    const { user } = renderDashboard();
+    await openTab(user, "활동 로그");
+    const log = await screen.findByRole("region", { name: "활동 로그" });
+    expect(await within(log).findByText(/매수 체결 13주/)).toBeInTheDocument();
+    await user.click(within(log).getByRole("button", { name: "경고 1" }));
+    expect(within(log).queryByText(/매수 체결 13주/)).not.toBeInTheDocument();
+    expect(within(log).getByText("봉 누락 · 3")).toBeInTheDocument();
+  });
+
+  it("keeps decisions and signal performance on their own tab", async () => {
+    const { user } = renderDashboard();
+    await openTab(user, "판단·성과");
+    const table = await screen.findByRole("region", { name: "판단 기록" });
+    expect(await within(table).findByText("그림자")).toBeInTheDocument();
+    expect(within(table).getByText(/손절 69,985 \/ 목표 70,435 · R 1.05/)).toBeInTheDocument();
+    const perf = screen.getByRole("region", { name: "신호 성과" });
+    expect(await within(perf).findByText("+0.12%")).toBeInTheDocument();
+  });
+
+  it("reviews a settings change and saves only overrides after 2FA", async () => {
+    let body: { values: Record<string, string | null> } | null = null;
+    server.use(
+      http.put("/api/trader/control/settings", async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        return HttpResponse.json({ version: 2, overrides: {} });
+      })
+    );
+    const { user } = renderDashboard({ stepUpUntil: "2099-01-01T00:00:00.000Z" });
+    await openTab(user, "설정");
+    const input = await screen.findByLabelText("슬리피지");
+    expect(input).toHaveValue("5");
+    expect(screen.getByLabelText("최소 손익비")).toHaveValue("1.2");
+    await user.clear(input);
+    await user.type(input, "7");
+    await user.click(screen.getByRole("button", { name: "변경 검토" }));
+    const dialog = screen.getByRole("dialog", { name: "설정 변경 검토" });
+    expect(within(dialog).getByText("슬리피지")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "적용" }));
+    await vi.waitFor(() => expect(body).not.toBeNull());
+    expect(body!.values.slippage_bps).toBe("7");
+    expect(body!.values.risk_min_risk_reward).toBe("1.2");
+    expect(body!.values.commission_rate_buy).toBeNull();
+    expect(await screen.findByText(/v2 저장됨/)).toBeInTheDocument();
+  });
+
+  it("disables settings changes and warns when 2FA is off", async () => {
+    const { user } = renderDashboard({ totpEnabled: false });
+    expect(await screen.findByText(/2단계 인증이 설정되지 않았습니다/)).toBeInTheDocument();
+    await openTab(user, "설정");
+    const input = await screen.findByLabelText("슬리피지");
+    await user.clear(input);
+    await user.type(input, "7");
+    expect(screen.getByRole("button", { name: "변경 검토" })).toBeDisabled();
   });
 
   it("shows the backend error when the trader DB is not configured", async () => {
     server.use(
-      http.get("/api/trader/summary", () =>
+      http.get("/api/trader/status", () =>
         HttpResponse.json(
           { error: { code: "TRADER_DB_NOT_CONFIGURED", message: "자동매매 DB 접속 정보가 설정되지 않았습니다." } },
           { status: 503 }
@@ -71,9 +186,20 @@ describe("TraderDashboard", () => {
     expect(await screen.findByText("자동매매 DB 접속 정보가 설정되지 않았습니다.")).toBeInTheDocument();
   });
 
+  it("goes back to login when the session has expired (401)", async () => {
+    server.use(
+      http.get("/api/trader/status", () =>
+        HttpResponse.json({ error: { code: "UNAUTHORIZED", message: "Trader login is required." } }, { status: 401 })
+      )
+    );
+    const onSessionExpired = vi.fn();
+    render(<TraderDashboard username="owner" onLogout={async () => {}} onSessionExpired={onSessionExpired} />);
+    await vi.waitFor(() => expect(onSessionExpired).toHaveBeenCalled());
+  });
+
   it("logs out", async () => {
-    const { onLogout } = renderDashboard();
-    await userEvent.setup().click(screen.getByRole("button", { name: "로그아웃" }));
+    const { onLogout, user } = renderDashboard();
+    await user.click(screen.getByRole("button", { name: "로그아웃" }));
     expect(onLogout).toHaveBeenCalled();
   });
 });
