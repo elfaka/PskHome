@@ -24,7 +24,9 @@ type Rule =
   | { kind: "nonneg"; max?: string }
   | { kind: "positive"; max?: string }
   | { kind: "enum"; values: string[] }
-  | { kind: "time" }; // "HH:MM[:SS]" (KST) 또는 null = 끔
+  | { kind: "time" } // "HH:MM[:SS]" (KST) 또는 null = 끔
+  | { kind: "int"; min: number; max: number; nullable?: boolean } // 정수 (nullable 이면 null = 제한 없음)
+  | { kind: "symbols"; max: number }; // "005930,000660" (null = 없음)
 
 /** DB 에 두고 화면에서 바꾸는 운영 설정. trader/src/trader/control.py 의 TUNABLE 과 같아야 한다. */
 export const TUNABLE_RULES: Record<string, Rule> = {
@@ -44,7 +46,17 @@ export const TUNABLE_RULES: Record<string, Rule> = {
   risk_max_spread_bps: { kind: "positive", max: "1000" },
   entry_cutoff: { kind: "time" },
   eod_exit: { kind: "time" },
+  universe_mode: { kind: "enum", values: ["fixed", "auto"] },
+  universe_max_symbols: { kind: "int", min: 1, max: 10 },
+  universe_pinned: { kind: "symbols", max: 10 },
+  risk_max_open_positions: { kind: "int", min: 1, max: 20, nullable: true },
 };
+
+/** null(빈 값)이 "끔·없음"을 뜻하는 설정 */
+function nullable(key: string): boolean {
+  const r = TUNABLE_RULES[key];
+  return r.kind === "time" || r.kind === "symbols" || (r.kind === "int" && Boolean(r.nullable));
+}
 
 export const TUNABLE_KEYS = Object.keys(TUNABLE_RULES);
 
@@ -87,6 +99,19 @@ function checkValue(key: string, raw: string): string {
     if (!t) throw bad(`${key}: 시각은 HH:MM 형식으로 입력하세요 (예: 15:00).`);
     return t;
   }
+  if (rule.kind === "int") {
+    const v = raw.trim();
+    if (!/^\d{1,3}$/.test(v)) throw bad(`${key}: 정수로 입력하세요.`);
+    const n = Number(v); // 화면용 작은 정수(종목 수)라 number 로 비교해도 된다
+    if (n < rule.min || n > rule.max) throw bad(`${key}: ${rule.min}~${rule.max} 사이여야 합니다.`);
+    return String(n);
+  }
+  if (rule.kind === "symbols") {
+    const list = [...new Set(raw.split(",").map((x) => x.trim()).filter(Boolean))];
+    if (list.some((x) => !/^[A-Za-z0-9]{1,16}$/.test(x))) throw bad(`${key}: 종목 코드를 쉼표로 구분해 입력하세요 (예: 005930,000660).`);
+    if (list.length > rule.max) throw bad(`${key}: 최대 ${rule.max}개까지입니다.`);
+    return list.join(",");
+  }
   if (rule.kind === "enum") {
     if (!rule.values.includes(raw)) throw bad(`${key}: ${rule.values.join(" | ")} 중 하나여야 합니다.`);
     return raw;
@@ -113,7 +138,7 @@ export type SettingsValues = Record<string, string | null>;
 export function validateSettings(
   changes: Record<string, unknown>,
   current: SettingsValues,
-  hours: { open?: string | null; close?: string | null } = {}
+  hours: { open?: string | null; close?: string | null; feed?: string | null } = {}
 ): SettingsValues {
   const next: SettingsValues = {};
   for (const k of TUNABLE_KEYS) next[k] = current[k] ?? null;
@@ -121,15 +146,16 @@ export function validateSettings(
     if (!(k in TUNABLE_RULES)) throw bad(`바꿀 수 없는 설정입니다: ${k}`);
     const rule = TUNABLE_RULES[k];
     if (v == null || v === "") {
-      if (rule.kind !== "time") throw bad(`${k}: 값이 필요합니다.`);
+      if (!nullable(k) && rule) throw bad(`${k}: 값이 필요합니다.`);
       next[k] = null;
       continue;
     }
     if (typeof v !== "string") throw bad(`${k}: 문자열로 보내야 합니다.`);
     next[k] = checkValue(k, v);
+    if (rule.kind === "symbols" && next[k] === "") next[k] = null;
   }
   for (const k of TUNABLE_KEYS) {
-    if (TUNABLE_RULES[k].kind !== "time" && next[k] == null) throw bad(`${k}: 값이 없습니다.`);
+    if (!nullable(k) && next[k] == null) throw bad(`${k}: 값이 없습니다.`);
   }
 
   const order = next.strategy_order_value!;
@@ -151,13 +177,20 @@ export function validateSettings(
   }
   if (next.entry_cutoff != null && next.eod_exit != null && next.entry_cutoff > next.eod_exit)
     throw bad("신규 매수 마감은 장마감 청산보다 늦을 수 없습니다.");
+
+  // 종목 선정
+  const pinned = next.universe_pinned ? next.universe_pinned.split(",") : [];
+  if (pinned.length > Number(next.universe_max_symbols)) throw bad("항상 포함 종목 수가 최대 종목 수보다 많습니다.");
+  if (next.universe_mode === "auto" && hours.feed != null && hours.feed !== "stocksim")
+    throw bad("자동 종목 선정은 시세 출처가 stocksim(실시세)일 때만 쓸 수 있습니다.");
   return next;
 }
 
 function sameValue(k: string, a: string | null | undefined, b: string | null | undefined): boolean {
   if (a == null || b == null) return a == null && b == null;
   const kind = TUNABLE_RULES[k]?.kind;
-  if (kind === "enum" || kind === "time" || !DEC.test(a) || !DEC.test(b)) return a === b;
+  if (kind !== "rate" && kind !== "fraction" && kind !== "nonneg" && kind !== "positive") return a === b;
+  if (!DEC.test(a) || !DEC.test(b)) return a === b;
   return cmpDec(a, b) === 0;
 }
 
@@ -253,9 +286,21 @@ export async function setStrategy(id: string, enabled: boolean, by: string): Pro
   });
 }
 
-async function marketHours(): Promise<{ open: string | null; close: string | null }> {
-  const info = (await readState(EFFECTIVE))?.info as { market_open?: string; market_close?: string } | undefined;
-  return { open: info?.market_open ?? null, close: info?.market_close ?? null };
+/** 엔진이 남긴 장 시간·시세 출처와 적용값 (DB 설정에 아직 없는 새 키는 적용값으로 채운다) */
+async function engineInfo(): Promise<{
+  hours: { open: string | null; close: string | null; feed: string | null };
+  effective: SettingsValues;
+}> {
+  const eff = await readState(EFFECTIVE);
+  const info = eff?.info as { market_open?: string; market_close?: string; feed?: string } | undefined;
+  return {
+    hours: { open: info?.market_open ?? null, close: info?.market_close ?? null, feed: info?.feed ?? null },
+    effective: (eff?.effective as SettingsValues) ?? {},
+  };
+}
+
+function pick(values: SettingsValues): SettingsValues {
+  return Object.fromEntries(TUNABLE_KEYS.filter((k) => k in values).map((k) => [k, values[k]]));
 }
 
 function notReady() {
@@ -274,11 +319,12 @@ export async function updateSettings(
   changes: Record<string, unknown>,
   by: string
 ): Promise<{ version: number; values: SettingsValues }> {
-  const hours = await marketHours();
+  const { hours, effective } = await engineInfo();
   return withTraderTx(async (tx) => {
     const cur = await lockState(tx, SETTINGS);
     if (!cur) throw notReady();
-    const before = (cur.values as SettingsValues) ?? {};
+    // 새로 생긴 키(옛 엔진이 옮긴 설정에 없는 값)는 엔진 적용값으로 채운다
+    const before: SettingsValues = { ...pick(effective), ...((cur.values as SettingsValues) ?? {}) };
     const next = validateSettings(changes, before, hours);
     const diff = diffSettings(before, next);
     if (Object.keys(diff).length === 0) throw new HttpError(400, "NO_CHANGE", "바뀐 값이 없습니다.");
@@ -296,13 +342,14 @@ export async function updateSettings(
 
 /** 직전 설정으로 되돌린다 (그 값을 새 버전으로 저장). 호출하기 전에 2단계 인증을 확인한다. */
 export async function revertSettings(by: string): Promise<{ version: number; values: SettingsValues; restored: number }> {
-  const hours = await marketHours();
+  const { hours, effective } = await engineInfo();
   return withTraderTx(async (tx) => {
     const cur = await lockState(tx, SETTINGS);
     if (!cur) throw notReady();
     const prev = cur.previous as { version?: number; values?: SettingsValues } | null | undefined;
     if (!prev?.values) throw new HttpError(409, "NO_PREVIOUS", "되돌릴 직전 설정이 없습니다.");
-    const before = (cur.values as SettingsValues) ?? {};
+    // 새로 생긴 키(옛 엔진이 옮긴 설정에 없는 값)는 엔진 적용값으로 채운다
+    const before: SettingsValues = { ...pick(effective), ...((cur.values as SettingsValues) ?? {}) };
     const next = validateSettings(prev.values, before, hours);
     const version = Number(cur.version ?? 0) + 1;
     const restored = Number(prev.version ?? 0);

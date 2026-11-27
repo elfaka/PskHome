@@ -53,6 +53,10 @@ const BASE = {
   risk_max_spread_bps: "30",
   entry_cutoff: "15:00:00",
   eod_exit: "15:15:00",
+  universe_mode: "fixed",
+  universe_max_symbols: "10",
+  universe_pinned: null,
+  risk_max_open_positions: null,
 };
 
 const INFO = {
@@ -103,6 +107,33 @@ describe("validateSettings", () => {
     });
     // 같은 값(표기만 다른 것)은 바뀐 것으로 보지 않는다
     expect(svc.diffSettings(BASE, svc.validateSettings({ slippage_bps: "5.000" }, BASE, HOURS))).toEqual({});
+  });
+
+  it("validates the symbol selection settings", () => {
+    const next = svc.validateSettings(
+      { universe_mode: "auto", universe_max_symbols: "05", universe_pinned: " 005930, 000660,005930 ", risk_max_open_positions: "3" },
+      BASE,
+      { ...HOURS, feed: "stocksim" }
+    );
+    expect(next).toMatchObject({ universe_mode: "auto", universe_max_symbols: "5", universe_pinned: "005930,000660", risk_max_open_positions: "3" });
+    // 비우면 없음·제한 없음
+    expect(svc.validateSettings({ universe_pinned: "", risk_max_open_positions: null }, next, HOURS)).toMatchObject({
+      universe_pinned: null,
+      risk_max_open_positions: null,
+    });
+    const bad: Record<string, unknown>[] = [
+      { universe_mode: "random" },
+      { universe_max_symbols: "0" },
+      { universe_max_symbols: "11" },
+      { universe_max_symbols: null },
+      { universe_max_symbols: "1", universe_pinned: "005930,000660" }, // 항상 포함 > 최대
+      { universe_pinned: "0059;30" },
+      { risk_max_open_positions: "0" },
+      { risk_max_open_positions: "2.5" },
+    ];
+    for (const v of bad) expect(() => svc.validateSettings(v, BASE, HOURS), JSON.stringify(v)).toThrowError();
+    // 자동 선정은 실시세(stocksim)에서만
+    expect(() => svc.validateSettings({ universe_mode: "auto" }, BASE, { ...HOURS, feed: "synthetic" })).toThrowError(/stocksim/);
   });
 
   it("rejects unknown keys, bad formats, ranges and broken relations", () => {
@@ -183,6 +214,13 @@ describe("control actions", () => {
     db.state = { settings_effective: { effective: BASE } }; // 옛 엔진 (settings 없음)
     await expect(svc.updateSettings({ slippage_bps: "6" }, "web:owner")).rejects.toMatchObject({ status: 409, code: "ENGINE_NOT_READY" });
     expect(db.writes).toEqual([]);
+  });
+
+  it("fills keys missing from an older DB doc with the engine's applied values", async () => {
+    const { universe_mode: _m, universe_max_symbols: _x, universe_pinned: _p, risk_max_open_positions: _r, ...old } = BASE;
+    db.state.settings = { version: 1, values: old, previous: null };
+    await svc.updateSettings({ risk_max_open_positions: "3" }, "web:owner");
+    expect(writtenState("settings")).toMatchObject({ version: 2, values: { ...BASE, risk_max_open_positions: "3" } });
   });
 
   it("uses the engine's market hours for the time range", async () => {

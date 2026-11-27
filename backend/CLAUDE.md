@@ -206,6 +206,8 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
 - **조회 API** (`traderStatus.service.ts`): `status`(상태 신호·킬스위치·스위치·설정·알림) · `equity`(일별 추이 + MDD, SQL 창 함수) ·
   `strategies`(오늘 집계·최근 판단 40개) · `activity`(체결·주문 실패·위험 이벤트를 시간순으로).
   장 구간 `marketPhase`: 09:00~15:20 정규장 · 15:20~15:30 마감 동시호가(체결이 없다) · 그 밖. 시세 끊김 경고(`QUOTE_STALE`)는 정규장에서만 낸다.
+  `status.universe`: 엔진의 오늘 볼 종목(engine_state `universe` — 자동 선정 결과·제외 사유) + `watching`(지금 시세를 보는 종목, 목록 밖 보유 포함).
+  운영 설정에 종목 선정(`universe_mode`·`universe_max_symbols`·`universe_pinned`)과 `risk_max_open_positions` 가 있다 — DB 설정에 없는 새 키는 엔진 적용값으로 채워 검증한다.
 - **그래프·지표 API** (`traderCharts.service.ts`, 조회만):
   `chart?symbol=&interval=60|300`(그 종목 봉이 있는 마지막 KST 거래일의 봉·VWAP/SMA20 선·체결·신호·보유 시 손절/목표가·최신 지표와 VWAP 괴리) ·
   `scores?symbol=`(점수 전략 합계·가격/맥락/이슈 점수 추이, 기준선, 최신 항목별 점수) ·

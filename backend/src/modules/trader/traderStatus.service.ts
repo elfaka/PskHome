@@ -72,7 +72,7 @@ export function isMarketHours(now: Date): boolean {
 async function states(): Promise<Map<string, { value: Json | null; updatedAt: string | null; updatedBy: string | null }>> {
   const rows = await traderQuery<Row>(
     "SELECT `key`, `value`, updated_at, updated_by FROM engine_state WHERE `key` IN " +
-      "('heartbeat', 'killswitch', 'strategy_switches', 'settings', 'settings_effective')"
+      "('heartbeat', 'killswitch', 'strategy_switches', 'settings', 'settings_effective', 'universe')"
   );
   return new Map(
     rows.map((r) => [
@@ -105,6 +105,33 @@ function settingsState(eff: Json | null, doc: Json | null): TraderSettingsState 
     previousVersion: prev?.values ? Number(prev.version ?? 0) : null,
     envIgnored: Array.isArray(eff?.env_ignored) ? (eff.env_ignored as unknown[]).map(String) : [],
     info: (eff?.info as Record<string, unknown>) ?? null,
+  };
+}
+
+/** 오늘 볼 종목 (엔진 engine_state universe) + 지금 실제로 보는 종목 (선정 밖 보유 종목 포함) */
+function universeState(doc: Json | null, settings: TraderSettingsState | null): TraderStatus["universe"] {
+  const watching = ((settings?.info as Json | null)?.symbols as unknown[] | undefined)?.map(String) ?? [];
+  if (!doc && watching.length === 0) return null;
+  const picks = Array.isArray(doc?.symbols) ? (doc!.symbols as Json[]) : [];
+  return {
+    date: str(doc?.date),
+    mode: str(doc?.mode),
+    source: str(doc?.source),
+    at: iso(doc?.at),
+    symbols: picks.map((p) => ({
+      symbol: String(p.symbol ?? ""),
+      name: str(p.name),
+      score: str(p.score),
+      foreigner: str(p.foreigner),
+      institution: str(p.institution),
+      pinned: Boolean(p.pinned),
+    })),
+    excluded: (Array.isArray(doc?.excluded) ? (doc!.excluded as Json[]) : []).slice(0, 30).map((e) => ({
+      symbol: String(e.symbol ?? ""),
+      name: str(e.name),
+      reason: String(e.reason ?? ""),
+    })),
+    watching,
   };
 }
 
@@ -186,6 +213,7 @@ export async function getStatus(now = new Date()): Promise<TraderStatus> {
       Object.entries((switchesDoc?.values as Record<string, unknown>) ?? {}).map(([k, v]) => [k, Boolean(v)])
     ),
     settings,
+    universe: universeState(st.get("universe")?.value ?? null, settings),
     alerts,
   };
 }
@@ -291,6 +319,7 @@ const INFO_EVENTS = new Set([
   "SETTINGS_REVERT",
   "SETTINGS_APPLIED",
   "SETTINGS_SEEDED",
+  "UNIVERSE_SELECTED",
 ]);
 
 const EVENT_TEXT: Record<string, string> = {
@@ -303,6 +332,7 @@ const EVENT_TEXT: Record<string, string> = {
   SETTINGS_REJECTED: "설정 거부",
   SETTINGS_REVERT: "직전 설정으로 되돌림",
   SETTINGS_SEEDED: "trader.env 설정을 DB 로 옮김",
+  UNIVERSE_SELECTED: "오늘의 종목 선정",
   DATA_INVALID: "잘못된 시세",
   DATA_GAP: "봉 누락",
   CANCEL_FAILED: "주문 취소 실패",
@@ -321,6 +351,7 @@ function eventMessage(kind: string, detail: Json | null): string {
     }
     if (detail[k] != null) parts.push(`${k === "by" ? "by " : ""}${String(detail[k])}`);
   }
+  if (Array.isArray(detail.symbols)) parts.push((detail.symbols as unknown[]).map(String).join(", "));
   if (detail.diff && typeof detail.diff === "object") {
     parts.push(Object.entries(detail.diff as Record<string, [string, string]>).map(([k, [a, b]]) => `${k} ${a}→${b}`).join(", "));
   }

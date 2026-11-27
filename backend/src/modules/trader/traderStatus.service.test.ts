@@ -202,3 +202,50 @@ describe("trader status", () => {
     for (const q of db.queries) expect(q.sql.trimStart().toUpperCase().startsWith("SELECT")).toBe(true);
   });
 });
+
+describe("today's symbols", () => {
+  it("reports the engine's selection and what it is watching (incl. held symbols outside the list)", async () => {
+    db.answer = (sql) => {
+      if (sql.includes("FROM engine_state"))
+        return stateRows({
+          heartbeat: { at: "2026-11-27T00:59:58Z", db_ok: true },
+          killswitch: { halted: false },
+          settings_effective: { effective: {}, applied_version: 1, info: { symbols: ["005930", "036930", "035420"] } },
+          universe: {
+            date: "2026-11-27",
+            mode: "auto",
+            source: "rankings",
+            at: "2026-11-26T23:50:00+00:00",
+            symbols: [
+              { symbol: "005930", name: "삼성전자", score: "350000000", foreigner: "400000000", institution: "-50000000", pinned: false },
+              { symbol: "036930", name: "주성엔지니어링", score: "250000000", foreigner: "100000000", institution: "150000000", pinned: false },
+            ],
+            excluded: [{ symbol: "069500", name: "KODEX 200", reason: "주식 아님 (ETF)" }],
+          },
+        });
+      return [];
+    };
+    const s = await svc.getStatus(NOW);
+    expect(s.universe).toEqual({
+      date: "2026-11-27",
+      mode: "auto",
+      source: "rankings",
+      at: "2026-11-26T23:50:00.000Z",
+      symbols: [
+        { symbol: "005930", name: "삼성전자", score: "350000000", foreigner: "400000000", institution: "-50000000", pinned: false },
+        { symbol: "036930", name: "주성엔지니어링", score: "250000000", foreigner: "100000000", institution: "150000000", pinned: false },
+      ],
+      excluded: [{ symbol: "069500", name: "KODEX 200", reason: "주식 아님 (ETF)" }],
+      watching: ["005930", "036930", "035420"],
+    });
+  });
+
+  it("labels the daily selection in the activity log", async () => {
+    db.answer = (sql) =>
+      sql.includes("FROM risk_events")
+        ? [{ id: 3, ts: "2026-11-26 23:50:00.000000", kind: "UNIVERSE_SELECTED", symbol: null, detail: JSON.stringify({ symbols: ["005930", "036930"] }) }]
+        : [];
+    const items = await svc.listActivity("paper-default", 10);
+    expect(items[0]).toMatchObject({ level: "info", message: "오늘의 종목 선정 · 005930, 036930" });
+  });
+});

@@ -169,6 +169,16 @@ export interface TraderStatus {
   marketPhase: "continuous" | "closing_auction" | "closed";
   switches: Record<string, boolean>;
   settings: TraderSettingsState | null;
+  /** 오늘 볼 종목 (자동 선정·고정). watching = 엔진이 지금 시세를 보는 종목 (선정 밖 보유 종목 포함) */
+  universe: {
+    date: string | null;
+    mode: string | null;
+    source: string | null;
+    at: string | null;
+    symbols: { symbol: string; name: string | null; score: Dec | null; foreigner: Dec | null; institution: Dec | null; pinned: boolean }[];
+    excluded: { symbol: string; name: string | null; reason: string }[];
+    watching: string[];
+  } | null;
   alerts: TraderAlert[];
 }
 
