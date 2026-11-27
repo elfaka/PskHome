@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Collection
 from decimal import Decimal
 from typing import Protocol
 
@@ -46,7 +46,7 @@ class Broker(Protocol):
 
     async def list_open_orders(self) -> list[OrderState]: ...
 
-    def subscribe_quotes(self, symbols: list[str]) -> AsyncIterator[Quote]: ...
+    def subscribe_quotes(self, symbols: Collection[str]) -> AsyncIterator[Quote]: ...
 
     def subscribe_executions(self) -> AsyncIterator[ExecutionEvent]: ...
 

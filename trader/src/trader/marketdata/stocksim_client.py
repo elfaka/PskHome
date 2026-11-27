@@ -26,6 +26,8 @@ ALLOWED_PATHS = (
     "/stocks/{symbol}/investors/intraday",
     "/stocks/{symbol}/overview",
     "/market",
+    "/rankings/investors",  # 종목 자동 선정 (외국인·기관 순매수 상위)
+    "/chart/{symbol}",  # 새로 들어온 종목의 지표 미리 채우기 (1분봉)
 )
 
 
@@ -115,3 +117,20 @@ class StockSimClient:
         if not isinstance(data, dict):
             raise StockSimError("market 응답 형식 오류")
         return data
+
+    async def investor_rankings(self, investor: str) -> dict[str, Any]:
+        """{investor, rankedAt, netBuy: [{rank, symbol, name, amount, price}], netSell: [...]} (investor: foreigner|institution)"""
+        if investor not in ("foreigner", "institution"):
+            raise StockSimError(f"investor 값 오류: {investor!r}")
+        data = await self._get("/rankings/investors", {"investor": investor})
+        if not isinstance(data, dict):
+            raise StockSimError("rankings 응답 형식 오류")
+        return data
+
+    async def candles_1m(self, symbol: str) -> list[dict[str, Any]]:
+        """최근 1분봉 [{time, open, high, low, close, volume}] (오래된 것부터)."""
+        data = await self._get(f"/chart/{symbol}", {"timeframe": "1m"})
+        candles = data.get("candles") if isinstance(data, dict) else None
+        if not isinstance(candles, list):
+            raise StockSimError("chart 응답 형식 오류")
+        return candles

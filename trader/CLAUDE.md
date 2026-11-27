@@ -26,6 +26,7 @@ trader/
 │   ├── execution/gateway.py  # 주문이 브로커로 가는 유일한 경로
 │   ├── storage/           # models(테이블), store(SqlTradingStore), db(엔진·인스턴스 락)
 │   ├── control.py         # 운영 설정(DB 원본)·첫 옮기기(resolve_settings)·실시간 반영, 전략 스위치, 적용값·상태 신호 기록 (engine_state)
+│   ├── universe.py        # 오늘 볼 종목: 고정 또는 외국인·기관 순매수 상위 자동 선정 (하루 1번, engine_state universe)
 │   ├── recovery.py        # 재시작 복구
 │   ├── engine.py          # 시세 루프·체결 루프·감시 루프
 │   ├── app.py             # 설정 → 엔진 조립, 스키마 버전 확인
@@ -90,6 +91,20 @@ trader/
 - 검증에 실패하면 이전 값을 유지하고 `SETTINGS_REJECTED` 를 남긴다. 적용하면 `SETTINGS_APPLIED`(바뀐 값).
 - 웹 조작은 `risk_events` 에 HALT/RESUME/STRATEGY_ON/OFF/SETTINGS_CHANGE/SETTINGS_REVERT 로 남는다 (`by` = `web:<아이디>`).
 - 웹 계정 `trader_web` 의 쓰기 권한은 `engine_state`(INSERT·UPDATE)·`risk_events`(INSERT)뿐 (`db/grant_web_control.sql`).
+
+### 종목 선정 (`universe.py`, 사용자 결정 2026-11-27: 순매수 기준 · 하루 1번 · 동시 보유 3)
+
+- 운영 설정(DB): `universe_mode`(fixed|auto) · `universe_max_symbols`(1~10) · `universe_pinned`(항상 포함) · `risk_max_open_positions`(비우면 제한 없음).
+  auto 는 feed=stocksim 일 때만 (Settings 검증).
+- auto: 평일 KST 08:50 이후 그날 선정이 없으면 `/api/stocksim/rankings/investors`(외국인·기관)로 고른다. 점수 = 순매수 합(순매도는 뺌).
+  거르기(종목 개요): STOCK 만(ETF·ETN 제외)·거래정지 제외·1주 > 1회 매수 금액 제외·상한가 근접 제외. 최종 = 항상 포함 + 순위, 최대 N개.
+  조건(모드·N·항상 포함·1회 매수 금액)이 바뀌면 바로 다시 고른다. 실패하면 직전 선정 유지 + 5분 뒤 재시도.
+- 결과는 engine_state `universe`(화면 "오늘의 종목") + risk_events `UNIVERSE_SELECTED`. 같은 날 재시작하면 저장된 선정을 쓴다.
+- 엔진은 `Engine.active`(set) 를 본다. 바뀌면 `set_symbols`: 시세 피드·시장 맥락 종목 교체, 새 종목은 DB 봉(부족하면 백엔드 1분봉)으로 지표를 채운다
+  (과거 봉으로 판단·주문하지 않는다). 보유·미체결 종목은 목록에서 빠져도 청산까지 계속 본다.
+- 동시 보유 한도(`MAX_OPEN_POSITIONS`): 신규 매수 때 보유 또는 미체결 매수가 있는 **다른** 종목 수 ≥ 한도면 거부. 같은 종목 추가 매수·매도는 막지 않는다.
+- 시세 폴링은 종목을 최대 4개씩 동시에 받는다. 한 번에 모두 실패하면 대기를 늘린다(최대 30초). 토스 체결·호가 호출 한도는 확인되지 않았다 —
+  10종목 × 3초에 2번(백엔드 2초 캐시). 운영 백엔드 로그에 `[toss] 429` 가 보이면 종목 수를 줄인다.
 
 ## 안전 규칙 (깨면 안 된다)
 
@@ -156,7 +171,7 @@ trader/
   - 모델 선택(다른 대화의 `gpt-6.2-sol`·`gpt-6-luna`·`gpt-6.2-astra` 등)은 착수 때 공식 문서로 확인한다.
 - **4단계 LightGBM**: 시간 순서 분할 검증. 규칙만 / +LLM / +ML 을 가상매매로 비교(`strategy_id`·그림자 전략으로 구분),
   지표는 적중률이 아니라 거래당 기대수익·MDD·손익비·비용 차감 후 수익.
-- **종목 스캐너** (2단계 이후): 거래대금·변동성으로 1차 후보 → 상위 10~20개 → 점수 → 최종 후보.
+- **종목 스캐너** (1차 완료 2026-11-27: 외국인·기관 순매수 상위 자동 선정, 아래 "종목 선정"). 다음 후보: 거래대금·변동성 기준 (토스 API 확인 필요).
 - **알림** (5단계): 체결·오류·엔진 중단을 텔레그램 등으로.
 - AI 는 점수·의견만 낸다. 주문 여부·금액은 규칙 코드(전략 + RiskManager)가 정한다. AI 에 API 키·브로커·게이트웨이를 주지 않는다.
   AI 실패 시 매매하지 않는다.

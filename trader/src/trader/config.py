@@ -118,17 +118,26 @@ class Settings(BaseSettings):
     # 매수 1회에 쓸 금액. 수량 = floor(금액 / 종가)
     strategy_order_value: PosDecimal
 
+    # ── 종목 선정 (운영 설정 — DB) ────────────────────────────────────────
+    # fixed: TRADER_SYMBOLS 고정 / auto: 외국인·기관 순매수 상위에서 매일 장 시작 전에 고른다 (feed=stocksim 만)
+    universe_mode: Literal["fixed", "auto"] = "fixed"
+    universe_max_symbols: int = Field(default=10, ge=1, le=10)
+    # auto 에서 항상 포함할 종목 (순위와 무관)
+    universe_pinned: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # 동시에 보유(또는 미체결 매수)할 수 있는 종목 수. 비우면 제한 없음
+    risk_max_open_positions: int | None = Field(default=None, ge=1, le=20)
+
     # ── 엔진 ──────────────────────────────────────────────────────────────
     killswitch_poll_seconds: Decimal = Decimal(1)
     health_check_seconds: Decimal = Decimal(5)
     quote_flush_size: int = Field(default=200, ge=1)
 
-    @field_validator("entry_cutoff", "eod_exit", mode="before")
+    @field_validator("entry_cutoff", "eod_exit", "risk_max_open_positions", mode="before")
     @classmethod
     def _blank_is_off(cls, v: object) -> object:
         return None if isinstance(v, str) and not v.strip() else v
 
-    @field_validator("symbols", "strategies", "shadow_strategies", mode="before")
+    @field_validator("symbols", "strategies", "shadow_strategies", "universe_pinned", mode="before")
     @classmethod
     def _split_symbols(cls, v: object) -> object:
         if isinstance(v, str):
@@ -140,10 +149,12 @@ class Settings(BaseSettings):
     def _check_symbols(cls, v: list[str]) -> list[str]:
         if not v:
             raise ValueError("종목이 하나 이상 필요하다")
-        for s in v:
-            if not s.isalnum() or len(s) > 16:  # 종목 코드
-                raise ValueError(f"종목 코드 형식이 아니다: {s!r}")
-        return v
+        return _check_codes(v)
+
+    @field_validator("universe_pinned")
+    @classmethod
+    def _check_pinned(cls, v: list[str]) -> list[str]:
+        return list(dict.fromkeys(_check_codes(v)))  # 중복 제거, 순서 유지
 
     @model_validator(mode="after")
     def _check(self) -> Settings:
@@ -179,11 +190,22 @@ class Settings(BaseSettings):
                 )
         if self.entry_cutoff is not None and self.eod_exit is not None and self.entry_cutoff > self.eod_exit:
             raise ValueError("entry_cutoff 는 eod_exit 보다 늦을 수 없다")
+        if self.universe_mode == "auto" and self.feed != "stocksim":
+            raise ValueError("universe_mode=auto 는 feed=stocksim 에서만 쓸 수 있다 (순위 데이터가 필요하다)")
+        if len(self.universe_pinned) > self.universe_max_symbols:
+            raise ValueError("항상 포함 종목 수가 universe_max_symbols 보다 많다")
         return self
 
     def secret_values(self) -> list[str]:
         """로그 마스킹 대상 비밀값."""
         return _db_secrets(self.database_url)
+
+
+def _check_codes(v: list[str]) -> list[str]:
+    for s in v:
+        if not s.isalnum() or len(s) > 16:  # 종목 코드
+            raise ValueError(f"종목 코드 형식이 아니다: {s!r}")
+    return v
 
 
 def _db_secrets(url: SecretStr) -> list[str]:
@@ -231,7 +253,7 @@ _EnvValues: type[BaseSettings] = create_model(  # type: ignore[call-overload]
 
 
 # 빈 값이 "끔"을 뜻하는 설정 — 빈 값도 적힌 값으로 둔다 (빼면 기본값 15:00·15:15 가 살아난다)
-BLANK_MEANS_OFF = frozenset({"entry_cutoff", "eod_exit"})
+BLANK_MEANS_OFF = frozenset({"entry_cutoff", "eod_exit", "risk_max_open_positions", "universe_pinned"})
 
 
 def load_env_values(env_file: str | None = ".env") -> dict[str, Any]:

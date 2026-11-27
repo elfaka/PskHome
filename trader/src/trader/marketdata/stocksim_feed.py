@@ -66,6 +66,10 @@ class _Cursor:
         return fresh
 
 
+POLL_CONCURRENCY = 4
+MAX_BACKOFF_S = 30.0
+
+
 class StockSimFeed:
     source = "stocksim"
 
@@ -80,13 +84,22 @@ class StockSimFeed:
         poll_end: time,
     ) -> None:
         self.client = client
-        self.symbols = symbols
+        self.symbols = list(symbols)
         self.clock = clock
         self.poll_seconds = poll_seconds
         self.poll_start = poll_start
         self.poll_end = poll_end
         self._cursors = {s: _Cursor() for s in symbols}
         self._last_warn = 0.0
+        # 한 번의 폴링에서 모든 종목이 실패하면 대기를 늘린다 (백엔드·토스 장애·호출 한도)
+        self._backoff = 0.0
+        self._sem = asyncio.Semaphore(POLL_CONCURRENCY)
+
+    def set_symbols(self, symbols: list[str]) -> None:
+        """폴링할 종목을 바꾼다 (자동 종목 선정). 새 종목은 처음 받는 체결부터 시세로 낸다."""
+        self.symbols = list(symbols)
+        for s in symbols:
+            self._cursors.setdefault(s, _Cursor())
 
     def start_time(self) -> datetime | None:
         return None  # 실시간 공급
@@ -95,9 +108,9 @@ class StockSimFeed:
         k = to_kst(self.clock.now())
         return k.weekday() < 5 and self.poll_start <= k.time() < self.poll_end
 
-    async def poll_once(self) -> list[Quote]:
-        out: list[Quote] = []
-        for sym in self.symbols:
+    async def _poll_symbol(self, sym: str) -> list[Quote] | None:
+        """한 종목의 새 체결. 실패하면 None."""
+        async with self._sem:
             try:
                 trades_raw, book = await asyncio.gather(self.client.trades(sym), self.client.orderbook(sym))
                 trades = sorted(
@@ -107,12 +120,25 @@ class StockSimFeed:
                 bid, ask = best_bid_ask(book)
             except (StockSimError, KeyError, TypeError, ArithmeticError) as e:
                 self._warn(f"stocksim poll failed for {sym}: {e}")
+                return None
+        out: list[Quote] = []
+        for ts, price, volume in self._cursors.setdefault(sym, _Cursor()).new_trades(trades):
+            if price <= 0 or volume < 0:
+                self._warn(f"잘못된 체결 무시: {sym} {price} {volume}")
                 continue
-            for ts, price, volume in self._cursors[sym].new_trades(trades):
-                if price <= 0 or volume < 0:
-                    self._warn(f"잘못된 체결 무시: {sym} {price} {volume}")
-                    continue
-                out.append(Quote(sym, ts, price, volume, bid=bid, ask=ask, source=self.source))
+            out.append(Quote(sym, ts, price, volume, bid=bid, ask=ask, source=self.source))
+        return out
+
+    async def poll_once(self) -> list[Quote]:
+        # 종목을 동시에 받는다 (최대 POLL_CONCURRENCY 개씩) — 10종목을 차례로 받으면 한 바퀴가 길어져 시세가 늦는다
+        symbols = list(self.symbols)
+        results = await asyncio.gather(*(self._poll_symbol(s) for s in symbols))
+        failed = sum(1 for r in results if r is None)
+        if symbols and failed == len(symbols):
+            self._backoff = min(MAX_BACKOFF_S, max(self.poll_seconds, self._backoff * 2))
+        else:
+            self._backoff = 0.0
+        out = [q for r in results if r for q in r]
         out.sort(key=lambda q: q.ts)
         return out
 
@@ -128,7 +154,7 @@ class StockSimFeed:
                 if self._in_window():
                     for q in await self.poll_once():
                         yield q
-                    await asyncio.sleep(self.poll_seconds)
+                    await asyncio.sleep(self.poll_seconds + self._backoff)
                 else:
                     await asyncio.sleep(30)
         finally:

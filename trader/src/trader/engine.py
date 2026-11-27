@@ -25,6 +25,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -33,7 +35,7 @@ from trader.broker.base import Broker, OrderNotFound
 from trader.broker.paper import PaperBroker
 from trader.clock import KST, Clock, SimClock, kst_trade_date, to_kst
 from trader.control import HEARTBEAT_KEY, RuntimeControls, SettingsChange, fee_schedule, risk_limits
-from trader.domain import ExecKind, ExecutionEvent, OrderStatus, Quote, Side
+from trader.domain import Bar, ExecKind, ExecutionEvent, OrderStatus, Quote, Side
 from trader.execution.gateway import FatalEngineError, OrderGateway, OrderIntent
 from trader.indicators import IndicatorBook
 from trader.logging_setup import log_fields
@@ -48,6 +50,7 @@ from trader.risk.manager import RiskContext, RiskManager, equity
 from trader.storage.db import InstanceLock
 from trader.storage.store import TradingStore
 from trader.strategy.base import ORDER_ACTIONS, Decision, MarketView, PortfolioView, Strategy
+from trader.universe import UniverseController
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +106,9 @@ class Engine:
         context: ContextProvider | None = None,
         controls: RuntimeControls | None = None,
         info: dict[str, object] | None = None,
+        universe: UniverseController | None = None,
+        on_symbols: Callable[[list[str]], None] | None = None,
+        candles: Callable[[str], Awaitable[list[Bar]]] | None = None,
     ) -> None:
         if sum(1 for s in strategies if not s.shadow) > 1:
             raise ValueError("주문하는 전략은 하나만 둘 수 있다")
@@ -123,7 +129,12 @@ class Engine:
         self.quotes: dict[str, Quote] = {}
         self.bars = BarAggregator(cfg.bar_interval_s)
         self.extra_bars = [BarAggregator(i) for i in cfg.extra_bar_intervals]
-        self.indicators: dict[str, IndicatorBook] = {s: IndicatorBook() for s in cfg.symbols}
+        # 지금 시세·판단을 보는 종목 (자동 선정이면 바뀐다). 브로커 시세 구독이 이 set 을 그대로 참조한다
+        self.active: set[str] = set(cfg.symbols)
+        self.universe = universe
+        self._on_symbols = on_symbols
+        self._candles = candles
+        self.indicators: defaultdict[str, IndicatorBook] = defaultdict(IndicatorBook)
         self.positions: dict[str, Decimal] = {}
         self.protect: dict[str, _Protect] = {}
         self.exits = _ExitState()
@@ -176,12 +187,13 @@ class Engine:
         self._load_positions()
         self._restore_shadow_positions()
         self._warm_up()
+        await self._refresh_universe()
         exec_task = asyncio.create_task(self._execution_loop(), name="executions")
         watch_task = asyncio.create_task(self._watch_loop(), name="watchdog")
         ctx_task = asyncio.create_task(self.context.run(), name="context")
         code = EXIT_OK
         try:
-            async for q in self.broker.subscribe_quotes(self.cfg.symbols):
+            async for q in self.broker.subscribe_quotes(self.active):
                 self._raise_if_fatal(exec_task)
                 await self._on_quote(q)
                 # 이 시세로 생긴 체결 이벤트를 먼저 반영하게 차례를 넘긴다
@@ -224,19 +236,84 @@ class Engine:
 
     def _warm_up(self) -> None:
         """DB 에 쌓인 최근 봉으로 지표·전략을 채운다. 다음 봉과 이어지지 않으면 누락 감지가 다시 초기화한다."""
-        need = max(s.strategy.warmup_bars for s in self.strategies)
-        for sym in self.cfg.symbols:
+        for sym in sorted(self.active):
+            self._feed_history(sym, self._db_bars(sym))
+
+    @property
+    def _need_bars(self) -> int:
+        return max(max(s.strategy.warmup_bars for s in self.strategies), 40)
+
+    def _db_bars(self, sym: str) -> list[Bar]:
+        try:
+            return list(self.store.recent_bars(sym, self.cfg.bar_interval_s, self._need_bars))
+        except Exception:
+            log.exception("warm-up read failed", extra=log_fields(symbol=sym))
+            return []
+
+    def _feed_history(self, sym: str, bars: list[Bar]) -> None:
+        view = PortfolioView(ZERO, ZERO, ZERO)
+        for b in bars:
+            snap = self.indicators[sym].add(b)
+            for slot in self.strategies:
+                # 판단은 버린다 — 과거 봉으로 주문하지 않는다
+                slot.strategy.on_bar(b, view, MarketView(now=b.start_ts, indicators=snap))
+
+    async def _warm_up_new(self, sym: str) -> None:
+        """새로 들어온 종목: DB 봉, 부족하면 백엔드 1분봉으로 지표를 채운다 (진행 중인 봉은 쓰지 않는다)."""
+        bars = self._db_bars(sym)
+        if len(bars) < self._need_bars and self._candles is not None and self.cfg.bar_interval_s == 60:
             try:
-                bars = self.store.recent_bars(sym, self.cfg.bar_interval_s, max(need, 40))
-            except Exception:
-                log.exception("warm-up read failed", extra=log_fields(symbol=sym))
-                continue
-            view = PortfolioView(ZERO, ZERO, ZERO)
-            for b in bars:
-                snap = self.indicators[sym].add(b)
-                for slot in self.strategies:
-                    # 판단은 버린다 — 과거 봉으로 주문하지 않는다
-                    slot.strategy.on_bar(b, view, MarketView(now=b.start_ts, indicators=snap))
+                fetched = await self._candles(sym)
+            except Exception as e:
+                log.warning("candle warm-up failed", extra=log_fields(symbol=sym, err=str(e)[:200]))
+                fetched = []
+            current = bucket_start(self.clock.now(), self.cfg.bar_interval_s)
+            done = [b for b in fetched if b.start_ts < current]
+            if len(done) > len(bars):
+                bars = done[-self._need_bars :]
+        self._feed_history(sym, bars)
+
+    # ── 종목 (자동 선정) ─────────────────────────────────────────────────
+
+    def _held_symbols(self) -> set[str]:
+        held = {s for s, q in self.positions.items() if q > 0}
+        try:
+            held |= {o.symbol for o in self.store.list_open_orders(self.account_id)}
+        except Exception as e:
+            self._db_failed("list_open_orders", e)
+        return held
+
+    async def _refresh_universe(self) -> None:
+        if self.universe is None or self.controls is None:
+            return
+        try:
+            new = await self.universe.maybe_refresh(
+                self.controls.current, self._held_symbols(), self.clock.now()
+            )
+        except Exception as e:
+            log.warning("universe refresh failed", extra=log_fields(err=str(e)[:200]))
+            return
+        if new is None:
+            return
+        await self.set_symbols(new)
+
+    async def set_symbols(self, symbols: list[str]) -> None:
+        """볼 종목을 바꾼다. 새 종목은 지표를 채우고, 빠진 종목은 시세·판단을 멈춘다 (보유 종목은 universe 가 남겨 둔다)."""
+        added = [s for s in symbols if s not in self.active]
+        removed = sorted(self.active - set(symbols))
+        for sym in added:
+            await self._warm_up_new(sym)
+        self.active.clear()
+        self.active.update(symbols)
+        for sym in removed:
+            self.health.data_issues.pop(sym, None)
+            self._recovering.pop(sym, None)
+        if self._on_symbols is not None:
+            self._on_symbols(list(symbols))
+        self.info["symbols"] = list(symbols)
+        if self.controls is not None:
+            self.controls.publish(self.clock.now(), dict(self.info))
+        log.warning("symbols changed", extra=log_fields(symbols=list(symbols), added=added, removed=removed))
 
     # ── 시세 ─────────────────────────────────────────────────────────────
 
@@ -631,6 +708,7 @@ class Engine:
                 self._db_failed("ping", e)
             await self._poll_killswitch()
             self._poll_controls()
+            await self._refresh_universe()
             self._heartbeat()
 
     async def _poll_killswitch(self) -> None:

@@ -63,9 +63,15 @@ TUNABLE: tuple[str, ...] = (
     "risk_max_spread_bps",
     "entry_cutoff",
     "eod_exit",
+    "universe_mode",
+    "universe_max_symbols",
+    "universe_pinned",
+    "risk_max_open_positions",
 )
-# 값이 null 이면 "끔"인 설정
-NULLABLE: frozenset[str] = frozenset({"entry_cutoff", "eod_exit"})
+# 값이 null(빈 값)이면 "끔·없음"인 설정
+NULLABLE: frozenset[str] = frozenset(
+    {"entry_cutoff", "eod_exit", "universe_pinned", "risk_max_open_positions"}
+)
 
 
 class SettingsUnavailableError(Exception):
@@ -79,6 +85,8 @@ def _text(v: object) -> str | None:
         return format(v, "f")
     if isinstance(v, time):
         return v.strftime("%H:%M:%S")
+    if isinstance(v, list):
+        return ",".join(str(x) for x in v) or None
     return str(v)
 
 
@@ -367,6 +375,7 @@ def risk_limits(s: Settings) -> RiskLimits:
         max_spread_bps=s.risk_max_spread_bps,
         near_upper_limit_pct=s.risk_near_upper_limit_pct,
         price_decimals=s.price_decimals,
+        max_open_positions=s.risk_max_open_positions,
     )
 
 

@@ -56,6 +56,8 @@ class RiskLimits:
     near_upper_limit_pct: Decimal = Decimal("0.02")
     # 손절·목표가를 호가 자릿수로 맞춘다 (원화 0). 손절은 올림, 목표는 내림 — 둘 다 보수적으로
     price_decimals: int = 0
+    # 동시에 보유(또는 미체결 매수)할 수 있는 종목 수. None 이면 제한 없음. 이미 가진 종목 추가 매수는 세지 않는다
+    max_open_positions: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +198,17 @@ class RiskManager:
             return self._reject(
                 "MAX_ORDER_VALUE", f"1회 주문 한도 초과 ({value} > {lim.max_order_value})", value
             )
+
+        # 7-1) 동시 보유 종목 수 (이 종목을 빼고, 보유 중이거나 미체결 매수가 있는 종목)
+        if lim.max_open_positions is not None and held + same_side_open == ZERO:
+            others = {s for s, p in ctx.balance.positions.items() if p.qty > 0 and s != req.symbol}
+            others |= {o.symbol for o in ctx.open_orders if o.side is Side.BUY and o.symbol != req.symbol}
+            if len(others) >= lim.max_open_positions:
+                return self._reject(
+                    "MAX_OPEN_POSITIONS",
+                    f"동시 보유 종목 수 한도 ({len(others)} >= {lim.max_open_positions})",
+                    value,
+                )
 
         # 8) 종목별 보유 한도 (보유 + 미체결 매수 + 이번 주문)
         exposure = (held + same_side_open + req.qty) * ref

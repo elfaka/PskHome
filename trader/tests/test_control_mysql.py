@@ -237,3 +237,46 @@ def test_env_values_read_a_real_env_file_with_other_keys(tmp_path: Path) -> None
         "eod_exit": "15:15",
         "entry_cutoff": "",
     }
+
+
+async def test_engine_switches_symbols_and_warms_new_ones(mysql_url: str, db_engine: Engine) -> None:
+    from datetime import timedelta
+
+    from trader.domain import Bar
+    from trader.universe import UNIVERSE_KEY
+
+    eng = build_engine(settings(mysql_url), db=db_engine, take_lock=False)
+    seen: list[list[str]] = []
+    eng._on_symbols = seen.append
+    start = eng.clock.now() - timedelta(minutes=60)
+
+    async def candles(sym: str) -> list[Bar]:
+        return [
+            Bar(
+                sym,
+                60,
+                start + timedelta(minutes=i),
+                Decimal(100 + i),
+                Decimal(102 + i),
+                Decimal(99 + i),
+                Decimal(101 + i),
+                Decimal(10),
+            )
+            for i in range(50)
+        ]
+
+    eng._candles = candles
+    # 고정 모드에서도 오늘 볼 종목을 기록한다
+    await eng._refresh_universe()
+    assert state(db_engine, UNIVERSE_KEY)["mode"] == "fixed"
+
+    await eng.set_symbols(["005930", "000660"])
+    assert eng.active == {"005930", "000660"} and seen == [["005930", "000660"]]
+    # 새 종목은 1분봉으로 지표가 채워져 있다 (과거 봉으로 판단·주문하지 않는다)
+    assert eng.indicators["000660"].last is not None and eng.indicators["000660"].last.atr14 is not None
+    assert scalar(db_engine, "SELECT COUNT(*) FROM strategy_decisions WHERE symbol = '000660'") == 0
+    assert state(db_engine, EFFECTIVE_KEY)["info"]["symbols"] == ["005930", "000660"]
+
+    eng.health.data_issues["000660"] = "봉 누락 3개"
+    await eng.set_symbols(["005930"])
+    assert eng.active == {"005930"} and "000660" not in eng.health.data_issues

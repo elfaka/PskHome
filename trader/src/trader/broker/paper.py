@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Collection
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
@@ -230,8 +230,9 @@ class PaperBroker:
 
     # ── 실시간 ───────────────────────────────────────────────────────────
 
-    async def subscribe_quotes(self, symbols: list[str]) -> AsyncIterator[Quote]:
-        wanted = set(symbols)
+    async def subscribe_quotes(self, symbols: Collection[str]) -> AsyncIterator[Quote]:
+        # set 을 넘기면 그대로 참조한다 — 엔진이 종목을 바꾸면 (자동 선정) 바로 반영된다
+        wanted = symbols if isinstance(symbols, set) else set(symbols)
         try:
             async for q in self._feed.stream():
                 if q.symbol not in wanted:
