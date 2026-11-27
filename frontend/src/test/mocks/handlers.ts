@@ -114,6 +114,7 @@ const TUNED_BASE = {
   risk_max_position_value: "5000000", risk_daily_loss_limit: "300000", risk_atr_stop_mult: "1.5",
   risk_atr_take_mult: "3", risk_min_risk_reward: "1.5", risk_max_spread_bps: "30",
   entry_cutoff: "15:00:00", eod_exit: "15:15:00",
+  universe_mode: "auto", universe_max_symbols: "10", universe_pinned: "005930", risk_max_open_positions: "3",
 };
 
 export const mockTraderStatus = {
@@ -145,6 +146,18 @@ export const mockTraderStatus = {
       strategies: [{ id: "ma_cross", shadow: false }, { id: "intraday_score", shadow: true }],
       paper_initial_cash: "10000000", bar_interval_seconds: 60, market_open: "09:00:00", market_close: "15:20:00",
     },
+  },
+  universe: {
+    date: "2026-11-26",
+    mode: "auto",
+    source: "rankings",
+    at: "2026-11-25T23:50:00.000Z",
+    symbols: [
+      { symbol: "005930", name: "삼성전자", score: null, foreigner: null, institution: null, pinned: true },
+      { symbol: "000660", name: "SK하이닉스", score: "35012345678", foreigner: "30000000000", institution: "5012345678", pinned: false },
+    ],
+    excluded: [{ symbol: "069500", name: "KODEX 200", reason: "주식 아님 (ETF)" }],
+    watching: ["005930", "000660", "035420"],
   },
   alerts: [],
 };

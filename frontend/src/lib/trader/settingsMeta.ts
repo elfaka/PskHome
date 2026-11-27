@@ -4,7 +4,7 @@
  * 모두 엔진 재시작 없이 약 5초 안에 다음 판단부터 적용된다.
  */
 
-export type SettingUnit = "rate" | "krw" | "bps" | "ratio" | "mult" | "enum" | "time";
+export type SettingUnit = "rate" | "krw" | "bps" | "ratio" | "mult" | "enum" | "time" | "count" | "symbols";
 
 export interface SettingMeta {
   key: string;
@@ -14,6 +14,9 @@ export interface SettingMeta {
   up: string;
   down: string;
   options?: { value: string; label: string }[];
+  /** 비울 수 있는 설정 — 비우면 이 뜻 (예: "제한 없음") */
+  emptyLabel?: string;
+  placeholder?: string;
 }
 
 export interface SettingGroup {
@@ -115,6 +118,16 @@ export const SETTING_GROUPS: SettingGroup[] = [
         down: "추가 매수가 막힘",
       },
       {
+        key: "risk_max_open_positions",
+        label: "동시 보유 종목 수",
+        unit: "count",
+        meaning: "동시에 들고 있을 수 있는(미체결 매수 포함) 종목 수. 이미 가진 종목을 더 사는 것은 세지 않음",
+        up: "여러 종목에 나눠 들어가 현금이 빨리 소진됨",
+        down: "좋은 신호가 와도 이미 다른 종목을 들고 있으면 사지 않음",
+        emptyLabel: "제한 없음",
+        placeholder: "비우면 제한 없음",
+      },
+      {
         key: "risk_daily_loss_limit",
         label: "하루 손실 한도",
         unit: "krw",
@@ -163,6 +176,42 @@ export const SETTING_GROUPS: SettingGroup[] = [
     ],
   },
   {
+    title: "종목 선정",
+    hint: "자동은 매일 장 시작 전(08:50)에 외국인·기관 순매수 상위에서 고릅니다 (ETF·거래정지·1주가 1회 매수 금액보다 비싼 종목·상한가 근접 제외). 보유 종목은 목록에서 빠져도 청산할 때까지 계속 봅니다.",
+    items: [
+      {
+        key: "universe_mode",
+        label: "선정 방식",
+        unit: "enum",
+        meaning: "고정: 서버 trader.env 의 종목만 / 자동: 매일 순매수 상위에서 고름 (실시세일 때만)",
+        up: "자동: 수급이 몰리는 종목을 따라가지만 매일 종목이 바뀜",
+        down: "고정: 같은 종목만 보므로 신호 성과를 비교하기 쉬움",
+        options: [
+          { value: "fixed", label: "고정 (trader.env)" },
+          { value: "auto", label: "자동 (순매수 상위)" },
+        ],
+      },
+      {
+        key: "universe_max_symbols",
+        label: "최대 종목 수",
+        unit: "count",
+        meaning: "자동 선정으로 볼 종목 수 (1~10, 항상 포함 종목 포함)",
+        up: "기회가 늘지만 시세 호출이 늘어남 (종목마다 3초에 2번)",
+        down: "호출이 줄고 몇 종목에 집중",
+      },
+      {
+        key: "universe_pinned",
+        label: "항상 포함 종목",
+        unit: "symbols",
+        meaning: "순위와 상관없이 자동 선정에 늘 넣을 종목 코드 (쉼표로 구분)",
+        up: "넣을수록 순위로 고르는 자리가 줄어듦",
+        down: "비우면 모두 순위로 고름",
+        emptyLabel: "없음",
+        placeholder: "예: 005930,000660",
+      },
+    ],
+  },
+  {
     title: "장중 시각",
     hint: "KST, HH:MM 으로 입력합니다. 비우면 끕니다. 장 시작 ≤ 신규 매수 마감 ≤ 장마감 청산 ≤ 장 마감이어야 합니다.",
     items: [
@@ -196,6 +245,8 @@ export const UNIT_SUFFIX: Record<SettingUnit, string> = {
   mult: "배",
   enum: "",
   time: "",
+  count: "개",
+  symbols: "",
 };
 
 /** 입력값 형식만 확인한다 (범위·관계는 서버와 엔진이 다시 검증한다). */
@@ -206,4 +257,14 @@ export function looksLikeDecimal(v: string): boolean {
 /** "15:00" · "15:00:00" (KST) */
 export function looksLikeTime(v: string): boolean {
   return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(v.trim());
+}
+
+export function looksLikeCount(v: string): boolean {
+  return /^\d{1,3}$/.test(v.trim());
+}
+
+/** "005930, 000660" (쉼표 구분 종목 코드) */
+export function looksLikeSymbols(v: string): boolean {
+  const parts = v.split(",").map((x) => x.trim()).filter(Boolean);
+  return parts.every((x) => /^[A-Za-z0-9]{1,16}$/.test(x));
 }

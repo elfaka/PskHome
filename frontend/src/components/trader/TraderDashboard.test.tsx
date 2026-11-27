@@ -88,6 +88,47 @@ describe("TraderDashboard", () => {
     expect(asked).toEqual(["005930:60", "005930:300", "000660:300"]);
   });
 
+  it("shows today's symbols with net buying in 억 and held symbols outside the list, and opens a chart on click", async () => {
+    const asked: string[] = [];
+    server.use(
+      http.get("/api/trader/chart", ({ request }) => {
+        const sym = new URL(request.url).searchParams.get("symbol")!;
+        asked.push(sym);
+        return HttpResponse.json({ ...mockTraderChart, symbol: sym });
+      })
+    );
+    const { user } = renderDashboard();
+    const strip = await screen.findByRole("region", { name: "오늘의 종목" });
+    expect(within(strip).getByText(/자동 \(외국인·기관 순매수 상위\) · 2026-11-26/)).toBeInTheDocument();
+    expect(within(strip).getByText("SK하이닉스")).toBeInTheDocument();
+    expect(within(strip).getByText("순매수 +350억")).toBeInTheDocument();
+    expect(within(strip).getByText("항상 포함")).toBeInTheDocument();
+    expect(within(strip).getByText("목록 밖 보유 — 청산까지 계속 봄")).toBeInTheDocument();
+    expect(within(strip).getByText(/뺀 종목 1개/)).toBeInTheDocument();
+    await user.click(within(strip).getByRole("button", { name: /SK하이닉스/ }));
+    const chart = screen.getByRole("region", { name: "종목 차트" });
+    expect(await within(chart).findByText("000660:60:2:1")).toBeInTheDocument();
+    expect(asked.at(-1)).toBe("000660");
+  });
+
+  it("uses a dropdown for the chart symbol when many symbols are watched", async () => {
+    server.use(
+      http.get("/api/trader/chart", ({ request }) =>
+        HttpResponse.json({
+          ...mockTraderChart,
+          symbol: new URL(request.url).searchParams.get("symbol"),
+          symbols: ["005930", "000660", "035420", "036930", "009150"],
+        })
+      )
+    );
+    const { user } = renderDashboard();
+    const chart = await screen.findByRole("region", { name: "종목 차트" });
+    const pick = await within(chart).findByRole("combobox", { name: "종목" });
+    expect(within(pick).getByRole("option", { name: "SK하이닉스 (000660)" })).toBeInTheDocument();
+    await user.selectOptions(pick, "036930");
+    expect(await within(chart).findByText("036930:60:2:1")).toBeInTheDocument();
+  });
+
   it("shows score trend with thresholds, score parts and a hover readout", async () => {
     const { user } = renderDashboard();
     const trend = await screen.findByRole("region", { name: "점수 추이 (점수 전략)" });
@@ -258,6 +299,49 @@ describe("TraderDashboard", () => {
     await vi.waitFor(() => expect(body).not.toBeNull());
     expect(body!.values).toEqual({ slippage_bps: "7", entry_cutoff: "14:30:00", eod_exit: null });
     expect(await screen.findByText(/v3 저장됨/)).toBeInTheDocument();
+  });
+
+  it("edits symbol selection and the open-position cap (blank = no limit)", async () => {
+    let body: { values: Record<string, string | null> } | null = null;
+    server.use(
+      http.put("/api/trader/control/settings", async ({ request }) => {
+        body = (await request.json()) as typeof body;
+        return HttpResponse.json({ version: 3, values: {} });
+      })
+    );
+    const { user } = renderDashboard({ stepUpUntil: "2099-01-01T00:00:00.000Z" });
+    await openTab(user, "설정");
+    expect(await screen.findByLabelText("선정 방식")).toHaveValue("auto");
+    expect(screen.getByText(/저장된 값 3개 · 엔진 적용 3개/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("선정 방식"), "fixed");
+    const max = screen.getByLabelText("최대 종목 수");
+    await user.clear(max);
+    await user.type(max, "05");
+    const pinned = screen.getByLabelText("항상 포함 종목");
+    await user.clear(pinned);
+    await user.type(pinned, "005930, 000660");
+    await user.clear(screen.getByLabelText("동시 보유 종목 수"));
+    await user.click(screen.getByRole("button", { name: "변경 검토" }));
+    const dialog = screen.getByRole("dialog", { name: "설정 변경 검토" });
+    expect(within(dialog).getByText("제한 없음")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "적용" }));
+    await vi.waitFor(() => expect(body).not.toBeNull());
+    expect(body!.values).toEqual({
+      universe_mode: "fixed",
+      universe_max_symbols: "5",
+      universe_pinned: "005930,000660",
+      risk_max_open_positions: null,
+    });
+  });
+
+  it("rejects malformed symbol codes in the pinned list", async () => {
+    const { user } = renderDashboard({ stepUpUntil: "2099-01-01T00:00:00.000Z" });
+    await openTab(user, "설정");
+    const pinned = await screen.findByLabelText("항상 포함 종목");
+    await user.clear(pinned);
+    await user.type(pinned, "0059;30");
+    expect(screen.getByText("형식이 맞지 않는 값이 있습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "변경 검토" })).toBeDisabled();
   });
 
   it("blocks a malformed time and reverts to the previous version after 2FA", async () => {

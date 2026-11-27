@@ -86,6 +86,8 @@ src/app/
 - 설정 항목 설명(올리면·내리면)은 `lib/trader/settingsMeta.ts` 한 곳. 키 목록은 백엔드 `TUNABLE_RULES`·엔진 `TUNABLE` 과 같아야 한다.
   운영 설정은 DB 가 원본이다 (`status.settings.values` = 저장된 값, `effective` = 엔진 적용값). 저장은 바꾼 항목만 보내고(시각 끔은 null),
   "직전 설정으로 되돌리기"는 `previousVersion` 이 있을 때만 보인다. `ready=false`(엔진이 아직 옮기기 전)면 입력을 막는다.
+- 개요의 "오늘의 종목"(`UniverseStrip`)은 `status.universe` — 종목을 누르면 종목 차트가 그 종목으로 바뀐다. 순매수 금액은 `shiftLeft` 로 억 단위(문자열 연산).
+  차트 종목은 엔진이 지금 보는 종목(`universe.watching`)이고, 5개 이상이면 드롭다운이다.
 - **숫자는 백엔드가 준 Decimal 문자열을 그대로 포맷한다** (`lib/trader/decimal.ts` — 반올림·천 단위·퍼센트 이동 모두 문자열 연산).
   `Number()` 로 바꿔 계산하지 않는다. 상승 빨강 / 하락 파랑은 stocksim 의 `TONE_TEXT` 를 쓴다.
 - 표는 카드 안에서 가로 스크롤한다. 그리드 안 카드는 `min-w-0` 이어야 좁은 화면에서 페이지가 옆으로 넘치지 않는다.

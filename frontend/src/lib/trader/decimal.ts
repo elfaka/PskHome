@@ -107,3 +107,14 @@ export function cmpDec(a: string | null | undefined, b: string): -1 | 0 | 1 | nu
   if (xs === ys) return 0;
   return (xs < ys ? -1 : 1) * flip as -1 | 1;
 }
+
+/** 소수점을 왼쪽으로 places 자리 옮긴다 (문자열 연산). "35000000000", 8 → "350" (억 단위 표시용) */
+export function shiftLeft(value: string | null | undefined, places: number): string | null {
+  if (value == null) return null;
+  const m = DEC.exec(value.trim());
+  if (!m) return null;
+  const int = m[2].padStart(places + 1, "0");
+  const head = int.slice(0, int.length - places);
+  const tail = int.slice(int.length - places) + (m[3] ?? "");
+  return `${m[1] ?? ""}${head}.${tail}`;
+}

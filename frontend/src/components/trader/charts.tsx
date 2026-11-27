@@ -11,13 +11,16 @@ import type {
   TraderPerformanceRow,
   TraderScores,
   TraderStats,
+  TraderUniverse,
 } from "@/api/trader";
+import Badge from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Field";
 import Alert from "@/components/ui/Alert";
 import Skeleton from "@/components/ui/Skeleton";
 import { useTheme } from "@/components/theme/useTheme";
 import { cn } from "@/lib/cn";
 import { TONE_TEXT } from "@/lib/stocksim/format";
-import { cmpDec, formatDec, formatKst, formatRatioPct, signOf } from "@/lib/trader/decimal";
+import { cmpDec, formatDec, formatKst, formatRatioPct, shiftLeft, signOf } from "@/lib/trader/decimal";
 
 import { Kpi, Section, Signed } from "./ui";
 
@@ -131,6 +134,7 @@ export function SymbolChartSection({
   onSymbol,
   onInterval,
   className,
+  names,
 }: {
   symbol: string | null;
   symbols: string[];
@@ -140,6 +144,8 @@ export function SymbolChartSection({
   onSymbol: (s: string) => void;
   onInterval: (i: ChartInterval) => void;
   className?: string;
+  /** 종목 코드 → 이름 (오늘의 종목에서) */
+  names?: Record<string, string>;
 }) {
   const { resolved } = useTheme();
   const [hover, setHover] = useState<number | null>(null);
@@ -153,7 +159,21 @@ export function SymbolChartSection({
       className={className}
       aside={
         <div className="flex flex-wrap items-center gap-2">
-          {symbols.length > 1 ? (
+          {symbols.length > 4 ? (
+            // 자동 선정으로 종목이 많으면 드롭다운
+            <Select
+              aria-label="종목"
+              value={symbol ?? ""}
+              onChange={(e) => onSymbol(e.target.value)}
+              className="h-8 w-auto min-w-32 py-0 text-xs"
+            >
+              {symbols.map((s) => (
+                <option key={s} value={s}>
+                  {names?.[s] ? `${names[s]} (${s})` : s}
+                </option>
+              ))}
+            </Select>
+          ) : symbols.length > 1 ? (
             <Segmented label="종목" value={symbol ?? ""} options={symbols.map((s) => ({ value: s, label: s }))} onChange={onSymbol} />
           ) : (
             symbol && <span className="text-xs font-medium text-fg">{symbol}</span>
@@ -607,6 +627,7 @@ const REJECT_TEXT: Record<string, string> = {
   DATA_UNHEALTHY: "데이터 이상",
   DB_UNHEALTHY: "DB 이상",
   ENGINE_ERROR: "엔진 오류",
+  MAX_OPEN_POSITIONS: "동시 보유 종목 수 한도",
 };
 
 export function RejectionSection({ stats, error, className }: { stats: TraderStats | null; error: string | null; className?: string }) {
@@ -692,5 +713,88 @@ export function PerformanceChart({ rows }: { rows: TraderPerformanceRow[] | null
         </figure>
       ))}
     </div>
+  );
+}
+
+// ── 오늘의 종목 (자동 선정 · 고정) ──────────────────────────────────────────
+
+/** 원 → 억 원 (문자열 연산) */
+function eok(v: string | null): string {
+  const shifted = shiftLeft(v, 8);
+  return shifted == null ? "—" : `${formatDec(shifted, 0, true)}억`;
+}
+
+export function UniverseStrip({
+  universe,
+  selected,
+  onSelect,
+}: {
+  universe: TraderUniverse | null | undefined;
+  selected: string | null;
+  onSelect: (symbol: string) => void;
+}) {
+  if (!universe) return null;
+  const picked = new Set(universe.symbols.map((p) => p.symbol));
+  const extra = universe.watching.filter((s) => !picked.has(s));
+  const auto = universe.mode === "auto";
+  return (
+    <Section
+      title="오늘의 종목"
+      aside={
+        <span className="text-[11px] text-fg-subtle tabular-nums">
+          {auto ? "자동 (외국인·기관 순매수 상위)" : "고정 (trader.env)"} · {universe.date ?? "—"} · 선정 {formatKst(universe.at)}
+        </span>
+      }
+    >
+      <ul className="flex flex-wrap gap-2" aria-label="오늘의 종목">
+        {universe.symbols.map((p) => (
+          <li key={p.symbol}>
+            <button
+              type="button"
+              onClick={() => onSelect(p.symbol)}
+              aria-pressed={selected === p.symbol}
+              title={auto && p.score != null ? `외국인 ${eok(p.foreigner)} · 기관 ${eok(p.institution)}` : undefined}
+              className={cn(
+                "flex items-center gap-2 rounded-control border px-2.5 py-1.5 text-left text-xs",
+                selected === p.symbol ? "border-accent bg-accent-soft text-accent-soft-fg" : "border-line hover:bg-surface-hover"
+              )}
+            >
+              <span className="font-medium text-fg">{p.name ?? p.symbol}</span>
+              <span className="text-fg-subtle tabular-nums">{p.symbol}</span>
+              {auto && p.score != null && <span className="tabular-nums text-fg-muted">순매수 {eok(p.score)}</span>}
+              {p.pinned && auto && <Badge tone="accent">항상 포함</Badge>}
+            </button>
+          </li>
+        ))}
+        {extra.map((sym) => (
+          <li key={sym}>
+            <button
+              type="button"
+              onClick={() => onSelect(sym)}
+              aria-pressed={selected === sym}
+              className={cn(
+                "flex items-center gap-2 rounded-control border border-dashed px-2.5 py-1.5 text-xs",
+                selected === sym ? "border-accent bg-accent-soft text-accent-soft-fg" : "border-line hover:bg-surface-hover"
+              )}
+            >
+              <span className="font-medium text-fg tabular-nums">{sym}</span>
+              <Badge tone="warning">목록 밖 보유 — 청산까지 계속 봄</Badge>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {universe.excluded.length > 0 && (
+        <details className="mt-2 text-[11px] text-fg-subtle">
+          <summary className="cursor-pointer select-none">순위에 있었지만 뺀 종목 {universe.excluded.length}개</summary>
+          <ul className="mt-1 space-y-0.5">
+            {universe.excluded.map((e) => (
+              <li key={e.symbol}>
+                {e.name ? `${e.name} (${e.symbol})` : e.symbol} — {e.reason}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </Section>
   );
 }

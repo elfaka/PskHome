@@ -210,6 +210,17 @@ export interface TraderSettingsState {
   } | null;
 }
 
+export interface TraderUniverse {
+  date: string | null;
+  /** fixed(trader.env 종목) | auto(외국인·기관 순매수 상위) */
+  mode: string | null;
+  source: string | null;
+  at: string | null;
+  symbols: { symbol: string; name: string | null; score: Dec | null; foreigner: Dec | null; institution: Dec | null; pinned: boolean }[];
+  excluded: { symbol: string; name: string | null; reason: string }[];
+  watching: string[];
+}
+
 export interface TraderStatus {
   serverTime: string;
   engine: {
@@ -230,6 +241,8 @@ export interface TraderStatus {
   marketPhase?: "continuous" | "closing_auction" | "closed";
   switches: Record<string, boolean>;
   settings: TraderSettingsState | null;
+  /** 오늘 볼 종목. watching = 엔진이 지금 시세를 보는 종목 (선정 밖 보유 종목 포함). 옛 백엔드면 없다 */
+  universe?: TraderUniverse | null;
   alerts: TraderAlert[];
 }
 

@@ -39,6 +39,7 @@ import {
   ScoreTrendSection,
   StatsRow,
   SymbolChartSection,
+  UniverseStrip,
 } from "./charts";
 import { DataTable, Gauge, Kpi, num, Section, Signed, StatusDot, Switch, td, ago } from "./ui";
 
@@ -72,7 +73,9 @@ export function OverviewPanel({
   const s = summary;
 
   // 종목 차트·지표·점수는 같은 종목을 본다
-  const configured = status?.settings?.info?.symbols ?? [];
+  // 엔진이 지금 보는 종목 (자동 선정이면 그날 고른 종목 + 목록 밖 보유 종목)
+  const configured = status?.universe?.watching?.length ? status.universe.watching : status?.settings?.info?.symbols ?? [];
+  const names = Object.fromEntries((status?.universe?.symbols ?? []).filter((p) => p.name).map((p) => [p.symbol, p.name!]));
   const [picked, setPicked] = useState<string | null>(null);
   const [barInterval, setBarInterval] = useState<ChartInterval>(60);
   const symbol = picked ?? configured[0] ?? s?.positions[0]?.symbol ?? null;
@@ -106,6 +109,7 @@ export function OverviewPanel({
 
       <StatsRow stats={stats.data} />
       {stats.error && <Alert>{stats.error}</Alert>}
+      <UniverseStrip universe={status?.universe} selected={symbol} onSelect={setPicked} />
 
       {/* 화면이 넓어질수록 열이 늘어난다 (lg 2 · xl 3 · 2xl 4). 빈칸은 뒤 카드가 채운다 */}
       <div className="grid grid-flow-row-dense gap-4 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -118,6 +122,7 @@ export function OverviewPanel({
           error={chart.error}
           onSymbol={setPicked}
           onInterval={setBarInterval}
+          names={names}
         />
         <div className="grid min-w-0 content-start gap-4 lg:col-span-2 lg:grid-cols-2 xl:col-span-1 xl:grid-cols-1">
           <IndicatorCards ind={chart.data?.indicators ?? null} symbol={symbol} />

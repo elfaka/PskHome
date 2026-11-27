@@ -11,7 +11,9 @@ import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/errorMessage";
 import { formatDec, formatKst, formatRatioPct } from "@/lib/trader/decimal";
 import {
+  looksLikeCount,
   looksLikeDecimal,
+  looksLikeSymbols,
   looksLikeTime,
   SETTING_GROUPS,
   SETTING_KEYS,
@@ -36,6 +38,14 @@ function normalize(meta: SettingMeta | undefined, v: string | null | undefined):
     if (!t) return null;
     return looksLikeTime(t) && t.length === 5 ? `${t}:00` : t;
   }
+  if (meta?.unit === "symbols") {
+    const list = [...new Set(t.split(",").map((x) => x.trim()).filter(Boolean))];
+    return list.length ? list.join(",") : null;
+  }
+  if (meta?.unit === "count") {
+    if (!t) return meta.emptyLabel ? null : t;
+    return looksLikeCount(t) ? String(Number(t)) : t;
+  }
   if (!looksLikeDecimal(t)) return t;
   const [i, f = ""] = t.split(".");
   const int = i.replace(/^0+(?=\d)/, "");
@@ -45,7 +55,9 @@ function normalize(meta: SettingMeta | undefined, v: string | null | undefined):
 
 function show(meta: SettingMeta, v: string | null | undefined): string {
   if (meta.unit === "time") return v ? v.slice(0, 5) : "끔";
-  if (v == null || v === "") return "—";
+  if (v == null || v === "") return meta.emptyLabel ?? "—";
+  if (meta.unit === "symbols") return v.split(",").join(", ");
+  if (meta.unit === "count") return `${v}개`;
   if (meta.unit === "rate") return `${formatRatioPct(v, 3, false)}`;
   if (meta.unit === "krw") return `${formatDec(v)}원`;
   if (meta.unit === "enum") return meta.options?.find((o) => o.value === v)?.label ?? v;
@@ -79,7 +91,8 @@ export default function SettingsPanel({ status, onSaved }: { status: TraderStatu
     );
   }
 
-  const stored = settings.values;
+  // DB 설정에 아직 없는 새 키(예전 엔진이 옮긴 설정)는 엔진 적용값으로 보여준다 — 서버도 같은 값으로 채워 검증한다
+  const stored: Record<string, string | null> = { ...settings.effective, ...settings.values };
   const canEdit = settings.ready && totpEnabled;
   const desired = (key: string): string => draft[key] ?? editable(metaByKey.get(key)!, stored[key]);
   const changes = SETTING_KEYS.filter((k) => {
@@ -92,6 +105,8 @@ export default function SettingsPanel({ status, onSaved }: { status: TraderStatu
     const v = draft[k].trim();
     if (m.unit === "enum") return false;
     if (m.unit === "time") return v !== "" && !looksLikeTime(v);
+    if (m.unit === "count") return v === "" ? !m.emptyLabel : !looksLikeCount(v);
+    if (m.unit === "symbols") return !looksLikeSymbols(v);
     return !looksLikeDecimal(v);
   });
 
@@ -246,8 +261,8 @@ export default function SettingsPanel({ status, onSaved }: { status: TraderStatu
                         <div className="flex items-center gap-2">
                           <Input
                             id={`setting-${m.key}`}
-                            inputMode={m.unit === "time" ? "numeric" : "decimal"}
-                            placeholder={m.unit === "time" ? "HH:MM (비우면 끔)" : undefined}
+                            inputMode={m.unit === "time" || m.unit === "count" ? "numeric" : m.unit === "symbols" ? "text" : "decimal"}
+                            placeholder={m.placeholder ?? (m.unit === "time" ? "HH:MM (비우면 끔)" : undefined)}
                             value={desired(m.key)}
                             disabled={!settings.ready}
                             onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}

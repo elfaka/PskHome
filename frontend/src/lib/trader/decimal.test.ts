@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cmpDec, formatDec, formatKst, formatRatioPct, signOf } from "./decimal";
+import { cmpDec, formatDec, formatKst, formatRatioPct, shiftLeft, signOf } from "./decimal";
 
 describe("trader decimal formatting (string-only)", () => {
   it("groups thousands and rounds half up", () => {
@@ -47,5 +47,12 @@ describe("trader decimal formatting (string-only)", () => {
     expect(cmpDec("12345678901234567890.1", "12345678901234567890.09")).toBe(1);
     expect(cmpDec(null, "1")).toBeNull();
     expect(cmpDec("abc", "1")).toBeNull();
+  });
+  it("shifts the decimal point as a string (억 단위)", () => {
+    expect(shiftLeft("35000000000", 8)).toBe("350.00000000");
+    expect(formatDec(shiftLeft("35012345678", 8), 0)).toBe("350");
+    expect(formatDec(shiftLeft("-5000000", 8), 1)).toBe("-0.1");
+    expect(shiftLeft("12.5", 2)).toBe("0.125");
+    expect(shiftLeft(null, 8)).toBeNull();
   });
 });
