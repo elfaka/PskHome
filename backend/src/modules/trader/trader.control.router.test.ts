@@ -18,6 +18,8 @@ const ready = vi.hoisted(async () => {
   process.env.TRADER_ADMIN_USERNAME = "owner";
   process.env.TRADER_ADMIN_PASSWORD_HASH = ["scrypt", 16384, 8, 1, salt.toString("base64"), key.toString("base64")].join(":");
   process.env.TRADER_TOTP_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+  // 운영 공개 주소 (Cloudflare → traefik 뒤에서 Host 가 바뀌어도 이 출처는 받아야 한다)
+  process.env.GOOGLE_CALLBACK_URL = "https://elfaka.kr/api/login/oauth2/code/google";
 });
 
 const calls = vi.hoisted(() => ({ list: [] as unknown[][] }));
@@ -135,6 +137,34 @@ describe("trader 2FA and control routes", () => {
       .send("reason=x");
     expect(form.status).toBe(403);
     expect(calls.list).toEqual([]);
+  });
+
+  it("accepts the public origin even when the proxy rewrites Host (production: Cloudflare → traefik)", async () => {
+    const agent = await login();
+    // 백엔드가 받은 Host 는 내부 주소, 브라우저 Origin 은 공개 주소
+    const viaProxy = await agent
+      .post("/api/trader/control/halt")
+      .set("Host", "pskhome-be-1:8080")
+      .set("Origin", "https://elfaka.kr")
+      .send({ reason: "proxy" });
+    expect(viaProxy.status).toBe(200);
+    // 프록시가 원래 Host 를 X-Forwarded-Host 로 넘기는 경우
+    const forwarded = await agent
+      .post("/api/trader/control/halt")
+      .set("Host", "pskhome-be-1:8080")
+      .set("X-Forwarded-Host", "trader.example.kr")
+      .set("X-Forwarded-Proto", "https")
+      .set("Origin", "https://trader.example.kr")
+      .send({ reason: "forwarded" });
+    expect(forwarded.status).toBe(200);
+    // 다른 사이트는 여전히 막는다
+    const evil = await agent.post("/api/trader/control/halt").set("Origin", "https://elfaka.kr.evil.example").send({});
+    expect(evil.status).toBe(403);
+    expect(evil.body.error.message).toContain("다른 주소");
+    expect(calls.list).toEqual([
+      ["halt", "proxy", "web:owner"],
+      ["halt", "forwarded", "web:owner"],
+    ]);
   });
 
   it("control routes require trader login", async () => {

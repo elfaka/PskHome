@@ -112,14 +112,55 @@ function originOf(url: string | undefined): string | null {
   }
 }
 
-/** 같은 출처의 JSON 요청만 받는다 (CSRF). 브라우저는 POST 에 항상 Origin 을 붙인다. */
+/** 프록시가 넘긴 첫 번째 값 ("a, b" → "a") */
+function firstHeader(req: Request, name: string): string | null {
+  const v = req.get(name);
+  return v ? v.split(",")[0]!.trim() || null : null;
+}
+
+/**
+ * 이 앱의 출처로 인정하는 값.
+ * - 요청이 도착한 주소 (Host 와, 프록시가 Host 를 바꿨을 때를 위한 X-Forwarded-Host)
+ * - 설정된 공개 주소: GOOGLE_CALLBACK_URL(운영 https://elfaka.kr), APP_LOGIN_SUCCESS_REDIRECT(개발 http://localhost:5173)
+ *   운영은 Cloudflare → traefik 을 거치며 Host·프로토콜이 바뀔 수 있어, 공개 주소를 기준으로도 맞춘다.
+ */
+export function allowedOrigins(req: Request): Set<string> {
+  const hosts = [req.get("host"), firstHeader(req, "x-forwarded-host")].filter((h): h is string => !!h);
+  return new Set(
+    [
+      ...hosts.map((h) => `${req.protocol}://${h}`),
+      originOf(env.GOOGLE_CALLBACK_URL),
+      originOf(env.APP_LOGIN_SUCCESS_REDIRECT),
+    ].filter((o): o is string => !!o)
+  );
+}
+
+/** 같은 출처의 JSON 요청만 받는다 (CSRF). 브라우저는 POST·PUT 에 항상 Origin 을 붙인다. */
 export const requireSameOrigin: RequestHandler = (req, _res, next) => {
   const origin = req.get("origin") ?? originOf(req.get("referer"));
-  const allowed = new Set(
-    [`${req.protocol}://${req.get("host")}`, originOf(env.APP_LOGIN_SUCCESS_REDIRECT)].filter(Boolean)
-  );
-  if (!origin || !allowed.has(origin) || !req.is("application/json")) {
-    next(new HttpError(403, "BAD_ORIGIN", "허용되지 않은 요청입니다."));
+  const allowed = allowedOrigins(req);
+  const json = Boolean(req.is("application/json"));
+  if (!origin || !allowed.has(origin) || !json) {
+    // 운영에서 막히면 원인을 docker logs 로 본다 (헤더 값만, 쿠키·본문은 남기지 않는다)
+    console.warn(
+      "[trader] BAD_ORIGIN",
+      JSON.stringify({
+        path: req.path,
+        origin: origin ?? null,
+        allowed: [...allowed],
+        host: req.get("host") ?? null,
+        forwardedHost: req.get("x-forwarded-host") ?? null,
+        forwardedProto: req.get("x-forwarded-proto") ?? null,
+        contentType: req.get("content-type") ?? null,
+      })
+    );
+    next(
+      new HttpError(
+        403,
+        "BAD_ORIGIN",
+        !json ? "허용되지 않은 요청입니다 (JSON 요청만 받습니다)." : "허용되지 않은 요청입니다 (다른 주소에서 온 요청)."
+      )
+    );
     return;
   }
   next();

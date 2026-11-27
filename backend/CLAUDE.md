@@ -197,6 +197,9 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
   엔진 DB 의 `engine_state` 에만 쓰고 `risk_events` 에 기록한다. 엔진이 약 5초 안에 읽어 반영한다 (형식은 `trader/src/trader/control.py`).
   설정 값은 문자열 Decimal 로 검증한다 (`cmpDec`, 범위·값 사이 관계). 엔진이 한 번 더 검증한다.
   `trader_web` 에 쓰기 권한이 없으면 503 `TRADER_DB_NO_WRITE` (`trader/db/grant_web_control.sql`).
+  같은 출처로 인정하는 값(`allowedOrigins`): 요청 Host·X-Forwarded-Host, `GOOGLE_CALLBACK_URL`(운영 공개 주소 `https://elfaka.kr`), `APP_LOGIN_SUCCESS_REDIRECT`.
+  운영은 Cloudflare → traefik 을 거쳐 Host 가 그대로 오지 않을 수 있다 (요청 주소만 비교하면 운영에서 step-up·조작이 전부 403 이었다).
+  막히면 `[trader] BAD_ORIGIN {...}` 로그에 Origin·Host·X-Forwarded-*·Content-Type 이 남는다.
 - **조회 API** (`traderStatus.service.ts`): `status`(상태 신호·킬스위치·스위치·설정·알림) · `equity`(일별 추이 + MDD, SQL 창 함수) ·
   `strategies`(오늘 집계·최근 판단 40개) · `activity`(체결·주문 실패·위험 이벤트를 시간순으로).
 - **그래프·지표 API** (`traderCharts.service.ts`, 조회만):
