@@ -1,10 +1,10 @@
 /**
- * 화면에서 바꿀 수 있는 엔진 설정 — 이름·단위·설명(올리면/내리면).
+ * 운영 설정(DB 에 저장, 화면에서 바꿈) — 이름·단위·설명(올리면/내리면).
  * 키는 백엔드 traderControl.service.ts 의 TUNABLE_RULES, 엔진 control.py 의 TUNABLE 과 같아야 한다.
- * 설명은 server/trader.env.example 의 주석과 같은 내용이다.
+ * 모두 엔진 재시작 없이 약 5초 안에 다음 판단부터 적용된다.
  */
 
-export type SettingUnit = "rate" | "krw" | "bps" | "ratio" | "mult" | "enum";
+export type SettingUnit = "rate" | "krw" | "bps" | "ratio" | "mult" | "enum" | "time";
 
 export interface SettingMeta {
   key: string;
@@ -162,6 +162,28 @@ export const SETTING_GROUPS: SettingGroup[] = [
       },
     ],
   },
+  {
+    title: "장중 시각",
+    hint: "KST, HH:MM 으로 입력합니다. 비우면 끕니다. 장 시작 ≤ 신규 매수 마감 ≤ 장마감 청산 ≤ 장 마감이어야 합니다.",
+    items: [
+      {
+        key: "entry_cutoff",
+        label: "신규 매수 마감",
+        unit: "time",
+        meaning: "이 시각 이후로는 새로 사지 않음 (매도·청산은 계속)",
+        up: "늦추면: 장 막판에 들어가 청산까지 시간이 짧은 매수가 생김",
+        down: "당기면: 오후 매수 기회가 줄어듦",
+      },
+      {
+        key: "eod_exit",
+        label: "장마감 청산",
+        unit: "time",
+        meaning: "이 시각에 보유분을 모두 시장가로 정리 (다음 날로 넘기지 않음)",
+        up: "늦추면: 마감 직전 유동성이 줄어 불리하게 체결될 수 있음",
+        down: "당기면: 오른 종목도 일찍 정리됨",
+      },
+    ],
+  },
 ];
 
 export const SETTING_KEYS = SETTING_GROUPS.flatMap((g) => g.items.map((i) => i.key));
@@ -173,9 +195,15 @@ export const UNIT_SUFFIX: Record<SettingUnit, string> = {
   ratio: "",
   mult: "배",
   enum: "",
+  time: "",
 };
 
 /** 입력값 형식만 확인한다 (범위·관계는 서버와 엔진이 다시 검증한다). */
 export function looksLikeDecimal(v: string): boolean {
   return /^\d{1,14}(\.\d{1,8})?$/.test(v.trim());
+}
+
+/** "15:00" · "15:00:00" (KST) */
+export function looksLikeTime(v: string): boolean {
+  return /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(v.trim());
 }

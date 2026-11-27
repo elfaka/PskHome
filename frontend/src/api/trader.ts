@@ -180,13 +180,23 @@ export interface TraderAlert {
   message: string;
 }
 
+/** 운영 설정 — 원본은 DB(engine_state settings). trader.env 는 처음 한 번 옮길 때만 쓴다 */
 export interface TraderSettingsState {
-  base: Record<string, string | null>;
+  /** DB 에 운영 설정이 있다. false 면 옛 엔진이라 저장할 수 없다 */
+  ready: boolean;
+  /** DB 에 저장된 값 (시각은 null = 끔) */
+  values: Record<string, string | null>;
+  /** 엔진이 지금 쓰는 값 */
   effective: Record<string, string | null>;
-  overrides: Record<string, string>;
+  savedVersion: number;
+  savedAt: string | null;
+  savedBy: string | null;
   appliedVersion: number;
-  pending: { version: number; values: Record<string, string>; at: string | null } | null;
+  pending: { version: number; at: string | null } | null;
   rejected: { version: number; reason: string; at: string | null } | null;
+  previousVersion: number | null;
+  /** trader.env 에 남아 있지만 무시되는 키 */
+  envIgnored: string[];
   info: {
     mode?: string;
     feed?: string;
@@ -195,8 +205,6 @@ export interface TraderSettingsState {
     strategies?: { id: string; shadow: boolean }[];
     paper_initial_cash?: string;
     bar_interval_seconds?: number;
-    entry_cutoff?: string | null;
-    eod_exit?: string | null;
     market_open?: string;
     market_close?: string;
   } | null;
@@ -375,8 +383,14 @@ export async function traderSetStrategy(id: string, enabled: boolean): Promise<v
   await api.post(`/api/trader/control/strategies/${encodeURIComponent(id)}`, { enabled });
 }
 
+/** 바꾼 항목만 보낸다 (시각을 끄려면 null). 서버가 지금 값에 합쳐 전체를 검증하고 새 버전으로 저장한다 */
 export async function traderUpdateSettings(
   values: Record<string, string | null>
-): Promise<{ version: number; overrides: Record<string, string> }> {
-  return (await api.put<{ version: number; overrides: Record<string, string> }>("/api/trader/control/settings", { values })).data;
+): Promise<{ version: number; values: Record<string, string | null> }> {
+  return (await api.put<{ version: number; values: Record<string, string | null> }>("/api/trader/control/settings", { values })).data;
+}
+
+/** 직전 설정으로 되돌린다 (그 값을 새 버전으로 저장) */
+export async function traderRevertSettings(): Promise<{ version: number; restored: number }> {
+  return (await api.post<{ version: number; restored: number }>("/api/trader/control/settings/revert", {})).data;
 }

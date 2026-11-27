@@ -216,6 +216,7 @@ Express 5 + TypeScript(NodeNext ESM) 앱. 모듈:
 - 백엔드 `modules/trader` — `/api/trader/**` 본인 ID/비밀번호 + 2단계 인증(Google Authenticator, `TRADER_TOTP_SECRET`) 로그인 (Google 로그인과 별개).
 - 프론트 `/trader` — 로그인 게이트 + 대시보드(상태 바·핵심 숫자·종목 차트·지표·점수 추이·낙폭·전략·보유/주문·활동 로그·리스크) + 설정. 화면 전체 폭을 쓴다.
   백엔드가 엔진 DB 를 `trader_web` 계정으로 조회하고, 화면 조작(긴급 정지·재개·전략 켜기/끄기·설정)은 `engine_state` 에 써서 엔진이 약 5초 안에 반영한다.
+  수수료·한도·진입 마감 등 운영 설정은 DB(`engine_state` `settings`)가 원본이다. trader.env 는 접속·실행 정보만 (첫 기동 때 한 번 옮긴다).
   위험이 커지는 조작은 2단계 인증 필수. `trader_web` 쓰기 권한은 `trader/db/grant_web_control.sql` (사용자가 실행).
 - 엔진 판단 구조: 가격 점수(규칙→ML) · 맥락 점수 · 이슈 점수(→LLM) → 결합 규칙 → 위험 관리 → 주문 (`trader/src/trader/scoring/`).
 

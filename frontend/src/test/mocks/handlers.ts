@@ -113,6 +113,7 @@ const TUNED_BASE = {
   slippage_bps: "5", participation_rate: "0.1", strategy_order_value: "2000000", risk_max_order_value: "2500000",
   risk_max_position_value: "5000000", risk_daily_loss_limit: "300000", risk_atr_stop_mult: "1.5",
   risk_atr_take_mult: "3", risk_min_risk_reward: "1.5", risk_max_spread_bps: "30",
+  entry_cutoff: "15:00:00", eod_exit: "15:15:00",
 };
 
 export const mockTraderStatus = {
@@ -127,16 +128,21 @@ export const mockTraderStatus = {
   marketOpen: true,
   switches: {},
   settings: {
-    base: TUNED_BASE,
+    ready: true,
+    values: { ...TUNED_BASE, risk_min_risk_reward: "1.2" },
     effective: { ...TUNED_BASE, risk_min_risk_reward: "1.2" },
-    overrides: { risk_min_risk_reward: "1.2" },
-    appliedVersion: 1,
+    savedVersion: 2,
+    savedAt: "2026-11-26T00:40:00.000Z",
+    savedBy: "web:owner",
+    appliedVersion: 2,
     pending: null,
     rejected: null,
+    previousVersion: 1,
+    envIgnored: [],
     info: {
       mode: "paper", feed: "stocksim", account: "paper-default", symbols: ["005930", "000660"],
       strategies: [{ id: "ma_cross", shadow: false }, { id: "intraday_score", shadow: true }],
-      paper_initial_cash: "10000000", bar_interval_seconds: 60, entry_cutoff: "15:00:00", eod_exit: "15:15:00",
+      paper_initial_cash: "10000000", bar_interval_seconds: 60, market_open: "09:00:00", market_close: "15:20:00",
     },
   },
   alerts: [],
@@ -251,7 +257,8 @@ export const handlers = [
   http.post("/api/trader/control/halt", () => HttpResponse.json({ ok: true })),
   http.post("/api/trader/control/resume", () => HttpResponse.json({ ok: true })),
   http.post("/api/trader/control/strategies/:id", () => HttpResponse.json({ ok: true })),
-  http.put("/api/trader/control/settings", () => HttpResponse.json({ version: 2, overrides: {} })),
+  http.put("/api/trader/control/settings", () => HttpResponse.json({ version: 3, values: {} })),
+  http.post("/api/trader/control/settings/revert", () => HttpResponse.json({ version: 3, restored: 1, values: {} })),
   http.post("/api/trader/auth/step-up", () => HttpResponse.json({ stepUpUntil: "2099-01-01T00:00:00.000Z" })),
   http.get("/api/trader/decisions", () => HttpResponse.json(mockTraderDecisions)),
   http.get("/api/trader/performance", () =>

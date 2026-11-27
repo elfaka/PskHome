@@ -84,6 +84,8 @@ src/app/
 - 위험이 커지는 조작(재개·전략 켜기·설정 변경)은 `stepUp.tsx` 의 `guarded()` 로 감싼다. 서버가 403 `STEP_UP_REQUIRED` 를 주면 코드를 묻고 한 번 다시 시도한다.
   긴급 정지·전략 끄기는 감싸지 않는다. 상태 조회가 401 이면 `onSessionExpired` 로 로그인 화면으로 돌아간다 (재배포로 세션이 사라질 때).
 - 설정 항목 설명(올리면·내리면)은 `lib/trader/settingsMeta.ts` 한 곳. 키 목록은 백엔드 `TUNABLE_RULES`·엔진 `TUNABLE` 과 같아야 한다.
+  운영 설정은 DB 가 원본이다 (`status.settings.values` = 저장된 값, `effective` = 엔진 적용값). 저장은 바꾼 항목만 보내고(시각 끔은 null),
+  "직전 설정으로 되돌리기"는 `previousVersion` 이 있을 때만 보인다. `ready=false`(엔진이 아직 옮기기 전)면 입력을 막는다.
 - **숫자는 백엔드가 준 Decimal 문자열을 그대로 포맷한다** (`lib/trader/decimal.ts` — 반올림·천 단위·퍼센트 이동 모두 문자열 연산).
   `Number()` 로 바꿔 계산하지 않는다. 상승 빨강 / 하락 파랑은 stocksim 의 `TONE_TEXT` 를 쓴다.
 - 표는 카드 안에서 가로 스크롤한다. 그리드 안 카드는 `min-w-0` 이어야 좁은 화면에서 페이지가 옆으로 넘치지 않는다.

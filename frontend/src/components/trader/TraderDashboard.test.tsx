@@ -219,12 +219,12 @@ describe("TraderDashboard", () => {
     expect(within(bars).getByText(/승률 75% · 4/)).toBeInTheDocument();
   });
 
-  it("reviews a settings change and saves only overrides after 2FA", async () => {
+  it("reviews a settings change and sends only the changed keys after 2FA", async () => {
     let body: { values: Record<string, string | null> } | null = null;
     server.use(
       http.put("/api/trader/control/settings", async ({ request }) => {
         body = (await request.json()) as typeof body;
-        return HttpResponse.json({ version: 2, overrides: {} });
+        return HttpResponse.json({ version: 3, values: {} });
       })
     );
     const { user } = renderDashboard({ stepUpUntil: "2099-01-01T00:00:00.000Z" });
@@ -232,17 +232,74 @@ describe("TraderDashboard", () => {
     const input = await screen.findByLabelText("슬리피지");
     expect(input).toHaveValue("5");
     expect(screen.getByLabelText("최소 손익비")).toHaveValue("1.2");
+    expect(screen.getByText(/운영 설정은 DB 에 저장됩니다/)).toHaveTextContent("마지막 저장 v2 · web:owner");
     await user.clear(input);
     await user.type(input, "7");
+    // 장마감 청산을 끄고, 진입 마감을 14:30 으로
+    await user.clear(screen.getByLabelText("장마감 청산"));
+    const cutoff = screen.getByLabelText("신규 매수 마감");
+    expect(cutoff).toHaveValue("15:00");
+    await user.clear(cutoff);
+    await user.type(cutoff, "14:30");
     await user.click(screen.getByRole("button", { name: "변경 검토" }));
     const dialog = screen.getByRole("dialog", { name: "설정 변경 검토" });
     expect(within(dialog).getByText("슬리피지")).toBeInTheDocument();
+    expect(within(dialog).getByText("끔")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "적용" }));
     await vi.waitFor(() => expect(body).not.toBeNull());
-    expect(body!.values.slippage_bps).toBe("7");
-    expect(body!.values.risk_min_risk_reward).toBe("1.2");
-    expect(body!.values.commission_rate_buy).toBeNull();
-    expect(await screen.findByText(/v2 저장됨/)).toBeInTheDocument();
+    expect(body!.values).toEqual({ slippage_bps: "7", entry_cutoff: "14:30:00", eod_exit: null });
+    expect(await screen.findByText(/v3 저장됨/)).toBeInTheDocument();
+  });
+
+  it("blocks a malformed time and reverts to the previous version after 2FA", async () => {
+    let reverted = false;
+    server.use(
+      http.post("/api/trader/control/settings/revert", () => {
+        reverted = true;
+        return HttpResponse.json({ version: 3, restored: 1, values: {} });
+      })
+    );
+    const { user } = renderDashboard({ stepUpUntil: "2099-01-01T00:00:00.000Z" });
+    await openTab(user, "설정");
+    const cutoff = await screen.findByLabelText("신규 매수 마감");
+    await user.clear(cutoff);
+    await user.type(cutoff, "3pm");
+    expect(screen.getByText("형식이 맞지 않는 값이 있습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "변경 검토" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "직전 설정으로 되돌리기" }));
+    const dialog = screen.getByRole("dialog", { name: "직전 설정으로 되돌리기" });
+    expect(dialog).toHaveTextContent("v2 대신 v1");
+    await user.click(within(dialog).getByRole("button", { name: "되돌리기" }));
+    await vi.waitFor(() => expect(reverted).toBe(true));
+    expect(await screen.findByText(/v1 값으로 되돌려 v3 저장됨/)).toBeInTheDocument();
+  });
+
+  it("explains that settings cannot be saved until the engine moved them to the DB", async () => {
+    server.use(
+      http.get("/api/trader/status", () =>
+        HttpResponse.json({
+          ...mockTraderStatus,
+          settings: { ...mockTraderStatus.settings, ready: false, savedVersion: 0, previousVersion: null, envIgnored: [] },
+        })
+      )
+    );
+    const { user } = renderDashboard({ stepUpUntil: "2099-01-01T00:00:00.000Z" });
+    await openTab(user, "설정");
+    expect(await screen.findByText(/아직 운영 설정을 DB 로 옮기지 않았습니다/)).toBeInTheDocument();
+    expect(screen.getByLabelText("슬리피지")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "직전 설정으로 되돌리기" })).not.toBeInTheDocument();
+  });
+
+  it("lists trader.env values that are ignored", async () => {
+    server.use(
+      http.get("/api/trader/status", () =>
+        HttpResponse.json({ ...mockTraderStatus, settings: { ...mockTraderStatus.settings, envIgnored: ["slippage_bps", "eod_exit"] } })
+      )
+    );
+    const { user } = renderDashboard();
+    await openTab(user, "설정");
+    expect(await screen.findByText(/쓰이지 않는 값: 슬리피지, 장마감 청산/)).toBeInTheDocument();
   });
 
   it("disables settings changes and warns when 2FA is off", async () => {
