@@ -27,7 +27,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES
 CREATE USER IF NOT EXISTS 'trader_app'@'172.26.%' IDENTIFIED BY '<APP_PASSWORD>';
 GRANT SELECT, INSERT, UPDATE, DELETE ON trader.* TO 'trader_app'@'172.26.%';
 
--- 3) 대시보드(5단계): 읽기 전용
+-- 3) 대시보드: 읽기 전용. 화면 제어용 쓰기 권한(engine_state·risk_events)은 마이그레이션 후 grant_web_control.sql 로 따로 준다
 CREATE USER IF NOT EXISTS 'trader_web'@'172.26.%' IDENTIFIED BY '<WEB_PASSWORD>';
 GRANT SELECT ON trader.* TO 'trader_web'@'172.26.%';
 

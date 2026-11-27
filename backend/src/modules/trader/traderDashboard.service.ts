@@ -27,6 +27,35 @@ function json(v: unknown): unknown {
   }
 }
 
+/**
+ * 비율을 SQL DECIMAL 로 나눠 문자열로 받는다 (JS 에서 나누지 않는다).
+ * 분모가 없거나 0 이면 null.
+ */
+export async function ratios(pairs: [string | null, string | null][]): Promise<(string | null)[]> {
+  const idx: number[] = [];
+  const params: string[] = [];
+  pairs.forEach(([a, b], i) => {
+    if (a != null && b != null && !/^-?0*(.0*)?$/.test(b)) {
+      idx.push(i);
+      params.push(a, b);
+    }
+  });
+  const out: (string | null)[] = pairs.map(() => null);
+  if (idx.length === 0) return out;
+  const cols = idx.map((_, k) => `ROUND(CAST(? AS DECIMAL(30,8)) / CAST(? AS DECIMAL(30,8)), 6) AS r${k}`).join(", ");
+  const [row] = await traderQuery<Row>(`SELECT ${cols}`, params);
+  idx.forEach((i, k) => {
+    out[i] = str(row?.[`r${k}`]);
+  });
+  return out;
+}
+
+export async function effectiveSettings(): Promise<Record<string, string | null>> {
+  const [row] = await traderQuery<Row>("SELECT `value` FROM engine_state WHERE `key` = 'settings_effective'");
+  const v = json(row?.value) as { effective?: Record<string, string | null> } | null;
+  return v?.effective ?? {};
+}
+
 export function clampLimit(raw: unknown, fallback = 50): number {
   const n = Number(raw);
   if (!Number.isInteger(n) || n < 1) return fallback;
@@ -58,6 +87,7 @@ export async function getSummary(accountName: string): Promise<TraderSummary> {
   if (!acc) {
     return {
       account: null, cash: null, marketValue: null, equity: null, dayStartEquity: null, dayPnl: null,
+      initialCash: null, cumReturn: null, dailyLossLimit: null, lossUsage: null, maxPositionValue: null,
       positions: [], openOrders: 0, ...base,
     };
   }
@@ -76,11 +106,13 @@ export async function getSummary(accountName: string): Promise<TraderSummary> {
   );
   const [totals] = await traderQuery<Row>(
     `SELECT c.cash,
+            dep.initial AS initial_cash,
             m.mv AS market_value,
             CASE WHEN m.missing = 0 THEN c.cash + m.mv END AS equity,
             d.start_equity,
             CASE WHEN m.missing = 0 AND d.start_equity IS NOT NULL THEN c.cash + m.mv - d.start_equity END AS day_pnl
        FROM (SELECT COALESCE(SUM(amount), 0) AS cash FROM cash_ledger WHERE account_id = ?) c
+       CROSS JOIN (SELECT COALESCE(SUM(amount), 0) AS initial FROM cash_ledger WHERE account_id = ? AND kind = 'DEPOSIT') dep
        CROSS JOIN (
          SELECT COALESCE(SUM(p.qty * q.price), 0) AS mv,
                 COALESCE(SUM(CASE WHEN q.price IS NULL THEN 1 ELSE 0 END), 0) AS missing
@@ -90,12 +122,29 @@ export async function getSummary(accountName: string): Promise<TraderSummary> {
        ) m
        LEFT JOIN daily_equity d
          ON d.account_id = ? AND d.trade_date = DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00'))`,
-    [acc.id, acc.id, acc.id]
+    [acc.id, acc.id, acc.id, acc.id]
   );
   const [open] = await traderQuery<Row>(
     "SELECT COUNT(*) AS n FROM orders WHERE account_id = ? AND status IN ('PENDING_NEW','NEW','PARTIALLY_FILLED','PENDING_CANCEL')",
     [acc.id]
   );
+
+  const eff = await effectiveSettings();
+  const equityStr = str(totals?.equity);
+  const initial = str(totals?.initial_cash);
+  const dayPnl = str(totals?.day_pnl);
+  const lossLimit = eff.risk_daily_loss_limit ?? null;
+  const maxPos = eff.risk_max_position_value ?? null;
+  const loss = dayPnl != null && dayPnl.startsWith("-") ? dayPnl.slice(1) : dayPnl != null ? "0" : null;
+  const gain = equityStr != null && initial != null ? await diff(equityStr, initial) : null;
+  const [cumReturn, lossUsage, ...posRatios] = await ratios([
+    [gain, initial],
+    [loss, lossLimit],
+    ...positions.flatMap((p): [string | null, string | null][] => [
+      [str(p.market_value), equityStr],
+      [str(p.market_value), maxPos],
+    ]),
+  ]);
 
   return {
     account: { name: acc.name, broker: acc.broker, createdAt: acc.createdAt },
@@ -103,8 +152,13 @@ export async function getSummary(accountName: string): Promise<TraderSummary> {
     marketValue: str(totals?.market_value),
     equity: str(totals?.equity),
     dayStartEquity: str(totals?.start_equity),
-    dayPnl: str(totals?.day_pnl),
-    positions: positions.map((p) => ({
+    dayPnl,
+    initialCash: initial,
+    cumReturn,
+    dailyLossLimit: lossLimit,
+    lossUsage,
+    maxPositionValue: maxPos,
+    positions: positions.map((p, i) => ({
       symbol: reqStr(p.symbol),
       qty: reqStr(p.qty),
       avgPrice: reqStr(p.avg_price),
@@ -113,10 +167,18 @@ export async function getSummary(accountName: string): Promise<TraderSummary> {
       marketValue: str(p.market_value),
       unrealizedPnl: str(p.unrealized),
       realizedPnl: reqStr(p.realized_pnl),
+      weight: posRatios[i * 2] ?? null,
+      limitUsage: posRatios[i * 2 + 1] ?? null,
     })),
     openOrders: Number(open?.n ?? 0),
     ...base,
   };
+}
+
+/** a - b (SQL DECIMAL) */
+async function diff(a: string, b: string): Promise<string | null> {
+  const [row] = await traderQuery<Row>("SELECT CAST(? AS DECIMAL(24,4)) - CAST(? AS DECIMAL(24,4)) AS d", [a, b]);
+  return str(row?.d);
 }
 
 export async function listOrders(accountName: string, limit: number): Promise<TraderOrder[]> {

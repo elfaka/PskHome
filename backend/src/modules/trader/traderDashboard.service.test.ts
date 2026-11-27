@@ -56,7 +56,7 @@ describe("trader dashboard service", () => {
     expect(s.killswitch).toEqual({ halted: true, reason: "manual", updatedAt: "2026-11-26T01:00:00.000Z" });
     expect(s.lastQuoteAt).toBe("2026-11-26T06:19:50.000Z");
     // 계좌 id 는 사용자 입력이 아니라 조회 결과로만 쓴다
-    expect(db.queries.find((q) => q.sql.includes("cash_ledger"))?.params).toEqual([7, 7, 7]);
+    expect(db.queries.find((q) => q.sql.includes("cash_ledger"))?.params).toEqual([7, 7, 7, 7]);
   });
 
   it("returns an empty summary when the account does not exist yet", async () => {

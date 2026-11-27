@@ -58,6 +58,9 @@ const envSchema = z.object({
   // 둘 중 하나라도 없으면 로그인은 항상 실패한다. 해시는 `npm run trader:hash-password` 로 만든다.
   TRADER_ADMIN_USERNAME: z.string().optional(),
   TRADER_ADMIN_PASSWORD_HASH: z.string().optional(),
+  // 2단계 인증 (Google Authenticator, base32). 있으면 로그인·재개·전략 켜기·설정 변경에 6자리 코드가 필요하다.
+  // 없으면 로그인은 비밀번호만, 위험이 커지는 조작은 거부된다. 만들기: `npm run trader:totp-setup`
+  TRADER_TOTP_SECRET: z.string().optional(),
   TRADER_SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(30),
   TRADER_SESSION_MAX_HOURS: z.coerce.number().int().positive().default(12),
   // 자동매매 대시보드: 엔진 DB(trader)에 읽기 전용 계정(trader_web, SELECT 만)으로 붙는다. 없으면 대시보드 API 만 503

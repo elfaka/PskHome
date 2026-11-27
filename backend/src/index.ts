@@ -15,6 +15,7 @@ const server = app.listen(env.PORT, () => {
     describeTraderAuthConfig({
       username: env.TRADER_ADMIN_USERNAME,
       passwordHash: env.TRADER_ADMIN_PASSWORD_HASH,
+      totpSecret: env.TRADER_TOTP_SECRET,
     })
   );
 });

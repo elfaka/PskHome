@@ -28,7 +28,7 @@ describe("trader routes", () => {
   it("GET /api/trader/auth/me is public and says not authenticated", async () => {
     const res = await request(createApp()).get("/api/trader/auth/me");
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ authenticated: false });
+    expect(res.body).toEqual({ authenticated: false, totpRequired: false });
     expect(res.headers["x-robots-tag"]).toBe("noindex, nofollow");
     expect(res.headers["cache-control"]).toBe("no-store");
   });
@@ -72,12 +72,14 @@ describe("trader routes", () => {
     expect((await agent.get("/api/trader/auth/me")).body).toEqual({
       authenticated: true,
       username: "owner",
+      totpEnabled: false,
+      stepUpUntil: null,
     });
     expect((await agent.get("/api/trader/ping")).status).toBe(200);
 
     expect((await agent.post("/api/trader/auth/logout")).status).toBe(200);
     expect((await agent.get("/api/trader/ping")).status).toBe(401);
-    expect((await agent.get("/api/trader/auth/me")).body).toEqual({ authenticated: false });
+    expect((await agent.get("/api/trader/auth/me")).body).toEqual({ authenticated: false, totpRequired: false });
   });
 
   it("rejects malformed bodies with the same 401", async () => {

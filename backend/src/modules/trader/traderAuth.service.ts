@@ -6,6 +6,8 @@ import {
   type ScryptOptions,
 } from "node:crypto";
 
+import { parseSecret } from "./totp.js";
+
 /**
  * 자동매매(/trader) 전용 로그인 — 본인 계정 하나만 존재한다.
  *
@@ -101,9 +103,13 @@ export function describeTraderAuthConfig(creds: TraderCredentials): string {
     const n = hash.trim().split(":").length;
     problems.push(`TRADER_ADMIN_PASSWORD_HASH 형식 오류 (scrypt:N:r:p:salt:hash 6칸이어야 하는데 ${n}칸)`);
   }
-  return problems.length === 0
-    ? "[trader] login configured"
-    : `[trader] login disabled: ${problems.join(", ")}`;
+  if (problems.length > 0) return `[trader] login disabled: ${problems.join(", ")}`;
+  if (creds.totpSecret === undefined || creds.totpSecret === "") {
+    return "[trader] login configured (2FA off — 재개·전략 켜기·설정 변경 불가)";
+  }
+  return parseSecret(creds.totpSecret)
+    ? "[trader] login configured (2FA on)"
+    : "[trader] login configured (2FA 비밀키 형식 오류 — base32 128비트 이상이어야 한다. 위험이 커지는 조작 불가)";
 }
 
 // 설정이 없거나 깨졌을 때도 같은 시간만큼 계산해 응답 시간으로 계정 존재를 추측하지 못하게 한다
@@ -122,6 +128,8 @@ function sameText(a: string, b: string): boolean {
 export type TraderCredentials = {
   username?: string;
   passwordHash?: string;
+  /** 2단계 인증 비밀키 (base32). 상태 설명에만 쓴다 */
+  totpSecret?: string;
 };
 
 /** 계정이 설정돼 있고 아이디·비밀번호가 모두 맞을 때만 true. */

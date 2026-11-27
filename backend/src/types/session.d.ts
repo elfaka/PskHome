@@ -10,7 +10,13 @@ declare module "express-session" {
   interface SessionData {
     stocksim?: PortfolioState;
     /** 자동매매(/trader) 로그인. Google 로그인(passport)과 별개다. 시각은 epoch ms */
-    trader?: { username: string; loginAt: number; lastSeenAt: number };
+    trader?: {
+      username: string;
+      loginAt: number;
+      lastSeenAt: number;
+      /** 2단계 인증(TOTP)을 마지막으로 통과한 시각. 이후 5분 동안 위험이 커지는 조작을 할 수 있다 */
+      stepUpAt?: number;
+    };
     /** passport 가 쓰는 키. trader 로그인 시 세션 재발급 후 옮겨 담는다 */
     passport?: unknown;
   }

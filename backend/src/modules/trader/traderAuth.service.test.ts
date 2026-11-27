@@ -69,7 +69,11 @@ describe("describeTraderAuthConfig", () => {
   it("reports configured without leaking values", async () => {
     const hash = await hashPassword("correct-horse-battery");
     const msg = describeTraderAuthConfig({ username: "admin", passwordHash: hash });
-    expect(msg).toBe("[trader] login configured");
+    expect(msg).toBe("[trader] login configured (2FA off — 재개·전략 켜기·설정 변경 불가)");
+    expect(describeTraderAuthConfig({ username: "admin", passwordHash: hash, totpSecret: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" })).toBe(
+      "[trader] login configured (2FA on)"
+    );
+    expect(describeTraderAuthConfig({ username: "admin", passwordHash: hash, totpSecret: "ABC" })).toContain("형식 오류");
   });
 
   it("names what is missing or broken", async () => {
