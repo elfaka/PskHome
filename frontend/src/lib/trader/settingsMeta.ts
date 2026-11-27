@@ -4,6 +4,8 @@
  * 모두 엔진 재시작 없이 약 5초 안에 다음 판단부터 적용된다.
  */
 
+import { formatDec, formatRatioPct } from "./decimal";
+
 export type SettingUnit = "rate" | "krw" | "bps" | "ratio" | "mult" | "enum" | "time" | "count" | "symbols";
 
 export interface SettingMeta {
@@ -267,4 +269,23 @@ export function looksLikeCount(v: string): boolean {
 export function looksLikeSymbols(v: string): boolean {
   const parts = v.split(",").map((x) => x.trim()).filter(Boolean);
   return parts.every((x) => /^[A-Za-z0-9]{1,16}$/.test(x));
+}
+
+const META_BY_KEY = new Map(SETTING_GROUPS.flatMap((g) => g.items.map((i) => [i.key, i] as const)));
+
+export function settingMeta(key: string): SettingMeta | undefined {
+  return META_BY_KEY.get(key);
+}
+
+/** 설정 값을 화면 표기로 ("0.00015" → "0.015%", "2000000" → "2,000,000원", 시각 "15:00", 빈 값 → "끔"·"제한 없음") */
+export function formatSettingValue(meta: SettingMeta | undefined, v: string | null | undefined): string {
+  if (!meta) return v ?? "—";
+  if (meta.unit === "time") return v ? v.slice(0, 5) : "끔";
+  if (v == null || v === "") return meta.emptyLabel ?? "—";
+  if (meta.unit === "symbols") return v.split(",").join(", ");
+  if (meta.unit === "count") return `${v}개`;
+  if (meta.unit === "rate") return formatRatioPct(v, 3, false);
+  if (meta.unit === "krw") return `${formatDec(v)}원`;
+  if (meta.unit === "enum") return meta.options?.find((o) => o.value === v)?.label ?? v;
+  return `${v}${UNIT_SUFFIX[meta.unit]}`;
 }

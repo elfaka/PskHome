@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { usePolling } from "@/lib/stocksim/usePolling";
 
 import { ActivityPanel, DecisionsPanel, OverviewPanel, StrategyList, TradesPanel } from "./panels";
+import { SymbolNamesProvider } from "./names";
 import SettingsPanel from "./SettingsPanel";
 import StatusBar from "./StatusBar";
 import { StepUpProvider } from "./stepUp";
@@ -115,8 +116,12 @@ export default function TraderDashboard({
     });
   }
 
+  // 종목 이름 (오늘의 종목에서) — 판단·로그·보유 표가 코드 옆에 이름을 보여준다
+  const names = Object.fromEntries((status.data?.universe?.symbols ?? []).filter((p) => p.name).map((p) => [p.symbol, p.name!]));
+
   return (
     <StepUpProvider totpEnabled={totpEnabled} initialUntil={stepUpUntil}>
+      <SymbolNamesProvider value={names}>
       <div className="min-h-screen bg-bg">
         <StatusBar
           status={status.data}
@@ -203,6 +208,7 @@ export default function TraderDashboard({
           </main>
         </div>
       </div>
+      </SymbolNamesProvider>
     </StepUpProvider>
   );
 }

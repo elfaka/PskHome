@@ -93,6 +93,12 @@ export const mockTraderDecisions = [
     symbol: "005930", action: "BUY", reason: "합계 90 ≥ 80, VWAP 위, 거래량 2.0배", shadow: true, score: "90.00",
     confidence: "0.9000", riskResult: "SHADOW", riskReason: "그림자 전략 — 주문하지 않음", clientOrderId: null,
     entryPrice: null, stopLoss: null, takeProfit: null, riskReward: null, reasons: ["technical: 30/30"],
+    parts: {
+      technical: { points: "30", max: "30", note: "VWAP 위, 거래량 2.0배", available: true },
+      flow: { points: "25", max: "25", note: "순매수: 외국인, 기관", available: true },
+      global: { points: "0", max: "15", note: "VIX 데이터 없음·지연", available: false },
+    },
+    ma: null, invalidation: ["VWAP 하회", "거래량 감소"], validUntil: "2026-11-26T00:36:00.000Z",
     components: {
       price: { kind: "price", source: "rules", model_version: "rules-v1", points: "30", max: "30" },
       context: { kind: "context", source: "rules", model_version: "rules-v1", points: "60", max: "60" },
@@ -104,7 +110,14 @@ export const mockTraderDecisions = [
     symbol: "005930", action: "BUY", reason: "golden cross", shadow: false, score: null, confidence: null,
     riskResult: "APPROVED", riskReason: null, clientOrderId: "ma_cross-005930-20261126T003000-B-abc",
     entryPrice: "70135.0000", stopLoss: "69985.0000", takeProfit: "70435.0000", riskReward: "1.0500",
-    reasons: null, components: null,
+    reasons: null, components: null, parts: null, ma: { fast: "70120", slow: "70050.5", diff: "69.5" }, invalidation: null, validUntil: null,
+  },
+  {
+    id: 0, ts: "2026-11-26T00:29:00.000Z", barTs: "2026-11-26T00:28:00.000Z", strategyId: "ma_cross",
+    symbol: "000660", action: "BUY", reason: "golden cross", shadow: false, score: null, confidence: null,
+    riskResult: "REJECTED", riskReason: "LOW_RISK_REWARD: 비용 차감 손익비 0.92 < 1.5", clientOrderId: null,
+    entryPrice: "1100000.0000", stopLoss: "1095000.0000", takeProfit: "1109000.0000", riskReward: "0.9200",
+    reasons: null, components: null, parts: null, ma: null, invalidation: null, validUntil: null,
   },
 ];
 
@@ -180,10 +193,35 @@ export const mockTraderStrategies = [
   },
 ];
 
+const act = (a: Record<string, unknown>) => ({
+  code: null, strategyId: null, by: null, diff: null, detail: null, groupKey: String(a.id), ...a,
+});
+
 export const mockTraderActivity = [
-  { id: "event-2", ts: "2026-11-26T00:40:00.000Z", level: "info", source: "event", kind: "SETTINGS_APPLIED", symbol: null, message: "설정 적용 · risk_min_risk_reward 1.5→1.2" },
-  { id: "fill-1", ts: "2026-11-26T00:31:10.000Z", level: "info", source: "fill", kind: "BUY", symbol: "005930", message: "매수 체결 13주 @ 70171 · ma_cross" },
-  { id: "event-1", ts: "2026-11-26T00:20:00.000Z", level: "warn", source: "event", kind: "DATA_GAP", symbol: "000660", message: "봉 누락 · 3" },
+  act({
+    id: "event-3", ts: "2026-11-26T00:42:00.000Z", level: "warn", source: "event", kind: "ORDER_REJECTED", symbol: "005930",
+    category: "risk", title: "위험 관리가 주문을 막음", code: "LOW_RISK_REWARD", detail: "비용 차감 손익비 0.92 < 1.5",
+    groupKey: "ORDER_REJECTED:LOW_RISK_REWARD:005930", message: "위험 관리가 주문을 막음 · 비용 차감 손익비 0.92 < 1.5",
+  }),
+  act({
+    id: "event-4", ts: "2026-11-26T00:41:00.000Z", level: "warn", source: "event", kind: "ORDER_REJECTED", symbol: "005930",
+    category: "risk", title: "위험 관리가 주문을 막음", code: "LOW_RISK_REWARD", detail: "비용 차감 손익비 0.95 < 1.5",
+    groupKey: "ORDER_REJECTED:LOW_RISK_REWARD:005930", message: "위험 관리가 주문을 막음 · 비용 차감 손익비 0.95 < 1.5",
+  }),
+  act({
+    id: "event-2", ts: "2026-11-26T00:40:00.000Z", level: "info", source: "event", kind: "SETTINGS_APPLIED", symbol: null,
+    category: "settings", title: "엔진이 설정 적용 (v2)", by: "web:owner",
+    diff: [{ key: "risk_min_risk_reward", before: "1.5", after: "1.2" }, { key: "slippage_bps", before: "5", after: "7" }],
+    message: "엔진이 설정 적용 (v2)",
+  }),
+  act({
+    id: "fill-1", ts: "2026-11-26T00:31:10.000Z", level: "info", source: "fill", kind: "BUY", symbol: "005930",
+    category: "trade", title: "매수 체결", detail: "13주 × 70,171원", strategyId: "ma_cross", message: "매수 체결 · 13주 × 70,171원",
+  }),
+  act({
+    id: "event-1", ts: "2026-11-26T00:20:00.000Z", level: "warn", source: "event", kind: "DATA_GAP", symbol: "000660",
+    category: "data", title: "봉 누락 3개", detail: "지표를 다시 쌓는 동안 그 종목은 신규 매수를 하지 않습니다", message: "봉 누락 3개",
+  }),
 ];
 
 export const mockTraderChart = {

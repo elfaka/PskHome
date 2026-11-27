@@ -122,6 +122,13 @@ export interface TraderDecision {
   riskReward: Dec | null;
   reasons: string[] | null;
   components: { price?: ComponentRecord; context?: ComponentRecord; issue?: ComponentRecord } | null;
+  /** 점수 전략의 항목별 점수 (technical·flow·market·global·news) */
+  parts?: Record<string, { points: Dec | null; max: Dec | null; note: string; available: boolean }> | null;
+  /** 이동평균 교차 전략의 짧은·긴 이동평균 */
+  ma?: { fast: Dec | null; slow: Dec | null; diff: Dec | null } | null;
+  /** 이렇게 되면 판단이 무효 */
+  invalidation?: string[] | null;
+  validUntil?: string | null;
 }
 
 export interface TraderPerformanceRow {
@@ -157,8 +164,14 @@ export async function getTraderFills(limit = 30): Promise<TraderFill[]> {
   return (await api.get<TraderFill[]>("/api/trader/fills", { params: { limit } })).data;
 }
 
-export async function getTraderDecisions(opts: { limit?: number; signalsOnly?: boolean } = {}): Promise<TraderDecision[]> {
-  const params = { limit: opts.limit ?? 40, ...(opts.signalsOnly ? { signals: "1" } : {}) };
+export async function getTraderDecisions(
+  opts: { limit?: number; signalsOnly?: boolean; strategy?: string } = {}
+): Promise<TraderDecision[]> {
+  const params = {
+    limit: opts.limit ?? 40,
+    ...(opts.signalsOnly ? { signals: "1" } : {}),
+    ...(opts.strategy ? { strategy: opts.strategy } : {}),
+  };
   return (await api.get<TraderDecision[]>("/api/trader/decisions", { params })).data;
 }
 
@@ -263,6 +276,8 @@ export interface TraderStrategyRow {
   recent: { ts: string | null; symbol: string; action: string; riskResult: string | null }[];
 }
 
+export type TraderActivityCategory = "trade" | "order" | "risk" | "control" | "settings" | "universe" | "system" | "data";
+
 export interface TraderActivity {
   id: string;
   ts: string | null;
@@ -270,6 +285,17 @@ export interface TraderActivity {
   source: "fill" | "order" | "event";
   kind: string;
   symbol: string | null;
+  /** 아래는 새 백엔드가 준다 (옛 백엔드면 message 만) */
+  category?: TraderActivityCategory;
+  title?: string;
+  detail?: string | null;
+  /** 위험 관리 거부 코드 */
+  code?: string | null;
+  strategyId?: string | null;
+  by?: string | null;
+  diff?: { key: string; before: string | null; after: string | null }[] | null;
+  /** 같은 값이 연달아 나오면 한 줄로 묶는다 */
+  groupKey?: string;
   message: string;
 }
 

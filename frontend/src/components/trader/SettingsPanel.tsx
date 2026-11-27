@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/errorMessage";
 import { formatDec, formatKst, formatRatioPct } from "@/lib/trader/decimal";
 import {
+  formatSettingValue,
   looksLikeCount,
   looksLikeDecimal,
   looksLikeSymbols,
@@ -53,16 +54,7 @@ function normalize(meta: SettingMeta | undefined, v: string | null | undefined):
   return frac ? `${int}.${frac}` : int;
 }
 
-function show(meta: SettingMeta, v: string | null | undefined): string {
-  if (meta.unit === "time") return v ? v.slice(0, 5) : "끔";
-  if (v == null || v === "") return meta.emptyLabel ?? "—";
-  if (meta.unit === "symbols") return v.split(",").join(", ");
-  if (meta.unit === "count") return `${v}개`;
-  if (meta.unit === "rate") return `${formatRatioPct(v, 3, false)}`;
-  if (meta.unit === "krw") return `${formatDec(v)}원`;
-  if (meta.unit === "enum") return meta.options?.find((o) => o.value === v)?.label ?? v;
-  return `${v}${UNIT_SUFFIX[meta.unit]}`;
-}
+const show = formatSettingValue;
 
 /** 입력칸에 보여줄 값 (시각은 HH:MM, 끔은 빈칸) */
 function editable(meta: SettingMeta, v: string | null | undefined): string {

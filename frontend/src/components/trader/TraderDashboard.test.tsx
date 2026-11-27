@@ -182,9 +182,12 @@ describe("TraderDashboard", () => {
   it("lists strategies with a status bar of recent decisions", async () => {
     renderDashboard();
     const list = await screen.findByRole("region", { name: "전략" });
-    expect(await within(list).findByText("ma_cross")).toBeInTheDocument();
-    expect(within(list).getByText(/그림자 \(신호만 기록\)/)).toBeInTheDocument();
-    expect(within(list).getByRole("switch", { name: "ma_cross 끄기" })).toHaveAttribute("aria-checked", "true");
+    // 한글 이름 + 한 줄 요약 (개요는 짧게)
+    expect(await within(list).findByText("이동평균 교차")).toBeInTheDocument();
+    expect(within(list).getByText("장중 점수")).toBeInTheDocument();
+    expect(within(list).getByText(/짧은 이동평균이 긴 이동평균을 위로 뚫으면 사고/)).toBeInTheDocument();
+    expect(within(list).getByText(/그림자 \(주문 없이 신호·성과만 기록\)/)).toBeInTheDocument();
+    expect(within(list).getByRole("switch", { name: "이동평균 교차 끄기" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("turns a strategy off without a code, and asks for the code to turn it back on", async () => {
@@ -197,11 +200,11 @@ describe("TraderDashboard", () => {
     );
     const { user } = renderDashboard({ stepUpUntil: null });
     const list = await screen.findByRole("region", { name: "전략" });
-    await user.click(await within(list).findByRole("switch", { name: "ma_cross 끄기" }));
+    await user.click(await within(list).findByRole("switch", { name: "이동평균 교차 끄기" }));
     expect(screen.queryByRole("dialog", { name: "2단계 인증" })).not.toBeInTheDocument();
     expect(sent).toEqual([["ma_cross", { enabled: false }]]);
 
-    await user.click(within(list).getByRole("switch", { name: "ma_cross 켜기" }));
+    await user.click(within(list).getByRole("switch", { name: "이동평균 교차 켜기" }));
     const dialog = await screen.findByRole("dialog", { name: "2단계 인증" });
     await user.type(within(dialog).getByLabelText("인증 코드"), "123456");
     await user.click(within(dialog).getByRole("button", { name: "확인" }));
@@ -245,14 +248,36 @@ describe("TraderDashboard", () => {
     expect(await screen.findByRole("dialog", { name: "2단계 인증" })).toBeInTheDocument();
   });
 
-  it("filters the activity log by level", async () => {
+  it("shows a clean activity log: categories, Korean titles, settings changes and collapsed repeats", async () => {
     const { user } = renderDashboard();
     await openTab(user, "활동 로그");
     const log = await screen.findByRole("region", { name: "활동 로그" });
-    expect(await within(log).findByText(/매수 체결 13주/)).toBeInTheDocument();
-    await user.click(within(log).getByRole("button", { name: "경고 1" }));
-    expect(within(log).queryByText(/매수 체결 13주/)).not.toBeInTheDocument();
-    expect(within(log).getByText("봉 누락 · 3")).toBeInTheDocument();
+    // 날짜 머리말
+    expect(await within(log).findByText(/11월 26일/)).toBeInTheDocument();
+    // 같은 거부가 연달아 나오면 한 줄 + "같은 내용 2번"
+    expect(within(log).getAllByText("위험 관리가 주문을 막음 — 손익비 부족")).toHaveLength(1);
+    const more = within(log).getByRole("button", { name: "같은 내용 2번 펼치기" });
+    await user.click(more);
+    expect(within(log).getByText(/비용 차감 손익비 0.95 < 1.5/)).toBeInTheDocument();
+    // 설정 변경은 이름·단위로
+    expect(within(log).getByText("최소 손익비")).toBeInTheDocument();
+    expect(within(log).getByText("7bp")).toBeInTheDocument();
+    expect(within(log).getByText("화면 · owner")).toBeInTheDocument();
+    // 체결: 전략 한글 이름
+    expect(within(log).getByText("매수 체결")).toBeInTheDocument();
+    expect(within(log).getByText("13주 × 70,171원")).toBeInTheDocument();
+    expect(within(log).getAllByText("이동평균 교차").length).toBeGreaterThan(0);
+
+    // 수준·종류 거르기
+    await user.click(within(log).getByRole("button", { name: "경고 3" }));
+    expect(within(log).queryByText("매수 체결")).not.toBeInTheDocument();
+    await user.click(within(log).getByRole("button", { name: "데이터" }));
+    expect(within(log).getByText("봉 누락 3개")).toBeInTheDocument();
+    expect(within(log).queryByText(/위험 관리가 주문을 막음/)).not.toBeInTheDocument();
+    // 묶기를 끄면 하나씩
+    await user.click(within(log).getByRole("button", { name: "모든 종류" }));
+    await user.click(within(log).getByLabelText("같은 내용 묶기"));
+    expect(within(log).getAllByText("위험 관리가 주문을 막음 — 손익비 부족")).toHaveLength(2);
   });
 
   it("keeps decisions and signal performance on their own tab", async () => {
@@ -260,13 +285,30 @@ describe("TraderDashboard", () => {
     await openTab(user, "판단·성과");
     const table = await screen.findByRole("region", { name: "판단 기록" });
     expect(await within(table).findByText("그림자")).toBeInTheDocument();
-    expect(within(table).getByText(/손절 69,985 \/ 목표 70,435 · R 1.05/)).toBeInTheDocument();
+    // 한글 전략·신호·사유·위험 관리 결과
+    expect(within(table).getAllByText("이동평균 교차").length).toBeGreaterThanOrEqual(2); // 표 2줄 + 전략 고르기
+    expect(within(table).getAllByText("골든크로스 — 짧은 이동평균이 긴 이동평균을 위로 돌파").length).toBe(2);
+    expect(within(table).getByText("주문 승인")).toBeInTheDocument();
+    expect(within(table).getByText("기록만 (그림자)")).toBeInTheDocument();
+    expect(within(table).getByText("손익비 부족")).toBeInTheDocument();
+    expect(within(table).getByText("비용 차감 손익비 0.92 < 1.5")).toBeInTheDocument();
+    expect(within(table).getByText("90점")).toBeInTheDocument();
+    expect(within(table).getByText("손익비 1.05")).toBeInTheDocument();
+    // 자세히: 점수 항목·무효 조건
+    await user.click(within(table).getAllByRole("button", { name: "자세히" })[0]);
+    expect(within(table).getByText("수급 (외국인·기관)")).toBeInTheDocument();
+    expect(within(table).getByText("사용 안 함 — VIX 데이터 없음·지연")).toBeInTheDocument();
+    expect(within(table).getByText(/VWAP 하회 · 거래량 감소/)).toBeInTheDocument();
+    await user.click(within(table).getAllByRole("button", { name: "자세히" })[0]);
+    expect(within(table).getByText(/짧은 이동평균 70,120.0 · 긴 이동평균 70,050.5/)).toBeInTheDocument();
+
+    // 신호 성과: 전략·신호 카드, 기간별
     const perf = screen.getByRole("region", { name: "신호 성과" });
-    expect(await within(perf).findByText("+0.12%")).toBeInTheDocument();
-    const bars = screen.getByRole("region", { name: "신호 성과 — 기간별 평균 수익률" });
-    expect(within(bars).getByText("intraday_score · BUY")).toBeInTheDocument();
-    expect(within(bars).getByText("5분")).toBeInTheDocument();
-    expect(within(bars).getByText(/승률 75% · 4/)).toBeInTheDocument();
+    expect(within(perf).getByText("장중 점수")).toBeInTheDocument();
+    expect(within(perf).getByText("5분 뒤")).toBeInTheDocument();
+    expect(within(perf).getByText("+0.12%")).toBeInTheDocument();
+    expect(within(perf).getByText("75%")).toBeInTheDocument();
+    expect(within(perf).getByText("평가 4건 · 대기 1건")).toBeInTheDocument();
   });
 
   it("reviews a settings change and sends only the changed keys after 2FA", async () => {

@@ -14,9 +14,9 @@ import {
   getTraderStats,
   traderSetStrategy,
   type ChartInterval,
-  type ComponentRecord,
   type TraderActivity,
   type TraderDecision,
+  type TraderPerformanceRow,
   type TraderStatus,
   type TraderStrategyRow,
   type TraderSummary,
@@ -27,13 +27,30 @@ import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/errorMessage";
 import { TONE_TEXT } from "@/lib/stocksim/format";
 import { usePolling } from "@/lib/stocksim/usePolling";
+import { Select } from "@/components/ui/Field";
 import { formatDec, formatKst, formatRatioPct, signOf } from "@/lib/trader/decimal";
+import {
+  actionLabel,
+  actionTone,
+  actorLabel,
+  CATEGORY_LABEL,
+  HORIZON_LABEL,
+  PART_LABEL,
+  PART_ORDER,
+  reasonKo,
+  REJECT_TEXT,
+  RISK_RESULT,
+  splitRiskReason,
+  STRATEGY_META,
+  strategyLabel,
+} from "@/lib/trader/labels";
+import { formatSettingValue, settingMeta } from "@/lib/trader/settingsMeta";
 
+import { SymbolText, useSymbolName } from "./names";
 import { useStepUp } from "./stepUp";
 import {
   EquitySection,
   IndicatorCards,
-  PerformanceChart,
   RejectionSection,
   ScorePartsCard,
   ScoreTrendSection,
@@ -43,14 +60,6 @@ import {
 } from "./charts";
 import { DataTable, Gauge, Kpi, num, Section, Signed, StatusDot, Switch, td, ago } from "./ui";
 
-const ACTION_TONE: Record<string, BadgeTone> = { BUY: "danger", SELL: "info", EXIT: "info", HOLD: "neutral", WAIT: "neutral" };
-const RISK_TONE: Record<string, BadgeTone> = {
-  APPROVED: "success",
-  REJECTED: "warning",
-  DUPLICATE: "neutral",
-  SHADOW: "accent",
-  STRATEGY_OFF: "neutral",
-};
 const SIDE_TEXT: Record<string, string> = { BUY: "매수", SELL: "매도" };
 
 // ── 개요 ─────────────────────────────────────────────────────────────────────
@@ -177,7 +186,7 @@ export function OverviewPanel({
             </button>
           }
         >
-          <ActivityList items={(activity ?? []).slice(0, 8)} />
+          <ActivityList items={(activity ?? []).slice(0, 12)} compact />
         </Section>
       </div>
 
@@ -192,7 +201,9 @@ function PositionsSection({ summary: s }: { summary: TraderSummary | null }) {
       <DataTable head={["종목", "수량", "평균단가", "현재가", "평가금액", "비중", "평가손익", "실현손익"]} empty={!!s && s.positions.length === 0}>
         {s?.positions.map((p) => (
           <tr key={p.symbol} className="border-b border-line/60">
-            <td className={td}>{p.symbol}</td>
+            <td className={td}>
+              <SymbolText symbol={p.symbol} />
+            </td>
             <td className={num}>{formatDec(p.qty)}</td>
             <td className={num}>{formatDec(p.avgPrice)}</td>
             <td className={num} title={formatKst(p.lastPriceAt)}>
@@ -273,14 +284,20 @@ export function StrategyList({
               <div className="flex min-w-40 items-center gap-2">
                 <StatusDot tone={tone} />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-fg">{r.id}</p>
-                  <p className="text-[11px] text-fg-subtle">
-                    {r.shadow ? "그림자 (신호만 기록)" : "주문 전략"} · 마지막 판단 {now == null ? "—" : ago(r.lastDecisionAt, now)}
+                  <p className="truncate text-sm font-medium text-fg">
+                    {strategyLabel(r.id)} <span className="text-[11px] font-normal text-fg-subtle">{r.id}</span>
                   </p>
+                  <p className="text-[11px] text-fg-subtle">
+                    {r.shadow ? "그림자 (주문 없이 신호·성과만 기록)" : "주문 전략"} · 마지막 판단 {now == null ? "—" : ago(r.lastDecisionAt, now)}
+                  </p>
+                  {!compact && STRATEGY_META[r.id] && (
+                    <p className="mt-0.5 max-w-xl text-[11px] text-fg-muted">{STRATEGY_META[r.id].description}</p>
+                  )}
+                  {compact && STRATEGY_META[r.id] && <p className="mt-0.5 truncate text-[11px] text-fg-muted">{STRATEGY_META[r.id].summary}</p>}
                 </div>
               </div>
               {/* 좁은 화면에서는 한 줄을 다 쓰고, 넘치는 옛 판단은 왼쪽에서 잘린다 (최근 것이 오른쪽) */}
-              <div className="order-last flex min-w-0 basis-full items-end justify-end gap-0.5 overflow-hidden sm:order-none sm:basis-0 sm:flex-1" aria-label={`${r.id} 최근 판단`}>
+              <div className="order-last flex min-w-0 basis-full items-end justify-end gap-0.5 overflow-hidden sm:order-none sm:basis-0 sm:flex-1" aria-label={`${strategyLabel(r.id)} 최근 판단`}>
                 {r.recent.slice(compact ? -24 : -40).map((t, i) => (
                   <span
                     key={`${t.ts}-${i}`}
@@ -310,7 +327,7 @@ export function StrategyList({
               <Switch
                 checked={enabled}
                 disabled={busy === r.id}
-                label={`${r.id} ${enabled ? "끄기" : "켜기"}`}
+                label={`${strategyLabel(r.id)} ${enabled ? "끄기" : "켜기"}`}
                 onChange={(next) => void toggle(r.id, next)}
               />
             </li>
@@ -345,12 +362,14 @@ export function TradesPanel({ summary }: { summary: TraderSummary | null }) {
           {open.map((o) => (
             <tr key={o.clientOrderId} className="border-b border-line/60">
               <td className={td}>{formatKst(o.createdAt)}</td>
-              <td className={td}>{o.symbol}</td>
+              <td className={td}>
+                <SymbolText symbol={o.symbol} />
+              </td>
               <td className={cn(td, o.side === "BUY" ? TONE_TEXT.up : TONE_TEXT.down)}>{SIDE_TEXT[o.side] ?? o.side}</td>
               <td className={num}>{formatDec(o.qty)}</td>
               <td className={num}>{formatDec(o.filledQty)}</td>
               <td className={td}>{o.status}</td>
-              <td className={cn(td, "text-fg-muted")}>{o.strategyId ?? "—"}</td>
+              <td className={cn(td, "text-fg-muted")}>{strategyLabel(o.strategyId)}</td>
             </tr>
           ))}
         </DataTable>
@@ -382,7 +401,9 @@ export function TradesPanel({ summary }: { summary: TraderSummary | null }) {
             {orders.data?.map((o) => (
               <tr key={o.clientOrderId} className="border-b border-line/60">
                 <td className={td}>{formatKst(o.createdAt)}</td>
-                <td className={td}>{o.symbol}</td>
+                <td className={td}>
+                <SymbolText symbol={o.symbol} />
+              </td>
                 <td className={cn(td, o.side === "BUY" ? TONE_TEXT.up : TONE_TEXT.down)}>{SIDE_TEXT[o.side] ?? o.side}</td>
                 <td className={num}>{formatDec(o.qty)}</td>
                 <td className={num}>
@@ -392,7 +413,7 @@ export function TradesPanel({ summary }: { summary: TraderSummary | null }) {
                 <td className={td}>
                   <Badge tone={o.status === "FILLED" ? "success" : o.status === "REJECTED" ? "warning" : "neutral"}>{o.status}</Badge>
                 </td>
-                <td className={cn(td, "text-fg-muted")}>{o.strategyId ?? "—"}</td>
+                <td className={cn(td, "text-fg-muted")}>{strategyLabel(o.strategyId)}</td>
                 <td className={cn(td, "max-w-64 truncate text-fg-muted")} title={o.rejectReason ?? undefined}>
                   {o.rejectReason ?? "—"}
                 </td>
@@ -404,7 +425,9 @@ export function TradesPanel({ summary }: { summary: TraderSummary | null }) {
             {fills.data?.map((f) => (
               <tr key={f.execId} className="border-b border-line/60">
                 <td className={td}>{formatKst(f.ts)}</td>
-                <td className={td}>{f.symbol}</td>
+                <td className={td}>
+                <SymbolText symbol={f.symbol} />
+              </td>
                 <td className={cn(td, f.side === "BUY" ? TONE_TEXT.up : TONE_TEXT.down)}>{SIDE_TEXT[f.side] ?? f.side}</td>
                 <td className={num}>{formatDec(f.qty)}</td>
                 <td className={num}>{formatDec(f.price)}</td>
@@ -421,165 +444,551 @@ export function TradesPanel({ summary }: { summary: TraderSummary | null }) {
 
 // ── 판단·성과 ────────────────────────────────────────────────────────────────
 
-function componentText(c: ComponentRecord | undefined, label: string): string {
-  if (!c) return `${label} —`;
-  const pts = c.points != null ? `${formatDec(c.points)}/${formatDec(c.max ?? null)}` : "—";
-  const src = c.status ? c.status : c.source ?? "";
-  return `${label} ${pts} ${src}${c.veto ? " 거부권" : ""}`.trim();
+const KST_HM = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+const KST_MD = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "2-digit", day: "2-digit" });
+const KST_DAY = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" });
+const KST_HMS = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
+function hm(iso: string | null | undefined): string {
+  return iso ? KST_HM.format(new Date(iso)) : "—";
 }
 
-function DecisionRow({ d }: { d: TraderDecision }) {
+const ACTION_BADGE: Record<string, BadgeTone> = { up: "danger", down: "info", flat: "neutral" };
+
+function ActionBadge({ action }: { action: string }) {
+  return <Badge tone={ACTION_BADGE[actionTone(action)]}>{actionLabel(action)}</Badge>;
+}
+
+function StrategyCell({ id, shadow }: { id: string; shadow?: boolean }) {
+  const meta = STRATEGY_META[id];
   return (
-    <tr className="border-b border-line/60 align-top">
-      <td className={td}>{formatKst(d.barTs)}</td>
-      <td className={td}>
-        {d.strategyId}
-        {d.shadow && (
-          <Badge tone="accent" className="ml-1">
-            그림자
-          </Badge>
-        )}
-      </td>
-      <td className={td}>{d.symbol}</td>
-      <td className={td}>
-        <Badge tone={ACTION_TONE[d.action] ?? "neutral"}>{d.action}</Badge>
-      </td>
-      <td className={num}>{d.score != null ? formatDec(d.score) : "—"}</td>
-      <td className={cn(td, "text-fg-muted")}>
-        {d.components
-          ? [componentText(d.components.price, "가격"), componentText(d.components.context, "맥락"), componentText(d.components.issue, "이슈")].join(" · ")
-          : "—"}
-      </td>
-      <td className={td}>
-        {d.riskResult ? <Badge tone={RISK_TONE[d.riskResult] ?? "neutral"}>{d.riskResult}</Badge> : "—"}
-        {d.riskReason && (
-          <div className="mt-0.5 max-w-64 truncate text-fg-subtle" title={d.riskReason}>
-            {d.riskReason}
-          </div>
-        )}
-      </td>
-      <td className={num}>
-        {d.entryPrice ? (
-          <>
-            {formatDec(d.entryPrice)}
-            <div className="text-fg-subtle">
-              손절 {formatDec(d.stopLoss)} / 목표 {formatDec(d.takeProfit)} · R {formatDec(d.riskReward, 2)}
-            </div>
-          </>
-        ) : (
-          "—"
-        )}
-      </td>
-      <td className={cn(td, "max-w-80 truncate text-fg-muted")} title={d.reason}>
-        {d.reason}
-      </td>
-    </tr>
+    <div className="min-w-0" title={meta?.summary}>
+      <span className="text-fg">{strategyLabel(id)}</span>
+      {shadow && (
+        <Badge tone="accent" className="ml-1">
+          그림자
+        </Badge>
+      )}
+      {meta?.kind === "규칙" && <span className="ml-1 text-[10px] text-fg-subtle">규칙</span>}
+    </div>
   );
 }
 
+/** 점수 (가격·맥락·이슈 쌓은 막대) */
+function ScoreCell({ d }: { d: TraderDecision }) {
+  if (d.score == null) return <span className="text-fg-subtle">—</span>;
+  const c = d.components ?? {};
+  const seg = [
+    { v: c.price?.points, cls: "bg-series-1", label: "가격" },
+    { v: c.context?.points, cls: "bg-series-2", label: "맥락" },
+    { v: c.issue?.points, cls: "bg-series-3", label: "이슈" },
+  ];
+  return (
+    <div className="w-24">
+      <div className="flex items-baseline justify-between">
+        <span className="font-medium tabular-nums text-fg">{formatDec(d.score)}점</span>
+      </div>
+      <div className="mt-1 flex h-1.5 w-full overflow-hidden rounded-full bg-surface-2" aria-hidden>
+        {seg.map((s) => (
+          <span key={s.label} className={s.cls} style={{ width: `${Math.max(0, Math.min(100, Number(s.v ?? 0)))}%` }} />
+        ))}
+      </div>
+      <p className="mt-0.5 text-[10px] text-fg-subtle tabular-nums">
+        {seg.map((s) => `${s.label} ${s.v != null ? formatDec(s.v) : "—"}`).join(" · ")}
+      </p>
+    </div>
+  );
+}
+
+function RiskCell({ d }: { d: TraderDecision }) {
+  if (!d.riskResult) return <span className="text-fg-subtle">주문 의도 없음</span>;
+  const meta = RISK_RESULT[d.riskResult] ?? { label: d.riskResult, tone: "neutral" as const };
+  const { label, message } = splitRiskReason(d.riskReason);
+  const showMsg = d.riskResult === "REJECTED" || d.riskResult === "DUPLICATE";
+  return (
+    <div className="min-w-44 max-w-60 whitespace-normal">
+      <Badge tone={meta.tone}>{meta.label}</Badge>
+      {d.riskResult === "REJECTED" && label && <p className="mt-0.5 font-medium text-warning-soft-fg">{label}</p>}
+      {showMsg && message && <p className="mt-0.5 text-fg-subtle">{message}</p>}
+    </div>
+  );
+}
+
+function LevelsCell({ d }: { d: TraderDecision }) {
+  if (!d.entryPrice) return <span className="text-fg-subtle">—</span>;
+  return (
+    <div className="tabular-nums">
+      <p className="text-fg">{formatDec(d.entryPrice)}</p>
+      <p className="text-[11px] text-fg-subtle">
+        손절 <span className={TONE_TEXT.down}>{formatDec(d.stopLoss)}</span> · 목표 <span className={TONE_TEXT.up}>{formatDec(d.takeProfit)}</span>
+      </p>
+      {d.riskReward && <p className="text-[11px] text-fg-subtle">손익비 {formatDec(d.riskReward, 2)}</p>}
+    </div>
+  );
+}
+
+function DecisionDetail({ d }: { d: TraderDecision }) {
+  const parts = d.parts ?? null;
+  const ma = d.ma ?? null;
+  const { label, message } = splitRiskReason(d.riskReason);
+  return (
+    <div className="grid gap-4 py-1 text-xs md:grid-cols-2">
+      <div className="min-w-0 space-y-2">
+        <p className="text-[11px] font-medium text-fg-muted">판단 근거</p>
+        <p className="text-fg">{reasonKo(d.reason)}</p>
+        {ma && (
+          <p className="text-fg-muted tabular-nums">
+            짧은 이동평균 {formatDec(ma.fast, 1)} · 긴 이동평균 {formatDec(ma.slow, 1)} · 차이 <Signed value={ma.diff} digits={1} />
+          </p>
+        )}
+        {parts && (
+          <ul className="space-y-1.5">
+            {PART_ORDER.filter((k) => parts[k]).map((k) => {
+              const p = parts[k];
+              const pct = Math.max(0, Math.min(100, (Number(p.points ?? 0) / Math.max(Number(p.max ?? 1), 1)) * 100));
+              return (
+                <li key={k} className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-2">
+                  <span className={p.available ? "text-fg-muted" : "text-fg-subtle"}>{PART_LABEL[k]}</span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                        <div className={cn("h-full rounded-full", p.available ? "bg-accent" : "bg-fg-subtle/40")} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="tabular-nums text-fg">
+                        {formatDec(p.points)}
+                        <span className="text-fg-subtle">/{formatDec(p.max)}</span>
+                      </span>
+                    </div>
+                    <p className={cn("truncate", p.available ? "text-fg-muted" : "text-fg-subtle")} title={p.note}>
+                      {p.available ? p.note : `사용 안 함 — ${p.note}`}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {d.invalidation && d.invalidation.length > 0 && (
+          <p className="text-fg-muted">
+            <span className="text-fg-subtle">이렇게 되면 판단 무효:</span> {d.invalidation.join(" · ")}
+          </p>
+        )}
+      </div>
+      <div className="min-w-0 space-y-2">
+        <p className="text-[11px] font-medium text-fg-muted">위험 관리</p>
+        <p className="text-fg">
+          {RISK_RESULT[d.riskResult ?? ""]?.label ?? d.riskResult ?? "주문 의도 없음"}
+          {label && <span className="text-warning-soft-fg"> · {label}</span>}
+        </p>
+        {message && <p className="text-fg-muted">{message}</p>}
+        {d.entryPrice && (
+          <p className="text-fg-muted tabular-nums">
+            진입 기준가 {formatDec(d.entryPrice)} · 손절 {formatDec(d.stopLoss)} · 목표 {formatDec(d.takeProfit)}
+            {d.riskReward && ` · 비용 차감 손익비 ${formatDec(d.riskReward, 2)}`}
+          </p>
+        )}
+        <p className="text-fg-subtle">
+          봉 {formatKst(d.barTs)} · 판단 {formatKst(d.ts)}
+          {d.validUntil && ` · 유효 ~${hm(d.validUntil)}`}
+        </p>
+        {d.clientOrderId && <p className="break-all text-fg-subtle">주문 번호 {d.clientOrderId}</p>}
+        <p className="text-fg-subtle">{STRATEGY_META[d.strategyId]?.summary}</p>
+      </div>
+    </div>
+  );
+}
+
+function DecisionRow({ d }: { d: TraderDecision }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <tr className={cn("border-b border-line/60 align-top", open && "bg-surface-2/50")}>
+        <td className={td}>
+          <p className="font-medium tabular-nums text-fg">{hm(d.barTs)}</p>
+          <p className="text-[10px] text-fg-subtle tabular-nums">{d.barTs ? KST_MD.format(new Date(d.barTs)) : ""}</p>
+        </td>
+        <td className={td}>
+          <SymbolText symbol={d.symbol} />
+        </td>
+        <td className={td}>
+          <StrategyCell id={d.strategyId} shadow={d.shadow} />
+        </td>
+        <td className={td}>
+          <ActionBadge action={d.action} />
+        </td>
+        <td className={td}>
+          <ScoreCell d={d} />
+        </td>
+        <td className={td}>
+          <RiskCell d={d} />
+        </td>
+        <td className={num}>
+          <LevelsCell d={d} />
+        </td>
+        <td className={cn(td, "min-w-56 max-w-[24rem] whitespace-normal text-fg")}>{reasonKo(d.reason)}</td>
+        <td className={td}>
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="rounded-control px-2 py-1 text-[11px] text-accent-soft-fg hover:bg-surface-hover"
+          >
+            {open ? "접기" : "자세히"}
+          </button>
+        </td>
+      </tr>
+      {open && (
+        <tr className="border-b border-line/60 bg-surface-2/50">
+          <td colSpan={9} className="px-3 pb-3">
+            <DecisionDetail d={d} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+const STRATEGY_FILTERS = ["", ...Object.keys(STRATEGY_META)];
+
 export function DecisionsPanel() {
   const [signalsOnly, setSignalsOnly] = useState(true);
-  const decisions = usePolling(`decisions:${signalsOnly}`, () => getTraderDecisions({ signalsOnly, limit: 60 }), 10_000, "판단 기록을 불러오지 못했습니다.");
+  const [strategy, setStrategy] = useState("");
+  const decisions = usePolling(
+    `decisions:${signalsOnly}:${strategy}`,
+    () => getTraderDecisions({ signalsOnly, limit: 80, strategy: strategy || undefined }),
+    10_000,
+    "판단 기록을 불러오지 못했습니다."
+  );
   const perf = usePolling("perf", getTraderPerformance, 60_000, "신호 성과를 불러오지 못했습니다.");
   return (
     <div className="space-y-4">
       <Section
         title="판단 기록"
         aside={
-          <label className="flex items-center gap-1.5 text-xs text-fg-muted">
-            <input type="checkbox" checked={signalsOnly} onChange={(e) => setSignalsOnly(e.target.checked)} />
-            매수·매도 신호만
-          </label>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <label className="flex items-center gap-1.5 whitespace-nowrap text-fg-muted">
+              전략
+              <Select value={strategy} onChange={(e) => setStrategy(e.target.value)} className="h-8 w-auto py-0 text-xs" aria-label="전략">
+                {STRATEGY_FILTERS.map((id) => (
+                  <option key={id || "all"} value={id}>
+                    {id ? strategyLabel(id) : "전체"}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="flex items-center gap-1.5 text-fg-muted">
+              <input type="checkbox" checked={signalsOnly} onChange={(e) => setSignalsOnly(e.target.checked)} />
+              매수·매도·청산 신호만
+            </label>
+          </div>
         }
       >
+        <p className="mb-2 text-[11px] text-fg-subtle">
+          1분봉이 닫힐 때마다 전략이 내린 판단입니다. 신호가 나면 위험 관리가 주문을 승인하거나 막습니다. &ldquo;자세히&rdquo;를 누르면 점수 항목·근거를 봅니다.
+        </p>
         {decisions.error && <Alert className="mb-2">{decisions.error}</Alert>}
-        <DataTable head={["봉", "전략", "종목", "신호", "점수", "점수 구성", "위험 관리", "진입·손절·목표", "사유"]} empty={decisions.data?.length === 0}>
+        <DataTable head={["시각", "종목", "전략", "신호", "점수", "위험 관리", "진입·손절·목표", "판단 사유", ""]} empty={decisions.data?.length === 0}>
           {decisions.data?.map((d) => <DecisionRow key={d.id} d={d} />)}
         </DataTable>
       </Section>
-      <Section title="신호 성과 — 기간별 평균 수익률" aside={<span className="text-xs text-fg-subtle">막대를 짚으면 평가 수·최대 유리/불리</span>}>
-        <PerformanceChart rows={perf.data} />
-      </Section>
-      <Section title="신호 성과" aside={<span className="text-xs text-fg-subtle">방향 반영 수익률 (매도·청산은 내린 만큼 +)</span>}>
-        {perf.error && <Alert className="mb-2">{perf.error}</Alert>}
-        <DataTable head={["전략", "신호", "기간", "평가 수", "평균 수익률", "승률", "최대 유리", "최대 불리", "대기"]} empty={perf.data?.length === 0}>
-          {perf.data?.map((r) => (
-            <tr key={`${r.strategyId}-${r.action}-${r.horizon}`} className="border-b border-line/60">
-              <td className={td}>{r.strategyId}</td>
-              <td className={td}>{r.action}</td>
-              <td className={td}>{r.horizon}</td>
-              <td className={num}>{r.count}</td>
-              <td className={num}>
-                <Signed value={r.avgReturnPct} digits={2} pct />
-              </td>
-              <td className={num}>{formatRatioPct(r.winRate, 0, false)}</td>
-              <td className={num}>{formatRatioPct(r.avgMfePct, 2)}</td>
-              <td className={num}>{formatRatioPct(r.avgMaePct, 2)}</td>
-              <td className={num}>{r.pending}</td>
-            </tr>
-          ))}
-        </DataTable>
-      </Section>
+      <PerformanceSection rows={perf.data} error={perf.error} />
     </div>
   );
 }
 
-// ── 활동 로그 (Grafana 로그 패널) ────────────────────────────────────────────
-
-const LEVEL_TEXT: Record<TraderActivity["level"], string> = { error: "오류", warn: "경고", info: "정보" };
-const LEVEL_TONE: Record<TraderActivity["level"], BadgeTone> = { error: "danger", warn: "warning", info: "neutral" };
-const LEVEL_BAR: Record<TraderActivity["level"], string> = { error: "bg-danger", warn: "bg-warning", info: "bg-line-strong" };
-
-export function ActivityList({ items }: { items: TraderActivity[] }) {
-  if (items.length === 0) return <p className="py-4 text-center text-xs text-fg-subtle">기록이 없습니다.</p>;
+/** 신호 성과 — 전략·신호별 카드, 기간별 평균 수익률·승률·최대 유리/불리 */
+function PerformanceSection({ rows, error }: { rows: TraderPerformanceRow[] | null; error: string | null }) {
+  const groups = new Map<string, TraderPerformanceRow[]>();
+  for (const r of rows ?? []) {
+    const k = `${r.strategyId}|${r.action}`;
+    groups.set(k, [...(groups.get(k) ?? []), r]);
+  }
+  const all = (rows ?? []).filter((r) => r.count > 0);
+  const maxAbs = Math.max(0.001, ...all.map((r) => Math.abs(Number(r.avgReturnPct ?? 0))));
   return (
-    <ol className="space-y-1.5" aria-label="활동 로그">
-      {items.map((a) => (
-        <li key={a.id} className="flex min-w-0 gap-2 text-xs">
-          <span className={cn("w-1 shrink-0 rounded-full", LEVEL_BAR[a.level])} aria-hidden />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-2 text-fg-subtle">
-              <time className="tabular-nums">{formatKst(a.ts)}</time>
-              <Badge tone={LEVEL_TONE[a.level]}>{LEVEL_TEXT[a.level]}</Badge>
-              {a.symbol && <span>{a.symbol}</span>}
-            </div>
-            <p className="break-words text-fg">{a.message}</p>
-          </div>
-        </li>
-      ))}
-    </ol>
+    <Section title="신호 성과">
+      <p className="mb-3 rounded-control bg-surface-2 px-3 py-2 text-[11px] text-fg-muted">
+        신호가 난 뒤 5분·15분·30분·장마감 시점에 가격이 <b className="font-medium text-fg">신호 방향으로</b> 얼마나 움직였는지입니다. 매수는 오르면 +,
+        매도·청산은 내리면 + 입니다. 승률은 + 로 끝난 비율, 최대 유리·불리는 그 사이 가장 좋았던·나빴던 폭의 평균입니다. 주문 여부와 상관없이 모든 신호를 평가합니다.
+      </p>
+      {error && <Alert className="mb-2">{error}</Alert>}
+      {rows && groups.size === 0 && <p className="py-4 text-center text-xs text-fg-subtle">평가할 신호가 아직 없습니다.</p>}
+      <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+        {[...groups.entries()].map(([key, list]) => {
+          const [sid, action] = key.split("|");
+          const done = list.reduce((a, r) => a + r.count, 0);
+          const pending = list.reduce((a, r) => a + r.pending, 0);
+          return (
+            <figure key={key} className="min-w-0 rounded-card border border-line p-3">
+              <figcaption className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="flex items-center gap-2 text-sm font-medium text-fg">
+                  {strategyLabel(sid)} <ActionBadge action={action} />
+                </span>
+                <span className="text-[11px] text-fg-subtle tabular-nums">
+                  평가 {done}건{pending ? ` · 대기 ${pending}건` : ""}
+                </span>
+              </figcaption>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-[11px] text-fg-subtle">
+                    <th scope="col" className="py-1 font-medium">기간</th>
+                    <th scope="col" className="py-1 font-medium">평균 수익률</th>
+                    <th scope="col" className="py-1 text-right font-medium">승률</th>
+                    <th scope="col" className="py-1 text-right font-medium">최대 유리 / 불리</th>
+                    <th scope="col" className="py-1 text-right font-medium">건수</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((r) => {
+                    const v = Number(r.avgReturnPct ?? 0);
+                    const w = r.count ? (Math.abs(v) / maxAbs) * 50 : 0;
+                    const up = signOf(r.avgReturnPct) === "up";
+                    const win = Math.max(0, Math.min(100, Number(r.winRate ?? 0) * 100));
+                    return (
+                      <tr key={r.horizon} className="border-t border-line/60">
+                        <td className="py-1.5 text-fg-muted">{HORIZON_LABEL[r.horizon] ?? r.horizon}</td>
+                        <td className="py-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="relative h-2.5 w-16 shrink-0" aria-hidden>
+                              <span className="absolute inset-y-0 left-1/2 w-px bg-line-strong" />
+                              <span
+                                className={cn("absolute inset-y-0 rounded-sm", up ? "left-1/2 bg-danger" : "right-1/2 bg-info")}
+                                style={{ width: `${w}%` }}
+                              />
+                            </span>
+                            {r.count ? <Signed value={r.avgReturnPct} digits={2} pct /> : <span className="text-fg-subtle">—</span>}
+                          </div>
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums">
+                          {r.count ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="h-1.5 w-10 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                                <span className="block h-full rounded-full bg-accent" style={{ width: `${win}%` }} />
+                              </span>
+                              {formatRatioPct(r.winRate, 0, false)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums">
+                          {r.count ? (
+                            <>
+                              <span className={TONE_TEXT.up}>{formatRatioPct(r.avgMfePct, 2)}</span>
+                              <span className="text-fg-subtle"> / </span>
+                              <span className={TONE_TEXT.down}>{formatRatioPct(r.avgMaePct, 2)}</span>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="py-1.5 text-right tabular-nums text-fg-muted">
+                          {r.count}
+                          {r.pending ? <span className="text-fg-subtle"> +{r.pending}</span> : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </figure>
+          );
+        })}
+      </div>
+    </Section>
   );
 }
 
+// ── 활동 로그 ────────────────────────────────────────────────────────────────
+
+const LEVEL_TEXT: Record<TraderActivity["level"], string> = { error: "오류", warn: "경고", info: "정보" };
+const LEVEL_BAR: Record<TraderActivity["level"], string> = { error: "bg-danger", warn: "bg-warning", info: "bg-line-strong" };
+const CATEGORY_TONE: Record<string, BadgeTone> = {
+  trade: "success",
+  order: "neutral",
+  risk: "warning",
+  control: "accent",
+  settings: "info",
+  universe: "accent",
+  system: "neutral",
+  data: "warning",
+};
+
+/** 옛 백엔드(제목 없음)도 보여준다 */
+function categoryOf(a: TraderActivity): string {
+  if (a.category) return a.category;
+  return a.source === "fill" ? "trade" : a.source === "order" ? "order" : "system";
+}
+
+type Run = { head: TraderActivity; items: TraderActivity[] };
+
+/** 같은 내용이 연달아 나오면 (위험 관리 거부가 1분마다 쌓이는 경우 등) 한 줄로 묶는다 */
+function groupRuns(items: TraderActivity[], enabled: boolean): Run[] {
+  const out: Run[] = [];
+  for (const a of items) {
+    const last = out[out.length - 1];
+    if (enabled && last && a.groupKey && last.head.groupKey === a.groupKey) last.items.push(a);
+    else out.push({ head: a, items: [a] });
+  }
+  return out;
+}
+
+function dayKey(iso: string | null): string {
+  return iso ? KST_DAY.format(new Date(iso)) : "—";
+}
+
+function DiffList({ diff }: { diff: NonNullable<TraderActivity["diff"]> }) {
+  return (
+    <ul className="mt-1 flex flex-wrap gap-1.5">
+      {diff.map((c) => {
+        const meta = settingMeta(c.key);
+        return (
+          <li key={c.key} className="rounded-control border border-line bg-surface-2 px-2 py-0.5 text-[11px] tabular-nums">
+            <span className="text-fg-muted">{meta?.label ?? c.key}</span>{" "}
+            <span className="text-fg-subtle line-through">{formatSettingValue(meta, c.before)}</span>
+            <span className="mx-1 text-fg-subtle">→</span>
+            <span className="text-fg">{formatSettingValue(meta, c.after)}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function ActivityRow({ run, compact }: { run: Run; compact: boolean }) {
+  const [open, setOpen] = useState(false);
+  const a = run.head;
+  const nameOf = useSymbolName();
+  const n = run.items.length;
+  const oldest = run.items[n - 1];
+  const cat = categoryOf(a);
+  let title = a.title ?? a.message;
+  if (a.code) title = `${title} — ${REJECT_TEXT[a.code] ?? a.code}`;
+  let detail = a.detail ?? null;
+  if (a.category === "universe" && detail) {
+    detail = detail
+      .split(",")
+      .map((s) => s.trim())
+      .map((s) => (nameOf(s) ? `${nameOf(s)}(${s})` : s))
+      .join(", ");
+  }
+  const actor = actorLabel(a.by);
+  return (
+    <li className="flex min-w-0 gap-3 py-2">
+      <div className="w-16 shrink-0 text-right tabular-nums">
+        <p className="text-xs text-fg">{a.ts ? KST_HMS.format(new Date(a.ts)) : "—"}</p>
+        {n > 1 && oldest.ts && <p className="text-[10px] text-fg-subtle">~{KST_HM.format(new Date(oldest.ts))}부터</p>}
+      </div>
+      <span className={cn("w-1 shrink-0 rounded-full", LEVEL_BAR[a.level])} aria-label={LEVEL_TEXT[a.level]} role="img" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Badge tone={CATEGORY_TONE[cat] ?? "neutral"}>{CATEGORY_LABEL[cat] ?? cat}</Badge>
+          <span className="text-sm font-medium text-fg">{title}</span>
+          {a.symbol && <SymbolText symbol={a.symbol} className="text-xs" />}
+          {a.strategyId && <span className="text-xs text-fg-muted">{strategyLabel(a.strategyId)}</span>}
+          {n > 1 && (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] tabular-nums text-fg-muted hover:bg-surface-hover"
+            >
+              같은 내용 {n}번 {open ? "접기" : "펼치기"}
+            </button>
+          )}
+          {actor && !compact && <span className="ml-auto text-[11px] text-fg-subtle">{actor}</span>}
+        </div>
+        {detail && <p className={cn("mt-0.5 text-xs text-fg-muted", compact ? "truncate" : "break-words")}>{detail}</p>}
+        {!compact && a.diff && a.diff.length > 0 && <DiffList diff={a.diff} />}
+        {open && (
+          <ol className="mt-1 space-y-0.5 border-l border-line pl-3 text-[11px] text-fg-subtle">
+            {run.items.map((x) => (
+              <li key={x.id} className="tabular-nums">
+                {x.ts ? KST_HMS.format(new Date(x.ts)) : "—"} · {x.detail ?? x.message}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </li>
+  );
+}
+
+export function ActivityList({ items, compact = false, grouped = true }: { items: TraderActivity[]; compact?: boolean; grouped?: boolean }) {
+  if (items.length === 0) return <p className="py-4 text-center text-xs text-fg-subtle">기록이 없습니다.</p>;
+  const runs = groupRuns(items, grouped);
+  const days: { day: string; runs: Run[] }[] = [];
+  for (const r of runs) {
+    const d = dayKey(r.head.ts);
+    const last = days[days.length - 1];
+    if (last && last.day === d) last.runs.push(r);
+    else days.push({ day: d, runs: [r] });
+  }
+  return (
+    <div className="space-y-3" aria-label="활동 로그" role="list">
+      {days.map((g) => (
+        <div key={g.day} role="listitem">
+          {!compact && <p className="sticky top-0 z-10 border-b border-line bg-surface py-1 text-[11px] font-medium text-fg-muted">{g.day}</p>}
+          <ol className="divide-y divide-line/50">
+            {g.runs.map((r) => (
+              <ActivityRow key={r.head.id} run={r} compact={compact} />
+            ))}
+          </ol>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const CATEGORY_FILTERS = ["trade", "order", "risk", "control", "settings", "universe", "system", "data"] as const;
+
 export function ActivityPanel() {
   const [level, setLevel] = useState<"all" | TraderActivity["level"]>("all");
+  const [category, setCategory] = useState<string>("all");
+  const [grouped, setGrouped] = useState(true);
   const activity = usePolling("activity:200", () => getTraderActivity(200), 10_000, "활동 로그를 불러오지 못했습니다.");
-  const items = (activity.data ?? []).filter((a) => level === "all" || a.level === level);
-  const count = (l: TraderActivity["level"]) => (activity.data ?? []).filter((a) => a.level === l).length;
+  const all = activity.data ?? [];
+  const items = all.filter((a) => (level === "all" || a.level === level) && (category === "all" || categoryOf(a) === category));
+  const count = (l: TraderActivity["level"]) => all.filter((a) => a.level === l).length;
+  const cats = CATEGORY_FILTERS.filter((c) => all.some((a) => categoryOf(a) === c));
+  const chip = (active: boolean) =>
+    cn(
+      "rounded-full border px-2.5 py-0.5",
+      active ? "border-accent bg-accent-soft text-accent-soft-fg" : "border-line text-fg-muted hover:bg-surface-hover"
+    );
   return (
-    <Section
-      title="활동 로그"
-      aside={
-        <div role="group" aria-label="수준" className="flex gap-1 text-xs">
+    <Section title="활동 로그">
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+        <div role="group" aria-label="수준" className="flex flex-wrap gap-1">
           {(["all", "error", "warn", "info"] as const).map((l) => (
-            <button
-              key={l}
-              type="button"
-              aria-pressed={level === l}
-              onClick={() => setLevel(l)}
-              className={cn(
-                "rounded-full border px-2.5 py-0.5",
-                level === l ? "border-accent bg-accent-soft text-accent-soft-fg" : "border-line text-fg-muted hover:bg-surface-hover"
-              )}
-            >
+            <button key={l} type="button" aria-pressed={level === l} onClick={() => setLevel(l)} className={chip(level === l)}>
               {l === "all" ? "전체" : `${LEVEL_TEXT[l]} ${count(l)}`}
             </button>
           ))}
         </div>
-      }
-    >
+        <div role="group" aria-label="종류" className="flex flex-wrap gap-1">
+          <button type="button" aria-pressed={category === "all"} onClick={() => setCategory("all")} className={chip(category === "all")}>
+            모든 종류
+          </button>
+          {cats.map((c) => (
+            <button key={c} type="button" aria-pressed={category === c} onClick={() => setCategory(c)} className={chip(category === c)}>
+              {CATEGORY_LABEL[c]}
+            </button>
+          ))}
+        </div>
+        <label className="ml-auto flex items-center gap-1.5 text-fg-muted">
+          <input type="checkbox" checked={grouped} onChange={(e) => setGrouped(e.target.checked)} />
+          같은 내용 묶기
+        </label>
+      </div>
       {activity.error && <Alert className="mb-2">{activity.error}</Alert>}
-      <ActivityList items={items} />
+      <ActivityList items={items} grouped={grouped} />
     </Section>
   );
 }

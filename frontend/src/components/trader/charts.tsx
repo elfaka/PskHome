@@ -8,7 +8,6 @@ import type {
   TraderChart,
   TraderEquity,
   TraderIndicators,
-  TraderPerformanceRow,
   TraderScores,
   TraderStats,
   TraderUniverse,
@@ -21,6 +20,7 @@ import { useTheme } from "@/components/theme/useTheme";
 import { cn } from "@/lib/cn";
 import { TONE_TEXT } from "@/lib/stocksim/format";
 import { cmpDec, formatDec, formatKst, formatRatioPct, shiftLeft, signOf } from "@/lib/trader/decimal";
+import { PART_LABEL, REJECT_TEXT } from "@/lib/trader/labels";
 
 import { Kpi, Section, Signed } from "./ui";
 
@@ -296,13 +296,6 @@ export function IndicatorCards({ ind, symbol, className }: { ind: TraderIndicato
 
 // ── 시장 맥락 (점수 항목) ─────────────────────────────────────────────────────
 
-const PART_LABEL: Record<string, string> = {
-  technical: "가격 (기술 지표)",
-  flow: "수급 (외국인·기관)",
-  market: "시장 (코스피)",
-  global: "글로벌 (VIX)",
-  news: "뉴스·공시",
-};
 
 export function ScorePartsCard({ scores, className }: { scores: TraderScores | null; className?: string }) {
   const latest = scores?.latest ?? null;
@@ -606,29 +599,6 @@ export function StatsRow({ stats }: { stats: TraderStats | null }) {
 
 // ── 위험 관리 거부 사유 (오늘) ─────────────────────────────────────────────────
 
-const REJECT_TEXT: Record<string, string> = {
-  LOW_RISK_REWARD: "손익비 부족",
-  WIDE_SPREAD: "호가 스프레드 넓음",
-  MAX_ORDER_VALUE: "1회 주문 한도",
-  MAX_POSITION_VALUE: "종목 보유 한도",
-  DAILY_LOSS_LIMIT: "하루 손실 한도",
-  INSUFFICIENT_CASH: "현금 부족",
-  INSUFFICIENT_POSITION: "매도 수량 부족",
-  NO_STOP: "손절가 계산 불가 (ATR 없음)",
-  NEAR_UPPER_LIMIT: "상한가 근접",
-  NO_PRICE_LIMIT: "상·하한가 정보 없음",
-  ENTRY_CUTOFF: "신규 진입 마감 이후",
-  MARKET_CLOSED: "장 시간 외",
-  STALE_QUOTE: "오래된 시세",
-  NO_QUOTE: "시세 없음",
-  NO_DAY_BASELINE: "오늘 기준 평가금액 없음",
-  HALTED: "긴급 정지 중",
-  INVALID_QTY: "수량 오류",
-  DATA_UNHEALTHY: "데이터 이상",
-  DB_UNHEALTHY: "DB 이상",
-  ENGINE_ERROR: "엔진 오류",
-  MAX_OPEN_POSITIONS: "동시 보유 종목 수 한도",
-};
 
 export function RejectionSection({ stats, error, className }: { stats: TraderStats | null; error: string | null; className?: string }) {
   const rows = stats?.rejections ?? [];
@@ -660,59 +630,6 @@ export function RejectionSection({ stats, error, className }: { stats: TraderSta
         </ul>
       )}
     </Section>
-  );
-}
-
-// ── 신호 성과 (기간별 평균 수익률, 0 기준 양쪽 막대) ─────────────────────────────
-
-const HORIZON_TEXT: Record<string, string> = { "5m": "5분", "15m": "15분", "30m": "30분", close: "장마감" };
-
-export function PerformanceChart({ rows }: { rows: TraderPerformanceRow[] | null }) {
-  const data = (rows ?? []).filter((r) => r.count > 0);
-  if (rows && data.length === 0) {
-    return <p className="py-4 text-center text-xs text-fg-subtle">평가가 끝난 신호가 아직 없습니다.</p>;
-  }
-  const groups = new Map<string, TraderPerformanceRow[]>();
-  for (const r of data) {
-    const k = `${r.strategyId} · ${r.action}`;
-    groups.set(k, [...(groups.get(k) ?? []), r]);
-  }
-  const maxAbs = Math.max(0.001, ...data.map((r) => Math.abs(px(r.avgReturnPct))));
-  return (
-    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-      {[...groups.entries()].map(([name, list]) => (
-        <figure key={name} className="min-w-0">
-          <figcaption className="mb-2 text-xs font-medium text-fg">{name}</figcaption>
-          <ul className="space-y-1.5">
-            {list.map((r) => {
-              const v = px(r.avgReturnPct);
-              const w = (Math.abs(v) / maxAbs) * 50;
-              const up = signOf(r.avgReturnPct) === "up";
-              return (
-                <li
-                  key={r.horizon}
-                  className="grid grid-cols-[3rem_minmax(0,1fr)_4.5rem] items-center gap-2 text-[11px]"
-                  title={`평가 ${r.count}건 · 승률 ${formatRatioPct(r.winRate, 0, false)} · 최대 유리 ${formatRatioPct(r.avgMfePct, 2)} · 최대 불리 ${formatRatioPct(r.avgMaePct, 2)}`}
-                >
-                  <span className="text-fg-muted">{HORIZON_TEXT[r.horizon] ?? r.horizon}</span>
-                  <span className="relative h-3" aria-hidden>
-                    <span className="absolute inset-y-0 left-1/2 w-px bg-line-strong" />
-                    <span
-                      className={cn("absolute inset-y-0.5 rounded-sm", up ? "left-1/2 bg-danger" : "right-1/2 bg-info")}
-                      style={{ width: `${w}%` }}
-                    />
-                  </span>
-                  <span className="text-right tabular-nums">
-                    <Signed value={r.avgReturnPct} digits={2} pct />
-                    <span className="block text-fg-subtle">승률 {formatRatioPct(r.winRate, 0, false)} · {r.count}</span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </figure>
-      ))}
-    </div>
   );
 }
 
