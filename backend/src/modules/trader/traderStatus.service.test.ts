@@ -49,8 +49,14 @@ describe("trader status", () => {
           heartbeat: { at: "2026-11-27T09:59:58+09:00", mode: "paper", feed: "stocksim", db_ok: true, data_issues: {}, last_quote_at: { "005930": "2026-11-27T09:59:57+09:00" } },
           killswitch: { halted: false },
           strategy_switches: { version: 2, values: { ma_cross: false } },
-          settings_overrides: { version: 3, values: { slippage_bps: "7" }, at: "2026-11-27T00:59:00+00:00" },
-          settings_effective: { base: { slippage_bps: "5" }, effective: { slippage_bps: "5" }, overrides: {}, applied_version: 2, rejected: null, info: { mode: "paper" } },
+          settings: {
+            version: 3,
+            values: { slippage_bps: "7" },
+            by: "web:owner",
+            at: "2026-11-27T00:59:00+00:00",
+            previous: { version: 2, values: { slippage_bps: "5" } },
+          },
+          settings_effective: { effective: { slippage_bps: "5" }, applied_version: 2, rejected: null, env_ignored: ["slippage_bps"], info: { mode: "paper" } },
         });
       if (sql.includes("MAX(ts) AS t FROM quotes")) return [{ t: "2026-11-27 00:59:57.000000" }];
       return [];
@@ -58,7 +64,17 @@ describe("trader status", () => {
     const s = await svc.getStatus(NOW);
     expect(s.engine).toMatchObject({ state: "running", mode: "paper", feed: "stocksim", dbOk: true, heartbeatAt: "2026-11-27T00:59:58.000Z" });
     expect(s.switches).toEqual({ ma_cross: false });
-    expect(s.settings?.pending).toEqual({ version: 3, values: { slippage_bps: "7" }, at: "2026-11-27T00:59:00.000Z" });
+    expect(s.settings).toMatchObject({
+      ready: true,
+      values: { slippage_bps: "7" },
+      effective: { slippage_bps: "5" },
+      savedVersion: 3,
+      savedBy: "web:owner",
+      appliedVersion: 2,
+      pending: { version: 3, at: "2026-11-27T00:59:00.000Z" },
+      previousVersion: 2,
+      envIgnored: ["slippage_bps"],
+    });
     expect(s.lastQuoteBySymbol).toEqual({ "005930": "2026-11-27T00:59:57.000Z" });
     expect(s.alerts).toEqual([]);
     expect(s.marketOpen).toBe(true);
@@ -70,7 +86,7 @@ describe("trader status", () => {
         return stateRows({
           heartbeat: { at: "2026-11-27T00:58:00Z", db_ok: false, data_issues: { "000660": "봉 누락 3개" } },
           killswitch: { halted: true, reason: "manual" },
-          settings_effective: { base: {}, effective: {}, applied_version: 1, rejected: { version: 2, reason: "범위 밖" } },
+          settings_effective: { effective: {}, applied_version: 1, rejected: { version: 2, reason: "범위 밖" } },
         });
       return [];
     };

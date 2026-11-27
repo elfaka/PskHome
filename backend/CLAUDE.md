@@ -193,9 +193,12 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
   - `/api/trader/auth/me`: 비로그인 `{authenticated:false, totpRequired}`, 로그인 `{authenticated, username, totpEnabled, stepUpUntil}`
   - 기동 로그 `[trader] login configured (2FA on|off)` / `login disabled: <이유>` 로 설정이 들어왔는지 본다 (값은 남기지 않음)
 - **조작 API** (`traderControl.service.ts`, 같은 출처의 JSON 요청만 — `requireSameOrigin`):
-  `POST control/halt`(코드 없이) · `POST control/resume`(step-up) · `POST control/strategies/:id {enabled}`(켜기만 step-up) · `PUT control/settings {values}`(step-up).
+  `POST control/halt`(코드 없이) · `POST control/resume`(step-up) · `POST control/strategies/:id {enabled}`(켜기만 step-up) ·
+  `PUT control/settings {values}`(step-up, 바꾼 항목만) · `POST control/settings/revert`(step-up, 직전 버전 값으로).
   엔진 DB 의 `engine_state` 에만 쓰고 `risk_events` 에 기록한다. 엔진이 약 5초 안에 읽어 반영한다 (형식은 `trader/src/trader/control.py`).
-  설정 값은 문자열 Decimal 로 검증한다 (`cmpDec`, 범위·값 사이 관계). 엔진이 한 번 더 검증한다.
+  **운영 설정의 원본은 engine_state `settings`** (`{version, values, by, at, previous}`, trader.env 아님). 서버가 지금 값에 바꾼 항목을 합쳐
+  전체를 검증(`validateSettings` — 문자열 Decimal `cmpDec`, 시각 HH:MM:SS, 범위·값 사이 관계·장 시간)하고 새 버전으로 저장한다. 엔진이 한 번 더 검증한다.
+  `settings` 가 아직 없으면(엔진이 trader.env 값을 옮기기 전) 409 `ENGINE_NOT_READY`, 바뀐 값이 없으면 400 `NO_CHANGE`, 직전 값이 없으면 409 `NO_PREVIOUS`.
   `trader_web` 에 쓰기 권한이 없으면 503 `TRADER_DB_NO_WRITE` (`trader/db/grant_web_control.sql`).
   같은 출처로 인정하는 값(`allowedOrigins`): 요청 Host·X-Forwarded-Host, `GOOGLE_CALLBACK_URL`(운영 공개 주소 `https://elfaka.kr`), `APP_LOGIN_SUCCESS_REDIRECT`.
   운영은 Cloudflare → traefik 을 거쳐 Host 가 그대로 오지 않을 수 있다 (요청 주소만 비교하면 운영에서 step-up·조작이 전부 403 이었다).

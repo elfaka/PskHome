@@ -57,7 +57,7 @@ export function isMarketHours(now: Date): boolean {
 async function states(): Promise<Map<string, { value: Json | null; updatedAt: string | null; updatedBy: string | null }>> {
   const rows = await traderQuery<Row>(
     "SELECT `key`, `value`, updated_at, updated_by FROM engine_state WHERE `key` IN " +
-      "('heartbeat', 'killswitch', 'strategy_switches', 'settings_overrides', 'settings_effective')"
+      "('heartbeat', 'killswitch', 'strategy_switches', 'settings', 'settings_effective')"
   );
   return new Map(
     rows.map((r) => [
@@ -67,25 +67,29 @@ async function states(): Promise<Map<string, { value: Json | null; updatedAt: st
   );
 }
 
-function settingsState(eff: Json | null, overrides: Json | null): TraderSettingsState | null {
-  if (!eff) return null;
-  const applied = Number(eff.applied_version ?? 0);
-  const rejected = eff.rejected as { version?: number; reason?: string; at?: string } | null;
-  const ovVersion = Number(overrides?.version ?? 0);
-  const pending =
-    overrides && ovVersion > applied && rejected?.version !== ovVersion
-      ? { version: ovVersion, values: (overrides.values as Record<string, string>) ?? {}, at: iso(overrides.at) }
-      : null;
+/** 운영 설정 상태 — 원본은 engine_state `settings`(DB), 엔진 적용 결과는 `settings_effective` */
+function settingsState(eff: Json | null, doc: Json | null): TraderSettingsState | null {
+  if (!eff && !doc) return null;
+  const effective = (eff?.effective as Record<string, string | null>) ?? {};
+  const applied = Number(eff?.applied_version ?? 0);
+  const rejected = eff?.rejected as { version?: number; reason?: string; at?: string } | null | undefined;
+  const saved = Number(doc?.version ?? 0);
+  const prev = doc?.previous as { version?: number; values?: unknown } | null | undefined;
   return {
-    base: (eff.base as Record<string, string | null>) ?? {},
-    effective: (eff.effective as Record<string, string | null>) ?? {},
-    overrides: (eff.overrides as Record<string, string>) ?? {},
+    ready: doc != null,
+    values: (doc?.values as Record<string, string | null>) ?? effective,
+    effective,
+    savedVersion: saved,
+    savedAt: iso(doc?.at),
+    savedBy: str(doc?.by),
     appliedVersion: applied,
-    pending,
+    pending: doc && saved > applied && rejected?.version !== saved ? { version: saved, at: iso(doc.at) } : null,
     rejected: rejected?.version
       ? { version: Number(rejected.version), reason: String(rejected.reason ?? ""), at: iso(rejected.at) }
       : null,
-    info: (eff.info as Record<string, unknown>) ?? null,
+    previousVersion: prev?.values ? Number(prev.version ?? 0) : null,
+    envIgnored: Array.isArray(eff?.env_ignored) ? (eff.env_ignored as unknown[]).map(String) : [],
+    info: (eff?.info as Record<string, unknown>) ?? null,
   };
 }
 
@@ -95,7 +99,7 @@ export async function getStatus(now = new Date()): Promise<TraderStatus> {
   const kill = st.get("killswitch");
   const killValue = kill?.value ?? null;
   const switchesDoc = st.get("strategy_switches")?.value ?? null;
-  const settings = settingsState(st.get("settings_effective")?.value ?? null, st.get("settings_overrides")?.value ?? null);
+  const settings = settingsState(st.get("settings_effective")?.value ?? null, st.get("settings")?.value ?? null);
 
   // 엔진은 시세를 모아서(기본 200건) 기록하므로 DB 보다 상태 신호의 마지막 시세 시각이 더 최신이다
   const hbQuotes = Object.values((hb?.last_quote_at as Record<string, string>) ?? {})
@@ -255,7 +259,15 @@ export async function getStrategies(recentPerStrategy = 40): Promise<TraderStrat
 }
 
 const ERROR_EVENTS = new Set(["FATAL", "ENGINE_ERROR", "CANCEL_FAILED", "HALT", "RECOVERY_MISMATCH"]);
-const INFO_EVENTS = new Set(["RESUME", "STRATEGY_ON", "STRATEGY_OFF", "SETTINGS_CHANGE", "SETTINGS_APPLIED"]);
+const INFO_EVENTS = new Set([
+  "RESUME",
+  "STRATEGY_ON",
+  "STRATEGY_OFF",
+  "SETTINGS_CHANGE",
+  "SETTINGS_REVERT",
+  "SETTINGS_APPLIED",
+  "SETTINGS_SEEDED",
+]);
 
 const EVENT_TEXT: Record<string, string> = {
   HALT: "긴급 정지",
@@ -265,6 +277,8 @@ const EVENT_TEXT: Record<string, string> = {
   SETTINGS_CHANGE: "설정 변경 요청",
   SETTINGS_APPLIED: "설정 적용",
   SETTINGS_REJECTED: "설정 거부",
+  SETTINGS_REVERT: "직전 설정으로 되돌림",
+  SETTINGS_SEEDED: "trader.env 설정을 DB 로 옮김",
   DATA_INVALID: "잘못된 시세",
   DATA_GAP: "봉 누락",
   CANCEL_FAILED: "주문 취소 실패",
@@ -276,7 +290,11 @@ function eventMessage(kind: string, detail: Json | null): string {
   const label = EVENT_TEXT[kind] ?? kind;
   if (!detail) return label;
   const parts: string[] = [];
-  for (const k of ["strategy", "reason", "by", "err", "missing", "version"]) {
+  for (const k of ["strategy", "reason", "by", "err", "missing", "version", "restored"]) {
+    if (k === "restored" && detail[k] != null) {
+      parts.push(`v${String(detail[k])} 값`);
+      continue;
+    }
     if (detail[k] != null) parts.push(`${k === "by" ? "by " : ""}${String(detail[k])}`);
   }
   if (detail.diff && typeof detail.diff === "object") {

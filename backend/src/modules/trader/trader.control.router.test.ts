@@ -30,7 +30,11 @@ vi.mock("./traderControl.service.js", () => ({
   setStrategy: async (id: string, enabled: boolean, by: string) => void calls.list.push(["strategy", id, enabled, by]),
   updateSettings: async (values: unknown, by: string) => {
     calls.list.push(["settings", values, by]);
-    return { version: 1, overrides: values };
+    return { version: 1, values };
+  },
+  revertSettings: async (by: string) => {
+    calls.list.push(["revert", by]);
+    return { version: 2, values: {}, restored: 1 };
   },
 }));
 
@@ -121,6 +125,10 @@ describe("trader 2FA and control routes", () => {
     const put2 = await agent.put("/api/trader/control/settings").set("Origin", ORIGIN).send({ values: { slippage_bps: "6" } });
     expect(put2.status).toBe(200);
     expect(calls.list.at(-1)).toEqual(["settings", { slippage_bps: "6" }, "web:owner"]);
+    // 되돌리기도 같은 보호 — 지금은 step-up 안이라 통과
+    const rev = await agent.post("/api/trader/control/settings/revert").set("Origin", ORIGIN).send({});
+    expect(rev.status).toBe(200);
+    expect(calls.list.at(-1)).toEqual(["revert", "web:owner"]);
   });
 
   it("rejects control requests from another origin or without JSON", async () => {

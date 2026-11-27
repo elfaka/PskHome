@@ -413,5 +413,10 @@ export function createTraderRouter(throttle = new LoginThrottle()): Router {
     res.json(await control.updateSettings(body.data.values, actor(req)));
   });
 
+  /** 직전 설정으로 되돌리기 — 설정 변경과 같은 보호 (2단계 인증) */
+  router.post("/trader/control/settings/revert", requireSameOrigin, requireStepUp, async (req, res) => {
+    res.json(await control.revertSettings(actor(req)));
+  });
+
   return router;
 }

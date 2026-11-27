@@ -129,13 +129,23 @@ export interface TraderAlert {
 }
 
 export interface TraderSettingsState {
-  base: Record<string, string | null>;
+  /** 운영 설정이 DB(engine_state settings)에 있다. false 면 옛 엔진이라 아직 trader.env 값을 쓰고 있다 (저장 불가) */
+  ready: boolean;
+  /** DB 에 저장된 값 (원본). ready=false 면 엔진 적용값 */
+  values: Record<string, string | null>;
+  /** 엔진이 지금 쓰는 값 */
   effective: Record<string, string | null>;
-  overrides: Record<string, string>;
+  savedVersion: number;
+  savedAt: string | null;
+  savedBy: string | null;
   appliedVersion: number;
-  /** 화면이 저장했지만 엔진이 아직 적용하지 않은 버전 (없으면 null) */
-  pending: { version: number; values: Record<string, string>; at: string | null } | null;
+  /** 저장됐지만 엔진이 아직 적용하지 않은 버전 (없으면 null) */
+  pending: { version: number; at: string | null } | null;
   rejected: { version: number; reason: string; at: string | null } | null;
+  /** 되돌릴 수 있는 직전 버전 */
+  previousVersion: number | null;
+  /** trader.env 에 남아 있지만 DB 값을 쓰느라 무시되는 키 */
+  envIgnored: string[];
   info: Record<string, unknown> | null;
 }
 
