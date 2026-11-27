@@ -120,6 +120,7 @@ uv run ruff check . ; uv run ruff format --check . ; uv run mypy
 
    `172.26.%` 는 Docker 네트워크 `traefik`(172.26.0.0/16)이다. 3306 이 호스트에 열려 있어도 이 계정들은 밖에서 못 붙는다.
 3. 서버에 `server/trader.env` 를 만든다 (`server/trader.env.example` 참고). git 에 올리지 않는다.
+   수수료·한도 같은 운영 설정은 엔진이 처음 기동할 때 한 번 DB 로 옮기고, 그 뒤로는 `/trader` → 설정에서 바꾼다 (trader.env 의 같은 값은 무시된다).
 
 ## 마이그레이션
 

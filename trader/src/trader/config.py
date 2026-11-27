@@ -1,7 +1,12 @@
-"""설정. `.env`(또는 환경변수)에서 `TRADER_` 접두사로 읽는다.
+"""설정. 두 곳에서 온다.
+
+- trader.env(`.env`, 환경변수 `TRADER_*`): DB 접속·모드·계좌·시세 출처·종목·전략 등 **접속·실행 정보**
+- DB(engine_state `settings`): 수수료·세율·슬리피지·위험 한도·손절/목표 배수·진입 마감 등 **운영 설정** (`control.TUNABLE`)
+  화면에서 바꾸고, 엔진이 기동할 때와 감시 주기마다 읽는다. DB 에 아직 없으면 처음 한 번 trader.env 값을 옮긴다
+  (`control.resolve_settings`)
 
 수수료·세율·슬리피지·위험 한도는 **기본값이 없다**. 값을 임의로 확정하지 않기 위해서이며,
-비어 있으면 엔진이 기동하지 않는다. 템플릿은 `.env.example`.
+DB 에도 trader.env 에도 없으면 엔진이 기동하지 않는다. 템플릿은 `.env.example`.
 """
 
 from __future__ import annotations
@@ -9,9 +14,9 @@ from __future__ import annotations
 from datetime import time
 from decimal import Decimal
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, create_model, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from trader.money import RoundingMode
@@ -165,18 +170,75 @@ class Settings(BaseSettings):
             raise ValueError("strategy_order_value 는 risk_max_order_value 이하여야 한다")
         if self.risk_max_order_value > self.risk_max_position_value:
             raise ValueError("risk_max_order_value 는 risk_max_position_value 이하여야 한다")
+        # 장중 시각: 장 시작 ≤ 신규 매수 마감 ≤ 장마감 청산 ≤ 장 마감 (끈 값은 건너뛴다)
+        for name in ("entry_cutoff", "eod_exit"):
+            t = getattr(self, name)
+            if t is not None and not (self.market_open <= t <= self.market_close):
+                raise ValueError(
+                    f"{name} 은 장 시간({self.market_open:%H:%M}~{self.market_close:%H:%M}) 안이어야 한다"
+                )
+        if self.entry_cutoff is not None and self.eod_exit is not None and self.entry_cutoff > self.eod_exit:
+            raise ValueError("entry_cutoff 는 eod_exit 보다 늦을 수 없다")
         return self
 
     def secret_values(self) -> list[str]:
         """로그 마스킹 대상 비밀값."""
-        from sqlalchemy.engine import make_url
+        return _db_secrets(self.database_url)
 
-        out: list[str] = []
-        try:
-            pw = make_url(self.database_url.get_secret_value()).password
-        except Exception:
-            # URL 파싱 실패는 마스킹만 못 할 뿐, 접속 단계에서 어차피 기동이 막힌다
-            pw = None
-        if pw:
-            out.append(str(pw))
-        return out
+
+def _db_secrets(url: SecretStr) -> list[str]:
+    from sqlalchemy.engine import make_url
+
+    try:
+        pw = make_url(url.get_secret_value()).password
+    except Exception:
+        # URL 파싱 실패는 마스킹만 못 할 뿐, 접속 단계에서 어차피 기동이 막힌다
+        pw = None
+    return [str(pw)] if pw else []
+
+
+class BootSettings(BaseModel):
+    """trader.env 만으로 정해지는 접속·로그 설정.
+
+    운영 설정(DB) 없이 만든다 — CLI halt/resume/status 와 기동 첫 단계(DB 접속 → 운영 설정 읽기)에서 쓴다.
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    database_url: SecretStr
+    account_name: str = Field(default="paper-default", min_length=1, max_length=64)
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    log_json: bool = True
+
+    def secret_values(self) -> list[str]:
+        return _db_secrets(self.database_url)
+
+
+class _EnvBase(BaseSettings):
+    # 설정은 클래스를 만들 때 정해져야 한다 (만든 뒤 model_config 를 바꾸면 적용되지 않는다).
+    # .env 에는 TRADER_ 가 아닌 값(로컬 DB 컨테이너 비밀번호 등)도 있으므로 extra="ignore" 가 꼭 필요하다
+    model_config = SettingsConfigDict(
+        env_prefix="TRADER_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
+# Settings 와 같은 환경변수·.env 를 읽되, 모든 값이 선택이고 형식 검사를 하지 않는 모델 (값 모으기 전용)
+_EnvValues: type[BaseSettings] = create_model(  # type: ignore[call-overload]
+    "_EnvValues",
+    __base__=_EnvBase,
+    **{name: (Annotated[Any, NoDecode], None) for name in Settings.model_fields},
+)
+
+
+# 빈 값이 "끔"을 뜻하는 설정 — 빈 값도 적힌 값으로 둔다 (빼면 기본값 15:00·15:15 가 살아난다)
+BLANK_MEANS_OFF = frozenset({"entry_cutoff", "eod_exit"})
+
+
+def load_env_values(env_file: str | None = ".env") -> dict[str, Any]:
+    """trader.env·환경변수에 실제로 적힌 값만 모은다 (빈 값은 빼되, 빈 값이 "끔"인 설정은 둔다). 검증은 Settings 가 한다."""
+    raw = _EnvValues(_env_file=env_file).model_dump()
+    return {
+        k: v
+        for k, v in raw.items()
+        if v is not None and (k in BLANK_MEANS_OFF or not (isinstance(v, str) and not v.strip()))
+    }

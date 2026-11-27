@@ -684,7 +684,9 @@ class Engine:
         """검증을 통과한 새 설정을 다음 판단·체결부터 적용한다."""
         assert self.controls is not None
         s = change.settings
-        self.risk.limits = risk_limits(s)
+        self.risk.limits = risk_limits(s)  # 진입 마감(entry_cutoff) 포함
+        if self.cfg.eod_exit != s.eod_exit:
+            self.cfg = replace(self.cfg, eod_exit=s.eod_exit)
         if isinstance(self.broker, PaperBroker):
             self.broker.update_costs(fee_schedule(s), s.slippage_bps, s.participation_rate)
         for slot in self.strategies:

@@ -7,7 +7,7 @@
 ```
 trader/
 ├── src/trader/
-│   ├── config.py          # pydantic-settings, TRADER_* (.env). 수수료·한도는 기본값 없음
+│   ├── config.py          # pydantic-settings, TRADER_* (.env) — 접속·실행 정보. BootSettings·load_env_values. 수수료·한도는 기본값 없음
 │   ├── logging_setup.py   # KST JSON 로그, DB URL 비밀번호·비밀값 마스킹
 │   ├── clock.py           # 내부는 tz-aware UTC, 거래일·장시간은 KST, DB 는 naive UTC
 │   ├── money.py           # Decimal 헬퍼. float 금지
@@ -25,7 +25,7 @@ trader/
 │   ├── risk/              # approval(승인 증표), manager, killswitch, health
 │   ├── execution/gateway.py  # 주문이 브로커로 가는 유일한 경로
 │   ├── storage/           # models(테이블), store(SqlTradingStore), db(엔진·인스턴스 락)
-│   ├── control.py         # 화면 제어: 설정 덮어쓰기·전략 스위치 반영, 적용값·상태 신호 기록 (engine_state)
+│   ├── control.py         # 운영 설정(DB 원본)·첫 옮기기(resolve_settings)·실시간 반영, 전략 스위치, 적용값·상태 신호 기록 (engine_state)
 │   ├── recovery.py        # 재시작 복구
 │   ├── engine.py          # 시세 루프·체결 루프·감시 루프
 │   ├── app.py             # 설정 → 엔진 조립, 스키마 버전 확인
@@ -74,14 +74,21 @@ trader/
 |---|---|---|
 | `killswitch` | 웹·CLI | `{halted, reason, at}` — 긴급 정지·재개 |
 | `strategy_switches` | 웹 | `{version, values: {전략: bool}}` — 꺼진 전략은 **신규 매수만** 안 한다 (매도·청산·규칙 청산은 그대로) |
-| `settings_overrides` | 웹 | `{version, values}` — `control.TUNABLE` 만. 엔진이 Settings 검증을 다시 통과시킨 뒤 다음 판단부터 적용 |
-| `settings_effective` | 엔진 | trader.env 기본값·덮어쓰기·적용값·거부 사유·바꿀 수 없는 설정(info) |
+| `settings` | 웹 (첫 버전은 엔진) | **운영 설정의 원본.** `{version, values(TUNABLE 16개 전체), by, at, previous}`. 엔진이 Settings 검증을 다시 통과시킨 뒤 다음 판단부터 적용 |
+| `settings_effective` | 엔진 | 적용값·적용 버전·거부 사유·무시된 trader.env 키(env_ignored)·trader.env 전용 설정(info) |
+| `settings_overrides` | (예전) | 예전 화면 덮어쓰기. 첫 옮기기 때만 읽어 합친다 |
 | `heartbeat` | 엔진 | 상태 신호 (DB·킬스위치·데이터 이상·마지막 시세·전략). 30초 넘게 없으면 화면이 "응답 없음" |
 
-- 바꿀 수 있는 설정(`TUNABLE`): 수수료·세율·원 단위 처리·슬리피지·체결 비율·1회 매수 금액·위험 한도 3종·ATR 배수·최소 손익비·최대 스프레드.
+- **운영 설정(`TUNABLE`)은 DB 가 원본이다** (2026-11-27 사용자 결정): 수수료·세율·원 단위 처리·슬리피지·체결 비율·1회 매수 금액·
+  위험 한도 3종·ATR 배수·최소 손익비·최대 스프레드·신규 매수 마감(`entry_cutoff`)·장마감 청산(`eod_exit`). 모두 재시작 없이 적용된다.
   목록은 백엔드 `traderControl.service.ts` 의 `TUNABLE_RULES`, 프론트 `lib/trader/settingsMeta.ts` 와 같아야 한다.
-- 덮어쓰기 검증에 실패하면 이전 값을 유지하고 `SETTINGS_REJECTED` 를 남긴다. 적용하면 `SETTINGS_APPLIED`(바뀐 값).
-- 웹 조작은 `risk_events` 에 HALT/RESUME/STRATEGY_ON/OFF/SETTINGS_CHANGE 로 남는다 (`by` = `web:<아이디>`).
+  종목·전략·봉 주기 등 재시작이 필요한 설정은 trader.env 에 남아 있다 (DB 로 옮기는 것은 나중 단계).
+- 기동 순서 (`app.build_engine` → `control.resolve_settings`): trader.env 로 DB 접속 → 인스턴스 락 → DB `settings` 읽기.
+  없으면 trader.env 값 + 예전 `settings_overrides` 를 합쳐 검증 후 version 1 로 저장(`SETTINGS_SEEDED`). 그것도 안 되면 기동하지 않는다.
+  있으면 DB 값을 쓰고 trader.env 의 같은 키는 무시한다(경고 로그 + `env_ignored`). 최신 값이 검증에 실패하면 `previous` 로 뜬다.
+- CLI `halt`·`resume`·`status` 는 `BootSettings`(DB 접속·로그)만 쓴다 — trader.env 에 운영 설정이 없어도 동작한다.
+- 검증에 실패하면 이전 값을 유지하고 `SETTINGS_REJECTED` 를 남긴다. 적용하면 `SETTINGS_APPLIED`(바뀐 값).
+- 웹 조작은 `risk_events` 에 HALT/RESUME/STRATEGY_ON/OFF/SETTINGS_CHANGE/SETTINGS_REVERT 로 남는다 (`by` = `web:<아이디>`).
 - 웹 계정 `trader_web` 의 쓰기 권한은 `engine_state`(INSERT·UPDATE)·`risk_events`(INSERT)뿐 (`db/grant_web_control.sql`).
 
 ## 안전 규칙 (깨면 안 된다)
@@ -100,7 +107,7 @@ trader/
 7. **금액은 Decimal**(DB `DECIMAL(20,4)`, 수량 `DECIMAL(20,6)`). `money.D()` 는 float 을 거부한다.
 8. **시각**: 내부·DB 는 UTC(`DATETIME(6)`), 거래일·장 시간은 Asia/Seoul. naive datetime 은 받지 않는다.
 9. **비밀값**은 `.env`/`server/trader.env` 에만. 로그는 마스킹 필터를 거친다. `echo`/`hide_parameters` 를 켜지 않는다.
-10. **수수료·세율·한도는 설정값**이고 기본값을 넣지 않는다.
+10. **수수료·세율·한도는 설정값**이고 기본값을 넣지 않는다. 원본은 DB(engine_state `settings`), 처음 한 번만 trader.env 에서 옮긴다.
 11. **엔진 인스턴스는 1개**: MySQL `GET_LOCK`. 락 연결이 끊기면 엔진을 멈춘다.
 12. 운영 MySQL 의 다른 DB·컨테이너·볼륨은 건드리지 않는다. 계정 SQL 실행·운영 배포는 사용자가 한다.
 13. 킬스위치는 DB(`engine_state`)에 있고 사람만 끈다 (CLI `trader resume` 또는 웹 — 웹은 2단계 인증 필수). 켜지면 미체결 일괄 취소. 상태를 못 읽으면 켜진 것으로 본다.

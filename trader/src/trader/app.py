@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import Engine as DbEngine
 from sqlalchemy import text
 
 from trader.broker.paper import PaperBroker
 from trader.clock import Clock, SimClock, SystemClock
-from trader.config import Settings
-from trader.control import RuntimeControls, fee_schedule, risk_limits, static_info
+from trader.config import BootSettings, Settings
+from trader.control import RuntimeControls, fee_schedule, resolve_settings, risk_limits, static_info
 from trader.engine import Engine, EngineConfig, StrategySlot
 from trader.marketdata.base import MarketDataFeed
 from trader.marketdata.context import StockSimContextProvider
@@ -84,13 +87,40 @@ def build_strategies(s: Settings) -> list[StrategySlot]:
     return [StrategySlot(made[name], shadow=name in s.shadow_strategies) for name in s.strategies]
 
 
-def build_engine(s: Settings, *, db: DbEngine | None = None, take_lock: bool = True) -> Engine:
-    db = db or create_db_engine(s.database_url.get_secret_value())
+def build_engine(
+    config: Settings | Mapping[str, Any],
+    *,
+    db: DbEngine | None = None,
+    take_lock: bool = True,
+    explicit: tuple[str, ...] = (),
+) -> Engine:
+    """엔진을 조립한다.
+
+    config 는 trader.env 값(`load_env_values()`) 또는 완성된 Settings(테스트). 운영 설정(TUNABLE)은 DB 가 원본이다 —
+    인스턴스 락을 잡은 뒤 DB `settings` 를 읽고, 없으면 config 의 값을 처음 한 번 옮긴다 (`control.resolve_settings`).
+    explicit 은 trader.env 에 실제로 적힌 키 (DB 값 때문에 무시되는 키를 알리는 용도).
+    """
+    env: dict[str, Any] = config.model_dump() if isinstance(config, Settings) else dict(config)
+    boot = BootSettings.model_validate(env)
+    db = db or create_db_engine(boot.database_url.get_secret_value())
     check_schema(db)
     lock: InstanceLock | None = None
     if take_lock:
         lock = InstanceLock(db)
         lock.acquire()
+
+    try:
+        resolved = resolve_settings(SqlTradingStore(db), env, datetime.now(UTC), explicit=explicit)
+    except Exception:
+        if lock is not None:
+            lock.release()
+        raise
+    s = resolved.settings
+    if resolved.env_ignored:
+        log.warning(
+            "trader.env 의 운영 설정은 무시된다: DB(화면) 값을 쓴다",
+            extra={"fields": {"keys": list(resolved.env_ignored)}},
+        )
 
     clock: Clock = SystemClock()
     feed = build_feed(s, clock)
@@ -141,6 +171,13 @@ def build_engine(s: Settings, *, db: DbEngine | None = None, take_lock: bool = T
         risk=RiskManager(risk_limits(s)),
         account_id=account_id,
         context=context,
-        controls=RuntimeControls(store, s, poll_seconds=float(s.health_check_seconds)),
+        controls=RuntimeControls(
+            store,
+            s,
+            version=resolved.version,
+            env_ignored=resolved.env_ignored,
+            rejected=resolved.rejected,
+            poll_seconds=float(s.health_check_seconds),
+        ),
         info=static_info(s),
     )
