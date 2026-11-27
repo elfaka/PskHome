@@ -199,13 +199,19 @@ Google Cloud Console 의 "승인된 리디렉션 URI" 와 묶여 있어서 마�
   `trader_web` 에 쓰기 권한이 없으면 503 `TRADER_DB_NO_WRITE` (`trader/db/grant_web_control.sql`).
 - **조회 API** (`traderStatus.service.ts`): `status`(상태 신호·킬스위치·스위치·설정·알림) · `equity`(일별 추이 + MDD, SQL 창 함수) ·
   `strategies`(오늘 집계·최근 판단 40개) · `activity`(체결·주문 실패·위험 이벤트를 시간순으로).
+- **그래프·지표 API** (`traderCharts.service.ts`, 조회만):
+  `chart?symbol=&interval=60|300`(그 종목 봉이 있는 마지막 KST 거래일의 봉·VWAP/SMA20 선·체결·신호·보유 시 손절/목표가·최신 지표와 VWAP 괴리) ·
+  `scores?symbol=`(점수 전략 합계·가격/맥락/이슈 점수 추이, 기준선, 최신 항목별 점수) ·
+  `stats`(오늘 체결·비용, 청산된 거래(보유 0→0)의 승률·평균 손익, 실현/평가 손익, 계획 손익비, 오늘 위험 관리 거부 사유별 건수).
+  symbol 은 영숫자 16자, interval 은 60·300 만 받는다(그 외 400). 봉 구간은 `TIMESTAMPDIFF` 로 나눈다 (`UNIX_TIMESTAMP` 는 세션 시간대를 탄다).
+  기준선 `SCORE_THRESHOLDS` 는 엔진 `scoring/combine.py` 의 `CombinationRule` 기본값과 같아야 한다. `equity` 는 점마다 `drawdown` 과 `current` 를 준다.
 - **대시보드 API** (`/api/trader/summary|orders|fills|decisions|performance|risk-events`, 모두 trader 로그인 필요):
   엔진 DB 를 `trader_web` 계정으로 조회한다 (`traderDb.ts`, mariadb 풀, `TRADER_DATABASE_URL`).
-  - 조회 서비스(`traderDashboard`·`traderStatus`)는 SELECT 만 쓴다 (테스트가 검사한다). 쓰기는 `withTraderTx` 를 쓰는 `traderControl` 에만 둔다
+  - 조회 서비스(`traderDashboard`·`traderStatus`·`traderCharts`)는 SELECT(·WITH) 만 쓴다 (테스트가 검사한다). 쓰기는 `withTraderTx` 를 쓰는 `traderControl` 에만 둔다
   - 비율(누적 수익률·손실 한도 사용률·비중·MDD)도 SQL DECIMAL 로 나눈다 (`ratios()`)
   - 금액 계산(평가금액·손익)은 SQL DECIMAL 로 하고 **문자열**로 내려보낸다. JS number 로 바꾸지 않는다
   - DATETIME 은 엔진이 UTC 로 저장한다 → `utcIso()` 로 `...Z` 문자열
-  - 엔진 DB 스키마(`trader/migrations`)가 바뀌면 `traderDashboard.service.ts` 를 함께 고친다
+  - 엔진 DB 스키마(`trader/migrations`)나 판단 기록(`inputs` JSON)이 바뀌면 `traderDashboard`·`traderStatus`·`traderCharts` 서비스를 함께 고친다
 
 ## 데이터베이스
 

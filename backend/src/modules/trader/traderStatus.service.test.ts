@@ -95,10 +95,20 @@ describe("trader status", () => {
           { trade_date: "2026-11-26", start_equity: "10000000.0000" },
         ];
       if (sql.includes("MIN((e - peak) / peak)")) return [{ mdd: "-0.019802" }];
+      if (sql.includes("AS dd FROM"))
+        return [
+          { i: 0, dd: "0.000000" },
+          { i: 1, dd: "0.000000" },
+          { i: 2, dd: "-0.019802" },
+        ];
       return [];
     };
     const e = await svc.getEquity("paper-default", "9900000.0000");
-    expect(e.points.map((p) => p.date)).toEqual(["2026-11-26", "2026-11-27"]);
+    expect(e.points).toEqual([
+      { date: "2026-11-26", equity: "10000000.0000", drawdown: "0.000000" },
+      { date: "2026-11-27", equity: "10100000.0000", drawdown: "0.000000" },
+    ]);
+    expect(e.current).toEqual({ equity: "9900000.0000", drawdown: "-0.019802" });
     expect(e.mdd).toBe("-0.019802");
     const q = db.queries.find((x) => x.sql.includes("MIN((e - peak)"));
     expect(q?.params).toEqual(["10000000.0000", "10100000.0000", "9900000.0000"]);

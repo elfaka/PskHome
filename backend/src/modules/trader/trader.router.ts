@@ -4,6 +4,7 @@ import { z } from "zod";
 import { env } from "../../config/env.js";
 import { HttpError } from "../../lib/httpError.js";
 import { LoginThrottle, verifyLogin } from "./traderAuth.service.js";
+import * as charts from "./traderCharts.service.js";
 import * as control from "./traderControl.service.js";
 import * as dashboard from "./traderDashboard.service.js";
 import * as status from "./traderStatus.service.js";
@@ -308,6 +309,25 @@ export function createTraderRouter(throttle = new LoginThrottle()): Router {
 
   router.get("/trader/risk-events", async (req, res) => {
     res.json(await dashboard.listRiskEvents(dashboard.clampLimit(req.query.limit, 30)));
+  });
+
+  // --- 그래프·지표 (조회만) ---
+
+  router.get("/trader/chart", async (req, res) => {
+    const interval = charts.parseInterval(req.query.interval);
+    if (!charts.isSymbol(req.query.symbol) || interval == null) {
+      throw new HttpError(400, "BAD_REQUEST", "symbol(영숫자 16자 이하)과 interval(60 또는 300)을 확인하세요.");
+    }
+    res.json(await charts.getChart(account(), req.query.symbol, interval));
+  });
+
+  router.get("/trader/scores", async (req, res) => {
+    if (!charts.isSymbol(req.query.symbol)) throw new HttpError(400, "BAD_REQUEST", "symbol(영숫자 16자 이하)을 확인하세요.");
+    res.json(await charts.getScores(req.query.symbol));
+  });
+
+  router.get("/trader/stats", async (_req, res) => {
+    res.json(await charts.getStats(account()));
   });
 
   // --- 조작 (engine_state 에 쓰고 엔진이 약 5초 안에 반영) ---

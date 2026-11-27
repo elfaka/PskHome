@@ -162,12 +162,16 @@ export interface TraderStatus {
 export interface TraderEquityPoint {
   date: string;
   equity: Dec;
+  /** 그때까지 최고점 대비 하락폭 (비율, 0 이하) */
+  drawdown: Dec | null;
 }
 
 export interface TraderEquity {
   points: TraderEquityPoint[];
   /** 최대 낙폭 (비율, 0 이하). 일별 시작 평가금액 + 현재 총자산 기준 */
   mdd: Dec | null;
+  /** 지금 총자산과 그 하락폭 (총자산을 모르면 null) */
+  current: { equity: Dec; drawdown: Dec | null } | null;
 }
 
 export interface TraderStrategyTick {
@@ -194,4 +198,96 @@ export interface TraderActivity {
   kind: string;
   symbol: string | null;
   message: string;
+}
+
+// ── 그래프·지표 (종목 차트, 점수 추이, 오늘 통계) ───────────────────────────────
+
+export interface TraderBar {
+  t: string;
+  o: Dec;
+  h: Dec;
+  l: Dec;
+  c: Dec;
+  v: Dec;
+}
+
+export interface TraderIndicators {
+  barTs: string | null;
+  close: Dec | null;
+  vwap: Dec | null;
+  /** (종가 − VWAP) ÷ VWAP (비율, SQL DECIMAL) */
+  vwapGap: Dec | null;
+  sma20: Dec | null;
+  rsi14: Dec | null;
+  macdHist: Dec | null;
+  atr14: Dec | null;
+  volumeRatio: Dec | null;
+}
+
+export interface TraderChart {
+  symbol: string;
+  /** 봉 주기 (초) */
+  interval: number;
+  /** 화면에 그린 거래일 (KST, YYYY-MM-DD). 봉이 없으면 null */
+  tradeDate: string | null;
+  /** 고를 수 있는 종목 */
+  symbols: string[];
+  bars: TraderBar[];
+  /** 지표선 — 1분봉 기준 값을 봉 구간의 마지막 값으로 맞춘다 */
+  lines: { t: string; vwap: Dec | null; sma20: Dec | null }[];
+  /** t = 이 체결이 속한 봉의 시작 시각 */
+  fills: { t: string; ts: string | null; side: string; qty: Dec; price: Dec; strategyId: string | null }[];
+  signals: { t: string; ts: string | null; strategyId: string; action: string; shadow: boolean; riskResult: string | null }[];
+  /** 보유 중이면 평균단가·손절·목표가 (마지막 매수 주문의 위험 관리 계산값) */
+  position: { qty: Dec; avgPrice: Dec; stopLoss: Dec | null; takeProfit: Dec | null } | null;
+  /** 가장 최근 판단 때의 지표 */
+  indicators: TraderIndicators | null;
+}
+
+export interface TraderScorePart {
+  points: Dec | null;
+  max: Dec | null;
+  note: string;
+  available: boolean;
+}
+
+export interface TraderScores {
+  symbol: string;
+  tradeDate: string | null;
+  /** 결합 규칙 기준 (엔진 scoring/combine.py 의 CombinationRule 기본값과 같다) */
+  thresholds: { buy: Dec; watch: Dec; exit: Dec };
+  points: { t: string; action: string; total: Dec | null; price: Dec | null; context: Dec | null; issue: Dec | null }[];
+  /** 가장 최근 판단의 항목별 점수 (기술·수급·코스피·VIX·뉴스) */
+  latest: { ts: string | null; parts: Record<string, TraderScorePart> } | null;
+}
+
+export interface TraderTripStats {
+  /** 청산된 거래 수 (보유 0 → 0) */
+  count: number;
+  wins: number;
+  winRate: Dec | null;
+  /** 비용 차감 손익 합계·평균 */
+  netPnl: Dec | null;
+  avgPnl: Dec | null;
+}
+
+export interface TraderStats {
+  today: {
+    fills: number;
+    buys: number;
+    sells: number;
+    commission: Dec;
+    tax: Dec;
+    slippage: Dec;
+    /** 수수료 + 세금 */
+    costs: Dec;
+    /** 오늘 승인된 매수의 계획 손익비 평균 */
+    avgPlannedRiskReward: Dec | null;
+  };
+  trips: { today: TraderTripStats; all: TraderTripStats };
+  /** 실현 손익 합계 (누적, 수수료·세금 차감 전 — 엔진 positions.realized_pnl) · 평가 손익 합계 (현재 시세) */
+  realizedPnl: Dec | null;
+  unrealizedPnl: Dec | null;
+  /** 오늘 위험 관리가 막은 주문 의도 — 사유 코드별 건수 */
+  rejections: { code: string; count: number; sample: string | null }[];
 }

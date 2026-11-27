@@ -169,12 +169,22 @@ export async function getEquity(accountName: string, currentEquity: string | nul
       WHERE a.name = ? ORDER BY d.trade_date DESC LIMIT ?`,
     [accountName, days]
   );
-  const points = rows
-    .map((r) => ({ date: String(r.trade_date).slice(0, 10), equity: String(r.start_equity) }))
-    .reverse();
-  const series = [...points.map((p) => p.equity), ...(currentEquity != null ? [currentEquity] : [])];
-  if (series.length < 2) return { points, mdd: series.length ? "0" : null };
+  const daily = rows.map((r) => ({ date: String(r.trade_date).slice(0, 10), equity: String(r.start_equity) })).reverse();
+  const series = [...daily.map((p) => p.equity), ...(currentEquity != null ? [currentEquity] : [])];
+  if (series.length === 0) return { points: [], mdd: null, current: null };
+  // 점마다 그때까지 최고점 대비 하락폭 (SQL DECIMAL, 창 함수)
   const union = series.map((_, i) => `SELECT ${i} AS i, CAST(? AS DECIMAL(24,4)) AS e`).join(" UNION ALL ");
+  const dd = await traderQuery<Row>(
+    `SELECT i, CASE WHEN peak > 0 THEN ROUND((e - peak) / peak, 6) END AS dd FROM (
+       SELECT i, e, MAX(e) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS peak
+         FROM (${union}) s
+     ) x ORDER BY i`,
+    series
+  );
+  const ddAt = (i: number) => str(dd.find((r) => Number(r.i) === i)?.dd);
+  const points = daily.map((p, i) => ({ ...p, drawdown: ddAt(i) }));
+  const current = currentEquity != null ? { equity: currentEquity, drawdown: ddAt(series.length - 1) } : null;
+  if (series.length < 2) return { points, mdd: "0", current };
   const [row] = await traderQuery<Row>(
     `SELECT ROUND(MIN((e - peak) / peak), 6) AS mdd FROM (
        SELECT e, MAX(e) OVER (ORDER BY i ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS peak
@@ -182,7 +192,7 @@ export async function getEquity(accountName: string, currentEquity: string | nul
      ) x WHERE peak > 0`,
     series
   );
-  return { points, mdd: str(row?.mdd) };
+  return { points, mdd: str(row?.mdd), current };
 }
 
 const TODAY_UTC =
