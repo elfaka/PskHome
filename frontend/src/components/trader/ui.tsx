@@ -9,8 +9,8 @@ import { TONE_TEXT } from "@/lib/stocksim/format";
 import { formatDec, formatRatioPct, signOf } from "@/lib/trader/decimal";
 
 /**
- * /trader 화면 공용 조각 — 카드 섹션, 표, 핵심 숫자 카드, 상태 점, 게이지, 스위치, 모달, 추이 차트.
- * 숫자는 Decimal 문자열을 그대로 포맷한다. (차트의 픽셀 좌표 계산만 예외로 number 를 쓴다)
+ * /trader 화면 공용 조각 — 카드 섹션, 표, 핵심 숫자 카드, 상태 점, 게이지, 스위치, 모달.
+ * 숫자는 Decimal 문자열을 그대로 포맷한다. 그래프는 charts.tsx.
  */
 
 export const td = "px-3 py-2 align-top whitespace-nowrap";
@@ -213,40 +213,4 @@ export function ago(iso: string | null | undefined, now: number): string {
   if (s < 3600) return `${Math.floor(s / 60)}분 전`;
   if (s < 86400) return `${Math.floor(s / 3600)}시간 전`;
   return `${Math.floor(s / 86400)}일 전`;
-}
-
-/** 평가금액 추이 (일별 시작 평가금액 + 현재). SVG 라 테마 토큰 색을 그대로 쓴다. */
-export function EquityChart({ points }: { points: { label: string; value: string }[] }) {
-  if (points.length < 2) {
-    return <p className="py-10 text-center text-xs text-fg-subtle">추이를 그리려면 거래일이 이틀 이상 쌓여야 합니다.</p>;
-  }
-  const W = 600;
-  const H = 160;
-  const P = 8;
-  const values = points.map((p) => Number(p.value)); // 픽셀 좌표용 (표시는 문자열 그대로)
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const x = (i: number) => P + (i * (W - P * 2)) / (points.length - 1);
-  const y = (v: number) => H - P - ((v - min) * (H - P * 2)) / span;
-  const line = values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const area = `${line} L${x(points.length - 1).toFixed(1)},${H - P} L${x(0).toFixed(1)},${H - P} Z`;
-  const first = points[0];
-  const last = points[points.length - 1];
-  return (
-    <figure className="min-w-0">
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-40 w-full" preserveAspectRatio="none" role="img" aria-label="평가금액 추이">
-        <path d={area} className="fill-accent-soft" />
-        <path d={line} className="fill-none stroke-accent" strokeWidth={2} vectorEffect="non-scaling-stroke" />
-      </svg>
-      <figcaption className="mt-1 flex justify-between text-[11px] text-fg-subtle tabular-nums">
-        <span>
-          {first.label} · {formatDec(first.value)}
-        </span>
-        <span>
-          {last.label} · {formatDec(last.value)}
-        </span>
-      </figcaption>
-    </figure>
-  );
 }

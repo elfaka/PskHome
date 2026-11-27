@@ -56,7 +56,7 @@ export default function StatusBar({
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="text-sm font-semibold tracking-tight text-fg">자동매매</h1>
           <span

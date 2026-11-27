@@ -64,7 +64,9 @@ trader/
 ### 대시보드와 화면 제어
 
 `/trader` (로그인 + 2단계 인증) — 백엔드가 이 DB 를 `trader_web` 으로 읽어 보여준다. 엔진과 직접 통신하지 않는다.
-**스키마를 바꾸면 `backend/src/modules/trader/traderDashboard.service.ts`·`traderStatus.service.ts` 도 함께 고친다.**
+**스키마를 바꾸면 `backend/src/modules/trader/traderDashboard.service.ts`·`traderStatus.service.ts`·`traderCharts.service.ts` 도 함께 고친다.**
+화면 그래프가 읽는 것: 판단 기록 `inputs.indicators`(VWAP·SMA20·RSI 등)·`inputs.components`·`inputs.parts`, `risk_reason` 의 `"코드: 메시지"` 형식,
+결합 규칙 기준(80/65/30 — 백엔드 `SCORE_THRESHOLDS`). 이 형식이나 기준을 바꾸면 백엔드도 같이 바꾼다.
 
 화면 조작은 `engine_state`(키-값) 를 거친다. 엔진은 감시 루프(`health_check_seconds`, 기본 5초)마다 읽는다.
 

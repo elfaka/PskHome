@@ -15,7 +15,7 @@ Next.js (App Router) + TypeScript 프론트엔드 개발 가이드.
 | axios | HTTP 클라이언트 |
 | react-markdown | PS 게시글 본문 렌더링 |
 | motion (`motion/react`) | 청첩장 인트로·스크롤 애니메이션 (`/wedding` 에서만 import) |
-| lightweight-charts (TradingView) | 모의투자 캔들 차트 (`/stocksim` 에서만, `next/dynamic` 으로 브라우저에서만 로드) |
+| lightweight-charts (TradingView) | 캔들 차트 (`/stocksim`·`/trader` 에서만, `next/dynamic` 으로 브라우저에서만 로드) |
 | Vitest + MSW + Testing Library | 테스트 |
 
 > 이 프로젝트는 **클라이언트 중심**이다. 데이터는 서버 컴포넌트가 아니라
@@ -71,8 +71,16 @@ src/app/
 - 검색 차단은 `layout.tsx` 의 `robots` 메타 + `next.config.ts` 의 `X-Robots-Tag` 헤더 두 겹이다.
 - Google 로그인(`/api/auth/me`)과 별개다. 로그인하면 `TraderDashboard` 를 보여준다. 2단계 인증이 켜져 있으면(`totpRequired`) 로그인에 인증 코드 칸이 나온다.
 - 화면 구성(`components/trader/`): `StatusBar`(실행/중지·모의·시세·DB·갱신·긴급 정지/재개) → 알림 줄 → 탭(개요·전략·보유·주문·판단·성과·활동 로그·설정, 주소 `#해시`).
-  lg 이상은 왼쪽 메뉴, 좁으면 위쪽 탭. 공용 조각은 `ui.tsx`(Section·DataTable·Kpi·StatusDot·Gauge·Switch·Modal·EquityChart).
+  lg 이상은 왼쪽 메뉴, 좁으면 위쪽 탭. 공용 조각은 `ui.tsx`(Section·DataTable·Kpi·StatusDot·Gauge·Switch·Modal).
   모달은 `createPortal` 로 body 에 띄운다 — 상단 바처럼 `backdrop-filter` 가 있는 조상 안에서는 fixed 가 잘린다.
+- **화면 폭 제한이 없다** (`/stocksim` 처럼 전체 폭). 개요는 열이 화면 폭에 따라 늘어난다 (lg 2 · xl 3 · 2xl 4, `grid-flow-row-dense`).
+  카드를 더하면 1440·1920·375 폭에서 빈칸·가로 넘침이 없는지 본다.
+- 그래프·지표는 `charts.tsx`: 종목 차트(`TraderCandleChart` — canvas, `next/dynamic`, 테스트는 `vi.mock("./TraderCandleChart")`),
+  종목 지표 카드, 점수 항목, 점수 추이(쌓은 영역 + 합계 + 기준선 80/65/30), 평가금액·낙폭, 오늘 통계 줄, 막힌 주문 사유, 신호 성과 막대.
+  SVG 그래프는 짚으면(마우스·←/→) 값 상자(`role="status"`)를 띄운다. 축은 하나만 쓴다 (평가금액과 낙폭은 그래프를 나눈다).
+  number 는 픽셀 좌표에만 쓰고, 지표 구간 판단(RSI 70 등)은 `cmpDec`(문자열 비교)로 한다.
+- 점수 구성(가격·맥락·이슈) 색은 `series-1~3` 토큰이다 (`globals.css`, 라이트·다크 각각 색약 구분을 검증한 값). 상승·하락·상태색과 섞어 쓰지 않는다.
+- 종목 차트의 지표선(VWAP·SMA20)은 엔진이 1분봉 판단 때 기록한 값이다 — 5분봉에서도 1분봉 기준 값을 구간 마지막 값으로 그린다.
 - 위험이 커지는 조작(재개·전략 켜기·설정 변경)은 `stepUp.tsx` 의 `guarded()` 로 감싼다. 서버가 403 `STEP_UP_REQUIRED` 를 주면 코드를 묻고 한 번 다시 시도한다.
   긴급 정지·전략 끄기는 감싸지 않는다. 상태 조회가 401 이면 `onSessionExpired` 로 로그인 화면으로 돌아간다 (재배포로 세션이 사라질 때).
 - 설정 항목 설명(올리면·내리면)은 `lib/trader/settingsMeta.ts` 한 곳. 키 목록은 백엔드 `TUNABLE_RULES`·엔진 `TUNABLE` 과 같아야 한다.
@@ -247,6 +255,7 @@ export async function fetchData(id: number) {
 - `src/api/stockSim.ts` — 주식 모의투자 (검색·시세·차트·호가·체결·개요·분석·수급·시장 지수·공포탐욕·포트폴리오·주문)
 - `src/api/trader.ts` — 자동매매 본인 로그인 (`getTraderMe`, `traderLogin`, `traderStepUp`, `traderLogout`),
   대시보드 조회 (`getTraderSummary`, `getTraderStatus`, `getTraderEquity`, `getTraderStrategies`, `getTraderActivity`, `getTraderDecisions`, `getTraderPerformance`, `getTraderOrders`, `getTraderFills`, `getTraderRiskEvents`),
+  그래프·지표 (`getTraderChart`, `getTraderScores`, `getTraderStats`),
   조작 (`traderHalt`, `traderResume`, `traderSetStrategy`, `traderUpdateSettings`)
 
 **에러 메시지**는 `@/lib/errorMessage` 의 `errorMessage(e, fallback)` 로 뽑는다.

@@ -128,7 +128,7 @@ export default function TraderDashboard({
           themeToggle={<ThemeToggle />}
         />
 
-        <div className="mx-auto flex max-w-7xl gap-6 px-4 py-4">
+        <div className="flex gap-6 px-4 py-4">
           <nav aria-label="자동매매 메뉴" className="hidden w-40 shrink-0 lg:block">
             <ul className="sticky top-20 space-y-1">
               {TABS.map((t) => (

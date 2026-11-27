@@ -4,12 +4,16 @@ import { useState } from "react";
 
 import {
   getTraderActivity,
+  getTraderChart,
   getTraderDecisions,
   getTraderEquity,
   getTraderFills,
   getTraderOrders,
   getTraderPerformance,
+  getTraderScores,
+  getTraderStats,
   traderSetStrategy,
+  type ChartInterval,
   type ComponentRecord,
   type TraderActivity,
   type TraderDecision,
@@ -26,7 +30,17 @@ import { usePolling } from "@/lib/stocksim/usePolling";
 import { formatDec, formatKst, formatRatioPct, signOf } from "@/lib/trader/decimal";
 
 import { useStepUp } from "./stepUp";
-import { DataTable, EquityChart, Gauge, Kpi, num, Section, Signed, StatusDot, Switch, td, ago } from "./ui";
+import {
+  EquitySection,
+  IndicatorCards,
+  PerformanceChart,
+  RejectionSection,
+  ScorePartsCard,
+  ScoreTrendSection,
+  StatsRow,
+  SymbolChartSection,
+} from "./charts";
+import { DataTable, Gauge, Kpi, num, Section, Signed, StatusDot, Switch, td, ago } from "./ui";
 
 const ACTION_TONE: Record<string, BadgeTone> = { BUY: "danger", SELL: "info", EXIT: "info", HOLD: "neutral", WAIT: "neutral" };
 const RISK_TONE: Record<string, BadgeTone> = {
@@ -54,15 +68,26 @@ export function OverviewPanel({
   onOpen: (tab: string) => void;
 }) {
   const equity = usePolling("equity", getTraderEquity, 60_000, "평가금액 추이를 불러오지 못했습니다.");
+  const stats = usePolling("stats", getTraderStats, 15_000, "오늘 통계를 불러오지 못했습니다.");
   const s = summary;
-  const points = [
-    ...(equity.data?.points ?? []).map((p) => ({ label: p.date.slice(5), value: p.equity })),
-    ...(s?.equity ? [{ label: "지금", value: s.equity }] : []),
-  ];
+
+  // 종목 차트·지표·점수는 같은 종목을 본다
+  const configured = status?.settings?.info?.symbols ?? [];
+  const [picked, setPicked] = useState<string | null>(null);
+  const [barInterval, setBarInterval] = useState<ChartInterval>(60);
+  const symbol = picked ?? configured[0] ?? s?.positions[0]?.symbol ?? null;
+  const chart = usePolling(
+    symbol ? `chart:${symbol}:${barInterval}` : null,
+    () => getTraderChart(symbol!, barInterval),
+    15_000,
+    "종목 차트를 불러오지 못했습니다."
+  );
+  const scores = usePolling(symbol ? `scores:${symbol}` : null, () => getTraderScores(symbol!), 30_000, "점수 추이를 불러오지 못했습니다.");
+  const symbols = chart.data?.symbols.length ? chart.data.symbols : configured;
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Kpi label="총자산" hint={s?.initialCash ? `시작 ${formatDec(s.initialCash)}` : undefined}>
           {formatDec(s?.equity ?? null)}
         </Kpi>
@@ -79,11 +104,28 @@ export function OverviewPanel({
         </Kpi>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Section title="평가금액 추이" className="lg:col-span-2">
-          {equity.error && <Alert className="mb-2">{equity.error}</Alert>}
-          <EquityChart points={points} />
-        </Section>
+      <StatsRow stats={stats.data} />
+      {stats.error && <Alert>{stats.error}</Alert>}
+
+      {/* 화면이 넓어질수록 열이 늘어난다 (lg 2 · xl 3 · 2xl 4). 빈칸은 뒤 카드가 채운다 */}
+      <div className="grid grid-flow-row-dense gap-4 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <SymbolChartSection
+          className="lg:col-span-2 2xl:col-span-3"
+          symbol={symbol}
+          symbols={symbols}
+          interval={barInterval}
+          data={chart.data}
+          error={chart.error}
+          onSymbol={setPicked}
+          onInterval={setBarInterval}
+        />
+        <div className="grid min-w-0 content-start gap-4 lg:col-span-2 lg:grid-cols-2 xl:col-span-1 xl:grid-cols-1">
+          <IndicatorCards ind={chart.data?.indicators ?? null} symbol={symbol} />
+          <ScorePartsCard scores={scores.data} />
+        </div>
+
+        <ScoreTrendSection className="lg:col-span-2" scores={scores.data} error={scores.error} />
+        <EquitySection equity={equity.data} current={s?.equity ?? null} error={equity.error} />
         <Section title="리스크">
           <div className="space-y-4">
             <Gauge
@@ -108,9 +150,7 @@ export function OverviewPanel({
             </div>
           </div>
         </Section>
-      </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
         <Section
           title="전략"
           className="lg:col-span-2"
@@ -122,8 +162,10 @@ export function OverviewPanel({
         >
           <StrategyList rows={strategies} status={status} compact />
         </Section>
+        <RejectionSection stats={stats.data} error={null} />
         <Section
           title="최근 활동"
+          className="xl:col-span-2 2xl:col-span-1"
           aside={
             <button type="button" className="text-xs text-accent-soft-fg hover:underline" onClick={() => onOpen("activity")}>
               전체 보기
@@ -449,6 +491,9 @@ export function DecisionsPanel() {
         <DataTable head={["봉", "전략", "종목", "신호", "점수", "점수 구성", "위험 관리", "진입·손절·목표", "사유"]} empty={decisions.data?.length === 0}>
           {decisions.data?.map((d) => <DecisionRow key={d.id} d={d} />)}
         </DataTable>
+      </Section>
+      <Section title="신호 성과 — 기간별 평균 수익률" aside={<span className="text-xs text-fg-subtle">막대를 짚으면 평가 수·최대 유리/불리</span>}>
+        <PerformanceChart rows={perf.data} />
       </Section>
       <Section title="신호 성과" aside={<span className="text-xs text-fg-subtle">방향 반영 수익률 (매도·청산은 내린 만큼 +)</span>}>
         {perf.error && <Alert className="mb-2">{perf.error}</Alert>}

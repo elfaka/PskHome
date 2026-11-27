@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -6,6 +6,15 @@ import { http, HttpResponse } from "msw";
 import { server } from "@/test/mocks/server";
 
 import TraderGate from "./TraderGate";
+
+// canvas 차트는 jsdom 에서 그릴 수 없다 — 받은 데이터만 보여주는 가짜로 바꾼다
+vi.mock("./TraderCandleChart", () => ({
+  default: ({ data }: { data: { symbol: string; interval: number; bars: unknown[]; fills: unknown[] } }) => (
+    <div data-testid="trader-candle-chart">
+      {data.symbol}:{data.interval}:{data.bars.length}:{data.fills.length}
+    </div>
+  ),
+}));
 
 describe("TraderGate", () => {
   it("shows only the login form when not logged in", async () => {

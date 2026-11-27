@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDec, formatKst, formatRatioPct, signOf } from "./decimal";
+import { cmpDec, formatDec, formatKst, formatRatioPct, signOf } from "./decimal";
 
 describe("trader decimal formatting (string-only)", () => {
   it("groups thousands and rounds half up", () => {
@@ -34,5 +34,18 @@ describe("trader decimal formatting (string-only)", () => {
 
   it("shows KST time", () => {
     expect(formatKst("2026-11-26T00:30:00.000Z")).toContain("09:30:00");
+  });
+
+  it("compares decimal strings without floats", () => {
+    expect(cmpDec("70.0000", "70")).toBe(0);
+    expect(cmpDec("69.9999", "70")).toBe(-1);
+    expect(cmpDec("100", "70")).toBe(1);
+    expect(cmpDec("1.5370", "1.5")).toBe(1);
+    expect(cmpDec("-0.0000", "0")).toBe(0);
+    expect(cmpDec("-438.0150", "0")).toBe(-1);
+    expect(cmpDec("-2", "-10")).toBe(1);
+    expect(cmpDec("12345678901234567890.1", "12345678901234567890.09")).toBe(1);
+    expect(cmpDec(null, "1")).toBeNull();
+    expect(cmpDec("abc", "1")).toBeNull();
   });
 });

@@ -223,8 +223,11 @@ export interface TraderStatus {
 }
 
 export interface TraderEquity {
-  points: { date: string; equity: Dec }[];
+  /** drawdown: 그때까지 최고점 대비 하락폭 (비율, 0 이하) */
+  points: { date: string; equity: Dec; drawdown?: Dec | null }[];
   mdd: Dec | null;
+  /** 지금 총자산과 그 하락폭 */
+  current?: { equity: Dec; drawdown: Dec | null } | null;
 }
 
 export interface TraderStrategyRow {
@@ -256,6 +259,102 @@ export async function getTraderEquity(): Promise<TraderEquity> {
 
 export async function getTraderStrategies(): Promise<TraderStrategyRow[]> {
   return (await api.get<TraderStrategyRow[]>("/api/trader/strategies")).data;
+}
+
+// ── 그래프·지표 ─────────────────────────────────────────────────────────────
+
+export type ChartInterval = 60 | 300;
+
+export interface TraderBar {
+  t: string;
+  o: Dec;
+  h: Dec;
+  l: Dec;
+  c: Dec;
+  v: Dec;
+}
+
+export interface TraderIndicators {
+  barTs: string | null;
+  close: Dec | null;
+  vwap: Dec | null;
+  /** (종가 − VWAP) ÷ VWAP (비율) */
+  vwapGap: Dec | null;
+  sma20: Dec | null;
+  rsi14: Dec | null;
+  macdHist: Dec | null;
+  atr14: Dec | null;
+  volumeRatio: Dec | null;
+}
+
+export interface TraderChart {
+  symbol: string;
+  interval: number;
+  /** 그린 거래일 (KST). 봉이 없으면 null */
+  tradeDate: string | null;
+  symbols: string[];
+  bars: TraderBar[];
+  /** 지표선 (1분봉 기준 값) */
+  lines: { t: string; vwap: Dec | null; sma20: Dec | null }[];
+  /** t = 체결이 속한 봉의 시작 시각 */
+  fills: { t: string; ts: string | null; side: string; qty: Dec; price: Dec; strategyId: string | null }[];
+  signals: { t: string; ts: string | null; strategyId: string; action: string; shadow: boolean; riskResult: string | null }[];
+  position: { qty: Dec; avgPrice: Dec; stopLoss: Dec | null; takeProfit: Dec | null } | null;
+  indicators: TraderIndicators | null;
+}
+
+export interface TraderScorePart {
+  points: Dec | null;
+  max: Dec | null;
+  note: string;
+  available: boolean;
+}
+
+export interface TraderScores {
+  symbol: string;
+  tradeDate: string | null;
+  thresholds: { buy: Dec; watch: Dec; exit: Dec };
+  points: { t: string; action: string; total: Dec | null; price: Dec | null; context: Dec | null; issue: Dec | null }[];
+  latest: { ts: string | null; parts: Record<string, TraderScorePart> } | null;
+}
+
+export interface TraderTripStats {
+  count: number;
+  wins: number;
+  winRate: Dec | null;
+  netPnl: Dec | null;
+  avgPnl: Dec | null;
+}
+
+export interface TraderStats {
+  today: {
+    fills: number;
+    buys: number;
+    sells: number;
+    commission: Dec;
+    tax: Dec;
+    slippage: Dec;
+    costs: Dec;
+    avgPlannedRiskReward: Dec | null;
+  };
+  /** 청산된 거래 (보유 0 → 0). 손익은 수수료·세금 차감 */
+  trips: { today: TraderTripStats; all: TraderTripStats };
+  /** 실현 손익 누적 (비용 차감 전) · 평가 손익 */
+  realizedPnl: Dec | null;
+  unrealizedPnl: Dec | null;
+  rejections: { code: string; count: number; sample: string | null }[];
+}
+
+export async function getTraderChart(symbol: string, interval: ChartInterval): Promise<TraderChart> {
+  return (await api.get<TraderChart>("/api/trader/chart", { params: { symbol, interval } })).data;
+}
+
+export async function getTraderScores(symbol: string): Promise<TraderScores> {
+  return (await api.get<TraderScores>("/api/trader/scores", { params: { symbol } })).data;
+}
+
+export async function getTraderStats(): Promise<TraderStats> {
+  return (await api.get<TraderStats>("/api/trader/stats")).data;
 }
 
 export async function getTraderActivity(limit = 50): Promise<TraderActivity[]> {

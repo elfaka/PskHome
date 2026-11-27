@@ -166,6 +166,59 @@ export const mockTraderActivity = [
   { id: "event-1", ts: "2026-11-26T00:20:00.000Z", level: "warn", source: "event", kind: "DATA_GAP", symbol: "000660", message: "봉 누락 · 3" },
 ];
 
+export const mockTraderChart = {
+  symbol: "005930",
+  interval: 60,
+  tradeDate: "2026-11-26",
+  symbols: ["005930", "000660"],
+  bars: [
+    { t: "2026-11-26T00:30:00.000Z", o: "70000.0000", h: "70200.0000", l: "69900.0000", c: "70100.0000", v: "1200.000000" },
+    { t: "2026-11-26T00:31:00.000Z", o: "70100.0000", h: "70300.0000", l: "70000.0000", c: "70200.0000", v: "900.000000" },
+  ],
+  lines: [{ t: "2026-11-26T00:31:00.000Z", vwap: "70050.5", sma20: "69980.25" }],
+  fills: [{ t: "2026-11-26T00:31:00.000Z", ts: "2026-11-26T00:31:10.000Z", side: "BUY", qty: "13.000000", price: "70171.0000", strategyId: "ma_cross" }],
+  signals: [{ t: "2026-11-26T00:31:00.000Z", ts: "2026-11-26T00:31:00.100Z", strategyId: "ma_cross", action: "BUY", shadow: false, riskResult: "APPROVED" }],
+  position: { qty: "13.000000", avgPrice: "70171.0000", stopLoss: "69400.0000", takeProfit: "71600.0000" },
+  indicators: {
+    barTs: "2026-11-26T00:31:00.000Z", close: "70200", vwap: "70050.5", vwapGap: "0.002134", sma20: "69980.25",
+    rsi14: "72.4", macdHist: "-12.5", atr14: "310.2", volumeRatio: "1.8200",
+  },
+};
+
+export const mockTraderScores = {
+  symbol: "005930",
+  tradeDate: "2026-11-26",
+  thresholds: { buy: "80", watch: "65", exit: "30" },
+  points: [
+    { t: "2026-11-26T00:30:00.000Z", action: "WAIT", total: "42.00", price: "12", context: "30", issue: "0" },
+    { t: "2026-11-26T00:31:00.000Z", action: "WAIT", total: "57.00", price: "22", context: "35", issue: "0" },
+  ],
+  latest: {
+    ts: "2026-11-26T00:31:00.100Z",
+    parts: {
+      technical: { points: "22", max: "30", note: "VWAP 위, 거래량 1.8배", available: true },
+      flow: { points: "15", max: "25", note: "순매수: 외국인, 기관", available: true },
+      market: { points: "14", max: "20", note: "코스피 +0.32%", available: true },
+      global: { points: "0", max: "15", note: "VIX 데이터 없음·지연", available: false },
+      news: { points: "0", max: "10", note: "뉴스·공시 해석 없음 (3단계)", available: false },
+    },
+  },
+};
+
+export const mockTraderStats = {
+  today: { fills: 4, buys: 2, sells: 2, commission: "120.0000", tax: "2800.0000", slippage: "500.0000", costs: "2920.0000", avgPlannedRiskReward: "1.2000" },
+  trips: {
+    today: { count: 2, wins: 1, winRate: "0.500000", netPnl: "-100.0000", avgPnl: "-50.0000" },
+    all: { count: 10, wins: 5, winRate: "0.500000", netPnl: "4378.0000", avgPnl: "437.8000" },
+  },
+  realizedPnl: "24420.0000",
+  unrealizedPnl: "-3300.0000",
+  rejections: [
+    { code: "LOW_RISK_REWARD", count: 7, sample: "LOW_RISK_REWARD: 비용 차감 손익비 0.92 < 1.5" },
+    { code: "WIDE_SPREAD", count: 1, sample: "WIDE_SPREAD: 호가 스프레드 40.0bp > 30bp" },
+  ],
+};
+
 export const handlers = [
   // 자동매매(/trader) — 기본은 비로그인. 로그인 흐름은 테스트에서 server.use 로 바꾼다
   http.get("/api/trader/auth/me", () => HttpResponse.json({ authenticated: false, totpRequired: false })),
@@ -183,12 +236,16 @@ export const handlers = [
   http.get("/api/trader/equity", () =>
     HttpResponse.json({
       points: [
-        { date: "2026-11-25", equity: "10000000.0000" },
-        { date: "2026-11-26", equity: "10000000.0000" },
+        { date: "2026-11-25", equity: "10000000.0000", drawdown: "0.000000" },
+        { date: "2026-11-26", equity: "10000000.0000", drawdown: "0.000000" },
       ],
       mdd: "-0.004500",
+      current: { equity: "9955000.0000", drawdown: "-0.004500" },
     })
   ),
+  http.get("/api/trader/chart", () => HttpResponse.json(mockTraderChart)),
+  http.get("/api/trader/scores", () => HttpResponse.json(mockTraderScores)),
+  http.get("/api/trader/stats", () => HttpResponse.json(mockTraderStats)),
   http.get("/api/trader/strategies", () => HttpResponse.json(mockTraderStrategies)),
   http.get("/api/trader/activity", () => HttpResponse.json(mockTraderActivity)),
   http.post("/api/trader/control/halt", () => HttpResponse.json({ ok: true })),

@@ -147,72 +147,74 @@ export default function SettingsPanel({ status, onSaved }: { status: TraderStatu
         </div>
       </Section>
 
-      {SETTING_GROUPS.map((g) => (
-        <Section key={g.title} title={g.title}>
-          {g.hint && <p className="mb-3 text-xs text-fg-subtle">{g.hint}</p>}
-          <ul className="divide-y divide-line/60">
-            {g.items.map((m) => {
-              const changed = changes.includes(m.key);
-              const overridden = stored[m.key] != null;
-              return (
-                <li key={m.key} className="grid gap-3 py-3 md:grid-cols-[minmax(0,1fr)_14rem]">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label htmlFor={`setting-${m.key}`} className="text-sm font-medium text-fg">
-                        {m.label}
-                      </label>
-                      {overridden && <Badge tone="accent">화면 설정</Badge>}
-                      {changed && <Badge tone="info">변경 예정</Badge>}
+      <div className="grid gap-4 2xl:grid-cols-2">
+        {SETTING_GROUPS.map((g) => (
+          <Section key={g.title} title={g.title}>
+            {g.hint && <p className="mb-3 text-xs text-fg-subtle">{g.hint}</p>}
+            <ul className="divide-y divide-line/60">
+              {g.items.map((m) => {
+                const changed = changes.includes(m.key);
+                const overridden = stored[m.key] != null;
+                return (
+                  <li key={m.key} className="grid gap-3 py-3 md:grid-cols-[minmax(0,1fr)_14rem]">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label htmlFor={`setting-${m.key}`} className="text-sm font-medium text-fg">
+                          {m.label}
+                        </label>
+                        {overridden && <Badge tone="accent">화면 설정</Badge>}
+                        {changed && <Badge tone="info">변경 예정</Badge>}
+                      </div>
+                      <p className="mt-0.5 text-xs text-fg-muted">{m.meaning}</p>
+                      <p className="mt-1 text-[11px] text-fg-subtle">
+                        <span className="text-danger-soft-fg">↑</span> {m.up}
+                        <br />
+                        <span className="text-info-soft-fg">↓</span> {m.down}
+                      </p>
+                      <p className="mt-1 text-[11px] text-fg-subtle tabular-nums">
+                        기본값(trader.env) {show(m, settings.base[m.key])} · 지금 적용 {show(m, settings.effective[m.key])}
+                      </p>
                     </div>
-                    <p className="mt-0.5 text-xs text-fg-muted">{m.meaning}</p>
-                    <p className="mt-1 text-[11px] text-fg-subtle">
-                      <span className="text-danger-soft-fg">↑</span> {m.up}
-                      <br />
-                      <span className="text-info-soft-fg">↓</span> {m.down}
-                    </p>
-                    <p className="mt-1 text-[11px] text-fg-subtle tabular-nums">
-                      기본값(trader.env) {show(m, settings.base[m.key])} · 지금 적용 {show(m, settings.effective[m.key])}
-                    </p>
-                  </div>
-                  <div className="self-center">
-                    {m.unit === "enum" ? (
-                      <Select
-                        id={`setting-${m.key}`}
-                        value={desired(m.key)}
-                        onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
-                      >
-                        {m.options?.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </Select>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Input
+                    <div className="self-center">
+                      {m.unit === "enum" ? (
+                        <Select
                           id={`setting-${m.key}`}
-                          inputMode="decimal"
                           value={desired(m.key)}
                           onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
-                          aria-invalid={invalid.includes(m.key) || undefined}
-                          className={cn("text-right tabular-nums", invalid.includes(m.key) && "border-danger")}
-                        />
-                        <span className="w-6 shrink-0 text-xs text-fg-subtle">{UNIT_SUFFIX[m.unit]}</span>
-                      </div>
-                    )}
-                    {m.unit === "rate" && looksLikeDecimal(desired(m.key)) && (
-                      <p className="mt-1 text-right text-[11px] text-fg-subtle">= {formatRatioPct(normalize(desired(m.key)), 3, false)}</p>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </Section>
-      ))}
+                        >
+                          {m.options?.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            id={`setting-${m.key}`}
+                            inputMode="decimal"
+                            value={desired(m.key)}
+                            onChange={(e) => setDraft((d) => ({ ...d, [m.key]: e.target.value }))}
+                            aria-invalid={invalid.includes(m.key) || undefined}
+                            className={cn("text-right tabular-nums", invalid.includes(m.key) && "border-danger")}
+                          />
+                          <span className="w-6 shrink-0 text-xs text-fg-subtle">{UNIT_SUFFIX[m.unit]}</span>
+                        </div>
+                      )}
+                      {m.unit === "rate" && looksLikeDecimal(desired(m.key)) && (
+                        <p className="mt-1 text-right text-[11px] text-fg-subtle">= {formatRatioPct(normalize(desired(m.key)), 3, false)}</p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Section>
+        ))}
+      </div>
 
       <div className="sticky bottom-0 z-20 -mx-4 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-fg-muted">
             {changes.length ? `${changes.length}개 항목 변경 예정` : "바뀐 항목이 없습니다."}
             {invalid.length > 0 && <span className="ml-2 text-danger-soft-fg">숫자 형식이 아닌 값이 있습니다.</span>}

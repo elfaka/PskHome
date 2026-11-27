@@ -61,6 +61,12 @@
   --info-soft: #e8f0fc;
   --info-soft-fg: #1a4f99;
 
+  /* 그래프 계열색 (범주) — 자동매매 점수 구성(가격·맥락·이슈). 색약 구분·명암을 검증한 값이다.
+     상승·하락(danger·info)이나 상태색과 섞어 쓰지 않는다. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+
   /* 그림자 — 라이트에서만 의미가 있다 */
   --sh-card: 0 1px 2px 0 #18181b0a, 0 1px 3px 0 #18181b0d;
   --sh-raised: 0 2px 4px -1px #18181b12, 0 8px 20px -6px #18181b1a;
@@ -106,6 +112,10 @@
   --info-soft: #7cb0f51f;
   --info-soft-fg: #a8caf9;
 
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+
   /* 어두운 바닥에서 드롭섀도는 거의 보이지 않는다. 경계선으로 층을 표현하고
      그림자는 최소만 남긴다. */
   --sh-card: 0 1px 2px 0 #00000059;
@@ -150,6 +160,9 @@
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
   --color-info-soft-fg: var(--info-soft-fg);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
 
   /* 라운드 — rounded-xl~3xl 혼용을 끝내고 역할 이름으로 고정한다 */
   --radius-control: 0.625rem; /* 버튼·인풋·작은 배지 */

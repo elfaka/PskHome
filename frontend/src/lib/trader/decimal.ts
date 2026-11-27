@@ -81,3 +81,29 @@ export function formatKst(iso: string | null | undefined): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : KST.format(d);
 }
+
+/**
+ * Decimal 문자열 비교 (a < b → -1, 같으면 0, a > b → 1). 형식이 아니면 null.
+ * 지표 구간(RSI 70 이상 등)을 나눌 때 쓴다 — number 로 바꾸지 않는다.
+ */
+export function cmpDec(a: string | null | undefined, b: string): -1 | 0 | 1 | null {
+  const ma = a == null ? null : DEC.exec(a.trim());
+  const mb = DEC.exec(b.trim());
+  if (!ma || !mb) return null;
+  const norm = (m: RegExpExecArray) => {
+    const int = m[2].replace(/^0+(?=\d)/, "");
+    const frac = (m[3] ?? "").replace(/0+$/, "");
+    const zero = /^0*$/.test(int) && frac === "";
+    return { neg: m[1] === "-" && !zero, int, frac };
+  };
+  const x = norm(ma);
+  const y = norm(mb);
+  if (x.neg !== y.neg) return x.neg ? -1 : 1;
+  const flip = x.neg ? -1 : 1;
+  if (x.int.length !== y.int.length) return (x.int.length < y.int.length ? -1 : 1) * flip as -1 | 1;
+  const len = Math.max(x.frac.length, y.frac.length);
+  const xs = x.int + x.frac.padEnd(len, "0");
+  const ys = y.int + y.frac.padEnd(len, "0");
+  if (xs === ys) return 0;
+  return (xs < ys ? -1 : 1) * flip as -1 | 1;
+}
