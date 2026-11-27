@@ -35,11 +35,11 @@ jobs:
     steps:
       # 1. 체크아웃
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # 2. Node.js 22 설치 (+ npm 캐시)
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -65,17 +65,17 @@ jobs:
       #    VPS 에서 tsc 가 메모리를 밀어내 커널 OOM killer 가 sshd 를 죽이는 일이 있었다.
       #    빌드를 러너로 옮겨 서버의 빌드 부하를 0 으로 만든다.
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           file: ./backend/dockerfile
