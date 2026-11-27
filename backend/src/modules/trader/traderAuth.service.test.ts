@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { hashPassword, LoginThrottle, verifyLogin } from "./traderAuth.service.js";
+import {
+  describeTraderAuthConfig,
+  hashPassword,
+  LoginThrottle,
+  verifyLogin,
+} from "./traderAuth.service.js";
 
 describe("trader password hashing", () => {
   it("hashes with scrypt and verifies only the right username + password", async () => {
@@ -57,5 +62,24 @@ describe("LoginThrottle", () => {
     th.succeed("1.1.1.1");
     th.fail("1.1.1.1");
     expect(th.lockedFor("1.1.1.1")).toBe(0);
+  });
+});
+
+describe("describeTraderAuthConfig", () => {
+  it("reports configured without leaking values", async () => {
+    const hash = await hashPassword("correct-horse-battery");
+    const msg = describeTraderAuthConfig({ username: "admin", passwordHash: hash });
+    expect(msg).toBe("[trader] login configured");
+  });
+
+  it("names what is missing or broken", async () => {
+    expect(describeTraderAuthConfig({})).toContain("TRADER_ADMIN_USERNAME 없음");
+    expect(describeTraderAuthConfig({})).toContain("TRADER_ADMIN_PASSWORD_HASH 없음");
+    const hash = await hashPassword("correct-horse-battery");
+    const cut = hash.split(":").slice(0, 5).join(":");
+    const msg = describeTraderAuthConfig({ username: " admin", passwordHash: cut });
+    expect(msg).toContain("앞뒤에 공백");
+    expect(msg).toContain("5칸");
+    expect(msg).not.toContain(cut);
   });
 });

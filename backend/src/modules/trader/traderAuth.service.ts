@@ -86,6 +86,26 @@ function parseHash(stored: string): ParsedHash | null {
   return { N, r, p, salt, key };
 }
 
+/**
+ * 로그인 설정 상태를 값 없이 설명한다 (기동 로그용). 로그인이 안 될 때 서버에서
+ * `docker logs pskhome-be-1 | grep trader` 로 설정이 들어왔는지 확인한다.
+ */
+export function describeTraderAuthConfig(creds: TraderCredentials): string {
+  const problems: string[] = [];
+  const user = creds.username ?? "";
+  if (!user) problems.push("TRADER_ADMIN_USERNAME 없음");
+  else if (user !== user.trim()) problems.push("TRADER_ADMIN_USERNAME 앞뒤에 공백");
+  const hash = creds.passwordHash ?? "";
+  if (!hash) problems.push("TRADER_ADMIN_PASSWORD_HASH 없음");
+  else if (!parseHash(hash)) {
+    const n = hash.trim().split(":").length;
+    problems.push(`TRADER_ADMIN_PASSWORD_HASH 형식 오류 (scrypt:N:r:p:salt:hash 6칸이어야 하는데 ${n}칸)`);
+  }
+  return problems.length === 0
+    ? "[trader] login configured"
+    : `[trader] login disabled: ${problems.join(", ")}`;
+}
+
 // 설정이 없거나 깨졌을 때도 같은 시간만큼 계산해 응답 시간으로 계정 존재를 추측하지 못하게 한다
 const DUMMY: ParsedHash = {
   ...SCRYPT_PARAMS,
