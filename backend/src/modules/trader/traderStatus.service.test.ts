@@ -183,9 +183,41 @@ describe("trader status", () => {
       ["fill", "info"],
       ["event", "info"],
     ]);
-    expect(a[0].message).toContain("manual");
-    expect(a[3].message).toContain("slippage_bps 5→7");
-    expect(a[2].message).toBe("매수 체결 11주 @ 170200 · ma_cross");
+    expect(a[0]).toMatchObject({ category: "control", title: "긴급 정지", detail: "사유: manual", by: "web:owner" });
+    expect(a[1]).toMatchObject({ category: "order", title: "주문 거부 (매수)", detail: "11주 · cash" });
+    expect(a[2]).toMatchObject({
+      category: "trade",
+      title: "매수 체결",
+      detail: "11주 × 170,200원",
+      strategyId: "ma_cross",
+      message: "매수 체결 · 11주 × 170,200원",
+    });
+    expect(a[3]).toMatchObject({
+      category: "settings",
+      title: "엔진이 설정 적용",
+      diff: [{ key: "slippage_bps", before: "5", after: "7" }],
+    });
+  });
+
+  it("describes risk events in Korean and groups repeated rejections", async () => {
+    db.answer = (sql) =>
+      sql.includes("FROM risk_events")
+        ? [
+            { id: 8, ts: "2026-11-27 00:32:00.000000", kind: "ORDER_REJECTED", symbol: "005930", detail: JSON.stringify({ code: "LOW_RISK_REWARD", reason: "비용 차감 손익비 0.92 < 1.5" }) },
+            { id: 7, ts: "2026-11-27 00:31:00.000000", kind: "ORDER_REJECTED", symbol: "005930", detail: JSON.stringify({ code: "LOW_RISK_REWARD", reason: "비용 차감 손익비 0.95 < 1.5" }) },
+            { id: 6, ts: "2026-11-27 00:20:00.000000", kind: "SETTINGS_CHANGE", symbol: null, detail: JSON.stringify({ version: 3, by: "web:owner", before: { slippage_bps: "5" }, after: { slippage_bps: "7" } }) },
+            { id: 5, ts: "2026-11-27 00:10:00.000000", kind: "RECOVERED", symbol: null, detail: JSON.stringify({ cash: "9124526.0000", positions: { "005930": "11" }, open_orders: [] }) },
+            { id: 4, ts: "2026-11-27 00:05:00.000000", kind: "STRATEGY_OFF", symbol: null, detail: JSON.stringify({ strategy: "ma_cross", by: "web:owner" }) },
+          ]
+        : [];
+    const a = await svc.listActivity("paper-default", 10);
+    expect(a[0]).toMatchObject({ category: "risk", title: "위험 관리가 주문을 막음", code: "LOW_RISK_REWARD", detail: "비용 차감 손익비 0.92 < 1.5", level: "warn" });
+    expect(a[0].groupKey).toBe(a[1].groupKey);
+    expect(a[2]).toMatchObject({ title: "설정 저장 (v3)", by: "web:owner", diff: [{ key: "slippage_bps", before: "5", after: "7" }] });
+    expect(a[3]).toMatchObject({ title: "엔진 시작 · 상태 복구", detail: "현금 9,124,526원 · 보유 1종목 · 미체결 0건", level: "info" });
+    expect(a[4]).toMatchObject({ category: "control", title: "전략 끔", strategyId: "ma_cross" });
+    expect(a[2].groupKey).not.toBe(a[3].groupKey);
+    expect(svc.groupNum("1234567.5000")).toBe("1,234,567.5");
   });
 
   it("trims trailing zeros for display", () => {
@@ -246,6 +278,6 @@ describe("today's symbols", () => {
         ? [{ id: 3, ts: "2026-11-26 23:50:00.000000", kind: "UNIVERSE_SELECTED", symbol: null, detail: JSON.stringify({ symbols: ["005930", "036930"] }) }]
         : [];
     const items = await svc.listActivity("paper-default", 10);
-    expect(items[0]).toMatchObject({ level: "info", message: "오늘의 종목 선정 · 005930, 036930" });
+    expect(items[0]).toMatchObject({ level: "info", category: "universe", title: "오늘의 종목 선정 (2개)", detail: "005930, 036930" });
   });
 });

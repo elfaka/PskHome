@@ -241,7 +241,25 @@ export async function listDecisions(
     [...params, limit]
   );
   return rows.map((r) => {
-    const inputs = json(r.inputs) as { components?: Record<string, unknown> } | null;
+    const inputs = json(r.inputs) as {
+      components?: Record<string, unknown>;
+      parts?: Record<string, Record<string, unknown>>;
+      fast_ma?: unknown;
+      slow_ma?: unknown;
+      diff?: unknown;
+    } | null;
+    const parts = inputs?.parts && typeof inputs.parts === "object"
+      ? Object.fromEntries(
+          Object.entries(inputs.parts).map(([k, p]) => [
+            k,
+            { points: str(p?.points), max: str(p?.max), note: reqStr(p?.note), available: Boolean(p?.available) },
+          ])
+        )
+      : null;
+    const ma = inputs && ("fast_ma" in inputs || "slow_ma" in inputs)
+      ? { fast: str(inputs.fast_ma), slow: str(inputs.slow_ma), diff: str(inputs.diff) }
+      : null;
+    const invalidation = json(r.invalidation);
     return {
       id: Number(r.id),
       ts: utcIso(str(r.ts)),
@@ -262,6 +280,10 @@ export async function listDecisions(
       riskReward: str(r.risk_reward),
       reasons: (json(r.reasons) as string[] | null) ?? null,
       components: inputs?.components ?? null,
+      parts,
+      ma,
+      invalidation: Array.isArray(invalidation) ? invalidation.map(String) : null,
+      validUntil: utcIso(str(r.valid_until)),
     };
   });
 }

@@ -320,43 +320,138 @@ const INFO_EVENTS = new Set([
   "SETTINGS_APPLIED",
   "SETTINGS_SEEDED",
   "UNIVERSE_SELECTED",
+  "RECOVERED",
 ]);
 
-const EVENT_TEXT: Record<string, string> = {
-  HALT: "긴급 정지",
-  RESUME: "재개",
-  STRATEGY_ON: "전략 켬",
-  STRATEGY_OFF: "전략 끔",
-  SETTINGS_CHANGE: "설정 변경 요청",
-  SETTINGS_APPLIED: "설정 적용",
-  SETTINGS_REJECTED: "설정 거부",
-  SETTINGS_REVERT: "직전 설정으로 되돌림",
-  SETTINGS_SEEDED: "trader.env 설정을 DB 로 옮김",
-  UNIVERSE_SELECTED: "오늘의 종목 선정",
-  DATA_INVALID: "잘못된 시세",
-  DATA_GAP: "봉 누락",
-  CANCEL_FAILED: "주문 취소 실패",
-  FATAL: "엔진 중단",
-  ENGINE_ERROR: "엔진 오류",
-};
-
-function eventMessage(kind: string, detail: Json | null): string {
-  const label = EVENT_TEXT[kind] ?? kind;
-  if (!detail) return label;
-  const parts: string[] = [];
-  for (const k of ["strategy", "reason", "by", "err", "missing", "version", "restored"]) {
-    if (k === "restored" && detail[k] != null) {
-      parts.push(`v${String(detail[k])} 값`);
-      continue;
-    }
-    if (detail[k] != null) parts.push(`${k === "by" ? "by " : ""}${String(detail[k])}`);
-  }
-  if (Array.isArray(detail.symbols)) parts.push((detail.symbols as unknown[]).map(String).join(", "));
-  if (detail.diff && typeof detail.diff === "object") {
-    parts.push(Object.entries(detail.diff as Record<string, [string, string]>).map(([k, [a, b]]) => `${k} ${a}→${b}`).join(", "));
-  }
-  return parts.length ? `${label} · ${parts.join(" · ")}`.slice(0, 300) : label;
+/** "1234567.5000" → "1,234,567.5" (표시용, 문자열 연산) */
+export function groupNum(v: unknown): string {
+  const t = plain(v);
+  const m = /^(-?)(\d+)(\.\d+)?$/.exec(t);
+  return m ? `${m[1]}${m[2].replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${m[3] ?? ""}` : t;
 }
+
+type EventText = Pick<TraderActivity, "category" | "title" | "detail" | "code" | "strategyId" | "by" | "diff"> & { group?: string };
+
+function diffOf(detail: Json): TraderActivity["diff"] {
+  // 지금 형식 {키: [전, 후]}, 예전 형식 {before: {...}, after: {...}}
+  if (detail.diff && typeof detail.diff === "object") {
+    return Object.entries(detail.diff as Record<string, unknown>).map(([key, v]) => {
+      const [a, b] = Array.isArray(v) ? v : [null, null];
+      return { key, before: a == null ? null : String(a), after: b == null ? null : String(b) };
+    });
+  }
+  const before = (detail.before as Record<string, unknown> | undefined) ?? null;
+  const after = (detail.after as Record<string, unknown> | undefined) ?? null;
+  if (before || after) {
+    const keys = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])];
+    return keys.map((key) => ({
+      key,
+      before: before?.[key] == null ? null : String(before[key]),
+      after: after?.[key] == null ? null : String(after[key]),
+    }));
+  }
+  return null;
+}
+
+function by(detail: Json | null): string | null {
+  return detail?.by == null ? null : String(detail.by);
+}
+
+/** 위험 이벤트 → 한글 제목·내용 */
+export function describeEvent(kind: string, detail: Json | null): EventText {
+  const d = detail ?? {};
+  const base: EventText = { category: "system", title: kind, detail: null, code: null, strategyId: null, by: by(detail), diff: null };
+  const version = d.version != null ? ` (v${String(d.version)})` : "";
+  switch (kind) {
+    case "HALT":
+      return { ...base, category: "control", title: "긴급 정지", detail: d.reason ? `사유: ${String(d.reason)}` : null };
+    case "RESUME":
+      return { ...base, category: "control", title: "재개", detail: d.note ? `메모: ${String(d.note)}` : d.previous ? `정지 사유였던 것: ${String(d.previous)}` : null };
+    case "STRATEGY_ON":
+    case "STRATEGY_OFF":
+      return {
+        ...base,
+        category: "control",
+        title: kind === "STRATEGY_ON" ? "전략 켬" : "전략 끔",
+        strategyId: d.strategy == null ? null : String(d.strategy),
+        detail: kind === "STRATEGY_OFF" ? "신규 매수만 멈춥니다 (매도·청산은 계속)" : null,
+      };
+    case "SETTINGS_CHANGE":
+      return { ...base, category: "settings", title: `설정 저장${version}`, detail: "엔진이 검증 후 적용합니다", diff: diffOf(d) };
+    case "SETTINGS_REVERT":
+      return {
+        ...base,
+        category: "settings",
+        title: `직전 설정으로 되돌림${version}`,
+        detail: d.restored != null ? `v${String(d.restored)} 의 값으로` : null,
+        diff: diffOf(d),
+      };
+    case "SETTINGS_APPLIED":
+      return { ...base, category: "settings", title: `엔진이 설정 적용${version}`, diff: diffOf(d) };
+    case "SETTINGS_REJECTED":
+      return { ...base, category: "settings", title: `엔진이 설정 거부${version}`, detail: d.reason ? `이전 값 유지 · ${String(d.reason)}` : "이전 값 유지" };
+    case "SETTINGS_SEEDED": {
+      const n = d.values && typeof d.values === "object" ? Object.keys(d.values as Json).length : null;
+      return {
+        ...base,
+        category: "settings",
+        title: "trader.env 설정을 DB 로 옮김",
+        detail: `운영 설정${n != null ? ` ${n}개` : ""}를 처음 한 번 옮겼습니다. 이제 화면에서 바꿉니다`,
+        by: "engine",
+      };
+    }
+    case "UNIVERSE_SELECTED": {
+      const syms = Array.isArray(d.symbols) ? (d.symbols as unknown[]).map(String) : [];
+      return { ...base, category: "universe", title: `오늘의 종목 선정 (${syms.length}개)`, detail: syms.join(", ") || null, by: "engine" };
+    }
+    case "ORDER_REJECTED": {
+      const code = d.code == null ? null : String(d.code);
+      return {
+        ...base,
+        category: "risk",
+        title: "위험 관리가 주문을 막음",
+        detail: d.reason == null ? null : String(d.reason),
+        code,
+        group: `ORDER_REJECTED:${code ?? ""}`,
+      };
+    }
+    case "DATA_INVALID":
+      return { ...base, category: "data", title: "잘못된 시세를 무시함", detail: d.price != null ? `가격 ${groupNum(d.price)}` : null };
+    case "DATA_GAP":
+      return {
+        ...base,
+        category: "data",
+        title: `봉 누락${d.missing != null ? ` ${String(d.missing)}개` : ""}`,
+        detail: "지표를 다시 쌓는 동안 그 종목은 신규 매수를 하지 않습니다",
+      };
+    case "CANCEL_FAILED":
+      return { ...base, category: "order", title: "주문 취소 실패", detail: [d.reason, d.err].filter(Boolean).map(String).join(" · ") || null };
+    case "FATAL":
+      return { ...base, category: "system", title: "엔진 중단", detail: d.err ? String(d.err) : null };
+    case "ENGINE_ERROR":
+      return { ...base, category: "system", title: "엔진 오류로 중단", detail: d.err ? String(d.err) : null };
+    case "RECOVERED": {
+      const pos = d.positions && typeof d.positions === "object" ? Object.keys(d.positions as Json).length : 0;
+      const open = Array.isArray(d.open_orders) ? d.open_orders.length : 0;
+      return {
+        ...base,
+        category: "system",
+        title: "엔진 시작 · 상태 복구",
+        detail: `현금 ${d.cash != null ? `${groupNum(d.cash)}원` : "—"} · 보유 ${pos}종목 · 미체결 ${open}건`,
+        by: "engine",
+      };
+    }
+    case "RECOVERY_MISMATCH": {
+      const n = Array.isArray(d.mismatches) ? d.mismatches.length : null;
+      return { ...base, category: "system", title: "복구 중 불일치 — 긴급 정지", detail: n != null ? `불일치 ${n}건 (확인 후 재개)` : null };
+    }
+    default:
+      return base;
+  }
+}
+
+const SIDE = (side: unknown) => (side === "BUY" ? "매수" : "매도");
+const ORDER_STATUS: Record<string, string> = { REJECTED: "주문 거부", CANCELED: "주문 취소", EXPIRED: "주문 만료" };
 
 /** 체결 · 주문 실패 · 위험 이벤트를 시간순으로 합친다 (최근 limit 건). */
 export async function listActivity(accountName: string, limit: number): Promise<TraderActivity[]> {
@@ -378,34 +473,62 @@ export async function listActivity(accountName: string, limit: number): Promise<
   );
 
   const out: TraderActivity[] = [
-    ...fills.map((f): TraderActivity => ({
-      id: `fill-${String(f.id)}`,
-      ts: utcIso(str(f.ts)),
-      level: "info",
-      source: "fill",
-      kind: String(f.side),
-      symbol: str(f.symbol),
-      message: `${f.side === "BUY" ? "매수" : "매도"} 체결 ${plain(f.qty)}주 @ ${plain(f.price)}${f.strategy_id ? ` · ${String(f.strategy_id)}` : ""}`,
-    })),
-    ...orders.map((o): TraderActivity => ({
-      id: `order-${String(o.id)}`,
-      ts: utcIso(str(o.updated_at)),
-      level: o.status === "REJECTED" ? "warn" : "info",
-      source: "order",
-      kind: String(o.status),
-      symbol: str(o.symbol),
-      message: `${o.status === "REJECTED" ? "주문 거부" : "주문 취소"} ${o.side === "BUY" ? "매수" : "매도"} ${plain(o.qty)}주${o.reject_reason ? ` · ${String(o.reject_reason)}` : ""}`,
-    })),
+    ...fills.map((f): TraderActivity => {
+      const title = `${SIDE(f.side)} 체결`;
+      const detail = `${groupNum(f.qty)}주 × ${groupNum(f.price)}원`;
+      return {
+        id: `fill-${String(f.id)}`,
+        ts: utcIso(str(f.ts)),
+        level: "info",
+        source: "fill",
+        kind: String(f.side),
+        symbol: str(f.symbol),
+        category: "trade",
+        title,
+        detail,
+        code: null,
+        strategyId: str(f.strategy_id),
+        by: null,
+        diff: null,
+        groupKey: `fill-${String(f.id)}`,
+        message: `${title} · ${detail}`,
+      };
+    }),
+    ...orders.map((o): TraderActivity => {
+      const title = `${ORDER_STATUS[String(o.status)] ?? String(o.status)} (${SIDE(o.side)})`;
+      const detail = `${groupNum(o.qty)}주${o.reject_reason ? ` · ${String(o.reject_reason)}` : ""}`;
+      return {
+        id: `order-${String(o.id)}`,
+        ts: utcIso(str(o.updated_at)),
+        level: o.status === "REJECTED" ? "warn" : "info",
+        source: "order",
+        kind: String(o.status),
+        symbol: str(o.symbol),
+        category: "order",
+        title,
+        detail,
+        code: null,
+        strategyId: str(o.strategy_id),
+        by: null,
+        diff: null,
+        groupKey: `order-${String(o.status)}-${String(o.symbol)}-${String(o.reject_reason ?? "")}`,
+        message: `${title} · ${detail}`,
+      };
+    }),
     ...events.map((e): TraderActivity => {
       const kind = String(e.kind);
+      const { group, ...t } = describeEvent(kind, parse(e.detail));
+      const symbol = str(e.symbol);
       return {
         id: `event-${String(e.id)}`,
         ts: utcIso(str(e.ts)),
         level: ERROR_EVENTS.has(kind) ? "error" : INFO_EVENTS.has(kind) ? "info" : "warn",
         source: "event",
         kind,
-        symbol: str(e.symbol),
-        message: eventMessage(kind, parse(e.detail)),
+        symbol,
+        ...t,
+        groupKey: group ? `${group}:${symbol ?? ""}` : `event-${String(e.id)}`,
+        message: t.detail ? `${t.title} · ${t.detail}` : t.title,
       };
     }),
   ];

@@ -95,6 +95,13 @@ export interface TraderDecision {
   reasons: string[] | null;
   /** 가격·맥락·이슈 점수 공급부 (출처·모델 버전·점수) */
   components: Record<string, unknown> | null;
+  /** 점수 전략의 항목별 점수 (technical·flow·market·global·news → {points, max, note, available}) */
+  parts: Record<string, { points: Dec | null; max: Dec | null; note: string; available: boolean }> | null;
+  /** 이동평균 교차 전략의 값 (짧은·긴 이동평균, 차이) */
+  ma: { fast: Dec | null; slow: Dec | null; diff: Dec | null } | null;
+  /** 이렇게 되면 판단이 무효 (점수 전략) */
+  invalidation: string[] | null;
+  validUntil: string | null;
 }
 
 export interface TraderPerformanceRow {
@@ -213,6 +220,8 @@ export interface TraderStrategyRow {
   recent: TraderStrategyTick[];
 }
 
+export type TraderActivityCategory = "trade" | "order" | "risk" | "control" | "settings" | "universe" | "system" | "data";
+
 export interface TraderActivity {
   id: string;
   ts: string | null;
@@ -220,6 +229,22 @@ export interface TraderActivity {
   source: "fill" | "order" | "event";
   kind: string;
   symbol: string | null;
+  /** 체결·주문·위험 관리·조작·설정·종목·시스템·데이터 */
+  category: TraderActivityCategory;
+  /** 한 줄 제목 (한글) */
+  title: string;
+  /** 자세한 내용 (한글, 없으면 null) */
+  detail: string | null;
+  /** 위험 관리 거부 코드 등 (화면이 한글 이름으로 바꾼다) */
+  code: string | null;
+  strategyId: string | null;
+  /** 조작한 사람 (web:아이디, cli, engine ...) */
+  by: string | null;
+  /** 설정 변경 내역 (키·전·후). 화면이 설정 이름·단위로 보여준다 */
+  diff: { key: string; before: string | null; after: string | null }[] | null;
+  /** 같은 값이 연달아 나오면 화면이 한 줄로 묶는다 */
+  groupKey: string;
+  /** 제목 · 내용 (예전 화면 호환) */
   message: string;
 }
 

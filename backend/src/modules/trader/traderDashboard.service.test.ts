@@ -85,6 +85,33 @@ describe("trader dashboard service", () => {
     expect(d.ts).toBe("2026-11-26T00:31:00.123Z");
     expect(d.reasons).toEqual(["technical: 30/30"]);
     expect(d.components).toEqual({ issue: { status: "NOT_CONFIGURED" } });
+    expect(d.parts).toBeNull();
+    expect(d.ma).toBeNull();
+  });
+
+  it("returns the full reasoning: score items, moving averages and invalidation", async () => {
+    db.answer = () => [
+      {
+        id: 4, ts: "2026-11-26 00:31:00", bar_ts: "2026-11-26 00:30:00", strategy_id: "intraday_score", symbol: "005930",
+        action: "BUY", reason: "합계 82 ≥ 80", shadow: 1, score: "82.00",
+        inputs: JSON.stringify({ parts: { technical: { points: "27", max: "30", note: "VWAP 위", available: true }, global: { points: "0", max: "15", note: "VIX 데이터 없음", available: false } } }),
+        invalidation: '["VWAP 하회", "거래량 감소"]',
+        valid_until: "2026-11-26 00:36:00",
+      },
+      {
+        id: 3, ts: "2026-11-26 00:31:00", bar_ts: "2026-11-26 00:30:00", strategy_id: "ma_cross", symbol: "005930",
+        action: "BUY", reason: "golden cross", shadow: 0,
+        inputs: JSON.stringify({ fast_ma: "70120", slow_ma: "70050.5", diff: "69.5", close: "70200" }),
+      },
+    ];
+    const [score, ma] = await svc.listDecisions(2);
+    expect(score.parts).toEqual({
+      technical: { points: "27", max: "30", note: "VWAP 위", available: true },
+      global: { points: "0", max: "15", note: "VIX 데이터 없음", available: false },
+    });
+    expect(score.invalidation).toEqual(["VWAP 하회", "거래량 감소"]);
+    expect(score.validUntil).toBe("2026-11-26T00:36:00.000Z");
+    expect(ma.ma).toEqual({ fast: "70120", slow: "70050.5", diff: "69.5" });
   });
 
   it("clamps limits", () => {
